@@ -2,6 +2,9 @@
 __pycache__/
 *.py[codz]
 *$py.class
+poetry.lock
+loss-without-lines.pdf
+training_history.pkl
 
 # C extensions
 *.so
