@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "gagf"
+version = "0.1.0"
+description = "Learning"
+authors = ["John Smith <john@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+torch = "^2.2.1"
+numpy = "^1.26.4"
+ruff = "*"
+pre-commit = "*"
+matplotlib = "*"
+jupyter = "*"
+jupyterlab = "*"
+pandas = "*"
+scikit-image = "*"
+scipy = "*"
+torchvision = "*"
+wandb = "*"
+jupyterlab-code-formatter = "^3.0.2"
+pytest = "^8.3.4"
+ipykernel = "^6.29.5"
+pykernel = "^0.1.6"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
