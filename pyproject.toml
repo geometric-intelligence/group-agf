@@ -23,6 +23,7 @@ jupyterlab-code-formatter = "^3.0.2"
 pytest = "^8.3.4"
 ipykernel = "^6.29.5"
 pykernel = "^0.1.6"
+scikit-learn = "^1.7.2"
 
 
 [build-system]
