@@ -11,7 +11,7 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
 
-import theory
+from . import theory
 
 
 def one_hot2D(p):
@@ -53,11 +53,11 @@ def generate_fixed_template(p):
     spectrum = np.zeros((p,p), dtype=complex)
 
     # Three low-frequency bins with Gaussian-ish weights
-    v1 = 0.7 # 2.0
+    v1 = 2.0 # 2.0
     v2 = 1.0 #0.1 # make sure this is not too close to v1
-    v3 = 2.0 # 0.7 #0.01
+    v3 = 0.7 # 0.7 #0.01
 
-    plot_set_template_components(v1, v2, v3, p)
+    # plot_set_template_components(v1, v2, v3, p)
 
     # Mode (1,0)
     spectrum[1,0] = v1
@@ -116,102 +116,10 @@ def mnist_template(p):
     # Normalize to [0, 1]
     sample_resized = (sample_resized - np.min(sample_resized)) / (np.max(sample_resized) - np.min(sample_resized))
 
-    plot_top_template_components(sample_resized, p)
-
     template = sample_resized.flatten()
 
     return template
 
-
-def plot_top_template_components(template_2d, p):
-    """Plot the top 5 Fourier components of the template.
-
-    Parameters
-    ----------
-    template : np.ndarray
-        A flattened 2D array of shape (p, p) representing the template.
-    p : int
-        p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
-    """
-    freqs_u, freqs_v, power = theory.get_power_2d(template_2d)
-
-    # Flatten the power array and get the indices of the top 5 components
-    power_flat = power.flatten()
-    top_indices = np.argsort(power_flat)[-5:][::-1]  # Indices of top 5 components
-
-    fig, axs = plt.subplots(1, 5, figsize=(15, 3))
-    
-    # Initialize cumulative spectrum
-    cumulative_spectrum = np.zeros_like(power, dtype=complex)
-    
-    for i, idx in enumerate(top_indices):
-        u = idx // power.shape[1]
-        v = idx % power.shape[1]
-        
-        # Add current component to cumulative spectrum
-        cumulative_spectrum[u, v] = np.sqrt(power[u, v] * p * p)  # Scale back to amplitude
-        if v != 0 and v != power.shape[1] - 1:
-            cumulative_spectrum[u, -v] = np.conj(cumulative_spectrum[u, v])  # Add negative frequency component if not DC or Nyquist
-        
-        # Convert cumulative spectrum to spatial domain
-        spatial_component = np.fft.ifft2(cumulative_spectrum).real
-        
-        # Create title showing which components are included
-        components_list = []
-        for j in range(i + 1):
-            comp_idx = top_indices[j]
-            comp_u = comp_idx // power.shape[1]
-            comp_v = comp_idx % power.shape[1]
-            components_list.append(f"({comp_u},{comp_v})")
-        
-        title = f"Components: {', '.join(components_list)}\nNew: ({u},{v}) Power: {power[u,v]:.4f}"
-        
-        # Roll the spatial component by half the image length in both x and y directions
-        spatial_component_rolled = np.roll(spatial_component, spatial_component.shape[0]//2, axis=0)
-        spatial_component_rolled = np.roll(spatial_component_rolled, spatial_component.shape[1]//2, axis=1)
-        
-        im = axs[i].imshow(spatial_component_rolled, cmap='viridis')
-        axs[i].set_title(title)
-        plt.colorbar(im, ax=axs[i])
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_set_template_components(v1, v2, v3, p):
-    spectrum = np.zeros((p,p), dtype=complex)
-
-    # Mode (1,0)
-    spectrum[1,0] = v1
-    spectrum[-1,0] = np.conj(v1) 
-
-    template_1 = np.fft.ifft2(spectrum).real
-
-    # Mode (0,1)
-    spectrum[0,1] = v2
-    spectrum[0,-1] = np.conj(v2)
-
-    template_2 = np.fft.ifft2(spectrum).real
-
-    # Mode (1,1)
-    spectrum[1,1] = v3
-    spectrum[-1,-1] = np.conj(v3)
-    
-    # Generate signal from spectrum
-    template_full = np.fft.ifft2(spectrum).real
-
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-    im1 = axs[0].imshow(template_1, cmap='viridis')
-    axs[0].set_title("Mode (1,0)")
-    plt.colorbar(im1, ax=axs[0])
-    im2 = axs[1].imshow(template_2, cmap='viridis')
-    axs[1].set_title("Mode (1,0)+(0,1)")
-    plt.colorbar(im2, ax=axs[1])
-    im3 = axs[2].imshow(template_full, cmap='viridis')
-    axs[2].set_title("Full Template")
-    plt.colorbar(im3, ax=axs[2])
-    plt.tight_layout()
-
-    plt.show()
 
 def ModularAdditionDataset2D(p, template, fraction=0.3, random_state=42):
     """Generate a dataset for the 2D modular addition operation.

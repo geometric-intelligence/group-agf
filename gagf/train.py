@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import torch
+import os
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
@@ -10,6 +11,8 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
+
+from . import viz
 
 def test_accuracy(model, dataloader):
     correct = 0
@@ -27,7 +30,7 @@ def test_accuracy(model, dataloader):
     accuracy = 100 * correct / total
     return accuracy
 
-def train(model, dataloader, criterion, optimizer, epochs=100, verbose_interval=1, neurons_to_plot=[0,1,2, 3,4,5]):
+def train(model, dataloader, criterion, optimizer, fig_save_dir, epochs=100, verbose_interval=1, neurons_to_plot=[0,1,2, 3,4,5]):
     model.train()  # Set the model to training mode
     loss_history = []  # List to store loss values
     accuracy_history = []
@@ -134,10 +137,12 @@ def train(model, dataloader, criterion, optimizer, epochs=100, verbose_interval=
                 axs[3].imshow(target_np.reshape(image_size, image_size))
                 axs[3].set_title('Target')
                 plt.tight_layout()
-                plt.savefig(f"figs/prediction_fig_epoch_{epoch+1}.png", bbox_inches='tight')
+                save_path = os.path.join(fig_save_dir, f"prediction_fig_epoch_{epoch+1}.png")
+                plt.savefig(save_path, bbox_inches='tight')
                 plt.close(fig)
 
-                plot_neuron_weights(model, neurons_to_plot, p=image_size, save_path=f"figs/weights_epoch_{epoch+1}.png", show=False)
+                save_path = os.path.join(fig_save_dir, f"weights_epoch_{epoch+1}.png")
+                viz.plot_neuron_weights(model, neurons_to_plot, p=image_size, save_path=save_path, show=False)
 
     
              

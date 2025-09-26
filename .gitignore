@@ -6,6 +6,9 @@ poetry.lock
 loss-without-lines.pdf
 training_history.pkl
 fourier_power_only.pdf
+notebooks/figs/
+notebooks/figs_temp/
+gagf/fourier_power_only.png
 
 # C extensions
 *.so

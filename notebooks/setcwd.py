@@ -40,4 +40,13 @@ def main():
     print("Directory added to path: ", notebook_dir)
 
 
+def get_root_dir():
+    """Return the root directory of the git repository."""
+    gitroot_path = subprocess.check_output(
+        ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
+    )
+    return gitroot_path[:-1]  # Remove trailing newline
+    
+
+
 

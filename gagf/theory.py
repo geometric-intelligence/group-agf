@@ -99,7 +99,7 @@ def get_alpha_values_and_valid_freq(template):
     return alpha_values, power, valid, sorted_idx
 
 
-def model_power_over_time(model, template_power_length, valid_freqs=None):
+def model_power_over_time(model, param_history, model_inputs, template_power_length, p, valid_freqs=None):
     """Compute the power spectrum of the model's learned weights over time.
 
     Parameters
@@ -116,6 +116,7 @@ def model_power_over_time(model, template_power_length, valid_freqs=None):
     """
     # Compute output power over time (GD)
     num_points = 1000
+    X_tensor = model_inputs
     steps = np.unique(np.logspace(0, np.log10(len(param_history) - 1), num_points, dtype=int))
     powers_over_time = np.zeros([len(steps), template_power_length])  # shape: (steps, num_freqs) np.zeros([len(steps), len(X_tensor), template_power_length]) 
     # powers_over_time = np.zeros([len(steps), len(X_tensor), template_power_length]) 
