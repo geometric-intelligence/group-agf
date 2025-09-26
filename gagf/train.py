@@ -30,7 +30,7 @@ def test_accuracy(model, dataloader):
     accuracy = 100 * correct / total
     return accuracy
 
-def train(model, dataloader, criterion, optimizer, fig_save_dir, epochs=100, verbose_interval=1, neurons_to_plot=[0,1,2, 3,4,5]):
+def train(model, dataloader, criterion, optimizer, epochs=100, verbose_interval=1):
     model.train()  # Set the model to training mode
     loss_history = []  # List to store loss values
     accuracy_history = []
@@ -86,65 +86,5 @@ def train(model, dataloader, criterion, optimizer, fig_save_dir, epochs=100, ver
         # Print verbose information every `verbose_interval` epochs
         if (epoch + 1) % verbose_interval == 0:
             print(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%")
-
-        # Plot results every 100 epochs
-        if (epoch + 1) % 100 == 0:
-            print(f'Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}')
-            model.eval()
-            with torch.no_grad():
-                # Get one random example from the dataset
-                idx = np.random.randint(len(dataloader.dataset))
-                x, y = dataloader.dataset[idx]
-                # If x is not already a tensor, convert it
-                if not torch.is_tensor(x):
-                    x = torch.tensor(x, dtype=torch.float32)
-                if not torch.is_tensor(y):
-                    y = torch.tensor(y, dtype=torch.float32)
-                # Move to device if needed
-                x_input = x.view(1, -1)
-                if hasattr(model, 'device'):
-                    x_input = x_input.to(model.device)
-                elif next(model.parameters()).is_cuda:
-                    x_input = x_input.cuda()
-                output = model(x_input)
-                output_np = output.cpu().numpy().squeeze()
-                target_np = y.cpu().numpy().squeeze() if hasattr(y, 'cpu') else y.numpy().squeeze()
-
-                # Try to infer image size if possible
-                # Ensure x, output, and target are on CPU and numpy arrays for plotting
-                if torch.is_tensor(x):
-                    x_np = x.detach().cpu().numpy()
-                else:
-                    x_np = np.array(x)
-                if torch.is_tensor(output):
-                    output_np = output.detach().cpu().numpy().squeeze()
-                # output_np already defined above, but ensure it's on CPU and numpy
-                if torch.is_tensor(y):
-                    target_np = y.detach().cpu().numpy().squeeze()
-                else:
-                    target_np = np.array(y).squeeze()
-
-                # Infer image size
-                image_size = int(np.sqrt(x_np.shape[-1] // 2)) if x_np.shape[-1] % 2 == 0 else int(np.sqrt(x_np.shape[-1]))
-
-                fig, axs = plt.subplots(1, 4, figsize=(15, 3), sharey=True)
-                axs[0].imshow(x_np[:image_size*image_size].reshape(image_size, image_size))
-                axs[0].set_title('Input 1')
-                axs[1].imshow(x_np[image_size*image_size:].reshape(image_size, image_size))
-                axs[1].set_title('Input 2')
-                axs[2].imshow(output_np.reshape(image_size, image_size))
-                axs[2].set_title('Output')
-                axs[3].imshow(target_np.reshape(image_size, image_size))
-                axs[3].set_title('Target')
-                plt.tight_layout()
-                save_path = os.path.join(fig_save_dir, f"prediction_fig_epoch_{epoch+1}.png")
-                plt.savefig(save_path, bbox_inches='tight')
-                plt.close(fig)
-
-                save_path = os.path.join(fig_save_dir, f"weights_epoch_{epoch+1}.png")
-                viz.plot_neuron_weights(model, neurons_to_plot, p=image_size, save_path=save_path, show=False)
-
-    
-             
 
     return loss_history, accuracy_history, param_history # Return loss history for plotting

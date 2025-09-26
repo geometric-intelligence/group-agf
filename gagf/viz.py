@@ -34,8 +34,8 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
             break
     if first_layer is None:
         # Support both nn.Linear and custom nn.Parameter-based models (like TwoLayerNet)
-        if hasattr(model, 'U'):
-            weights = model.U.detach().cpu().numpy()
+        if hasattr(model, 'W'):
+            weights = model.W.detach().cpu().numpy()
         elif first_layer is not None:
             weights = first_layer.weight.detach().cpu().numpy()
         else:
@@ -68,6 +68,48 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
     if show:
         plt.show()
     plt.close(fig)
+
+
+def plot_model_outputs(model, X, Y, idx, num_samples=5, save_path=None):
+    with torch.no_grad():
+        x = X[idx].view(1, -1)
+        y = Y[idx].view(1, -1)
+
+        output = model(x)
+        output_np = output.cpu().numpy().squeeze()
+        target_np = y.cpu().numpy().squeeze() if hasattr(y, 'cpu') else y.numpy().squeeze()
+
+        # Try to infer image size if possible
+        # Ensure x, output, and target are on CPU and numpy arrays for plotting
+        if torch.is_tensor(x):
+            x_np = x.detach().cpu().numpy()
+        else:
+            x_np = np.array(x)
+        if torch.is_tensor(output):
+            output_np = output.detach().cpu().numpy().squeeze()
+        # output_np already defined above, but ensure it's on CPU and numpy
+        if torch.is_tensor(y):
+            target_np = y.detach().cpu().numpy().squeeze()
+        else:
+            target_np = np.array(y).squeeze()
+
+        # Infer image size
+        image_size = int(np.sqrt(x_np.shape[-1] // 2)) if x_np.shape[-1] % 2 == 0 else int(np.sqrt(x_np.shape[-1]))
+
+        fig, axs = plt.subplots(1, 4, figsize=(15, 3), sharey=True)
+        axs[0].imshow(x_np[:image_size*image_size].reshape(image_size, image_size))
+        axs[0].set_title('Input 1')
+        axs[1].imshow(x_np[image_size*image_size:].reshape(image_size, image_size))
+        axs[1].set_title('Input 2')
+        axs[2].imshow(output_np.reshape(image_size, image_size))
+        axs[2].set_title('Output')
+        axs[3].imshow(target_np.reshape(image_size, image_size))
+        axs[3].set_title('Target')
+        plt.tight_layout()
+        if save_path is not None:
+            plt.savefig(save_path, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
 
 
 def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):

@@ -79,22 +79,26 @@ def generate_fixed_template(p):
     return template
 
 
-def mnist_template(p):
-    """Generate a template from the MNIST dataset, resized to p x p.
+def mnist_template(p, digit=0, sample_idx=0, random_state=42):
+    """Generate a template from the MNIST dataset, resized to p x p, for a specified digit.
 
     Parameters
     ----------
     p : int
         p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
+    digit : int, optional
+        The MNIST digit to use as a template (0-9). Default is 0.
+    sample_idx : int, optional
+        The index of the sample to use among the filtered digit images. Default is 0.
+    random_state : int, optional
+        Random seed for shuffling the digit images. Default is 42.
+
     Returns
     -------
     template : np.ndarray
         A flattened 2D array of shape (p, p) representing the template.
     """
     from sklearn.datasets import fetch_openml
-    from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
     from sklearn.utils import shuffle
     from skimage.transform import resize
 
@@ -103,12 +107,17 @@ def mnist_template(p):
     X = mnist.data.values
     y = mnist.target.astype(int).values
 
-    # Filter for digit '0'
-    X_zero = X[y == 0]
+    # Filter for the specified digit
+    X_digit = X[y == digit]
 
-    # Shuffle and take one sample
-    X_zero = shuffle(X_zero, random_state=42)
-    sample = X_zero[0].reshape(28, 28)
+    if X_digit.shape[0] == 0:
+        raise ValueError(f"No samples found for digit {digit} in MNIST dataset.")
+
+    # Shuffle and select the desired sample
+    X_digit = shuffle(X_digit, random_state=random_state)
+    if sample_idx >= X_digit.shape[0]:
+        raise IndexError(f"sample_idx {sample_idx} is out of bounds for digit {digit} (found {X_digit.shape[0]} samples).")
+    sample = X_digit[sample_idx].reshape(28, 28)
 
     # Resize to p x p
     sample_resized = resize(sample, (p, p), anti_aliasing=True)
