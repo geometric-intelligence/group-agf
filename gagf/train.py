@@ -39,26 +39,12 @@ def train(model, dataloader, criterion, optimizer, epochs=100, verbose_interval=
     for epoch in range(epochs):
         running_loss = 0.0
         for batch_idx, (inputs, labels) in enumerate(dataloader):
-            # Check if labels are all zeros or if labels are not being set correctly
-            if torch.all(labels == 0):
-                print(f"Warning: All labels are zero in batch {batch_idx} of epoch {epoch}")
-            if torch.isnan(inputs).any() or torch.isnan(labels).any():
-                print(f"NaN detected in inputs or labels in batch {batch_idx} of epoch {epoch}")
-
             inputs = inputs.view(inputs.shape[0], -1)  # Flatten input for FC layers
 
             optimizer.zero_grad()  # Zero gradients
             outputs = model(inputs)  # Forward pass
 
-            # Check if outputs are all zeros or constant
-            if torch.all(outputs == 0):
-                print(f"Warning: Model outputs are all zero in batch {batch_idx} of epoch {epoch}")
-
             loss = criterion(outputs, labels)  # Compute loss
-
-            # Check if loss is zero from the start
-            if epoch == 0 and batch_idx == 0 and loss.item() == 0.0:
-                print("Warning: Loss is zero at the very first batch. Check if criterion and labels are set up correctly.")
 
             loss.backward()  # Backpropagation
             optimizer.step()  # Update weights

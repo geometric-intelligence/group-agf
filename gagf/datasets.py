@@ -183,10 +183,11 @@ def ModularAdditionDataset2D(p, template, fraction=0.3, random_state=42):
                     idx += 1
 
     assert 0 < fraction <= 1.0, "fraction must be in (0, 1]"
+    # Sample a subset of the dataset according to the specified fraction
     N = X.shape[0]
     n_sample = int(np.ceil(N * fraction))
     rng = np.random.default_rng(random_state)
-    indices = rng.choice(N, size=n_sample, replace=False)
+    indices = rng.choice(N, size=n_sample, replace=False)  # indices of the sampled subset
 
     return X[indices], Y[indices], translations[indices]
             

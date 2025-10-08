@@ -38,6 +38,9 @@ def main():
     notebook_dir = os.path.join(os.getcwd(), "notebooks")
     sys.path.append(notebook_dir)
     print("Directory added to path: ", notebook_dir)
+    saved_models_dir = os.path.join(notebook_dir, "saved_models")
+    sys.path.append(saved_models_dir)
+    print("Directory added to path: ", saved_models_dir)
 
 
 def get_root_dir():
