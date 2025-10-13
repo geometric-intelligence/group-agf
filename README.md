@@ -1,7 +1,7 @@
 # group-agf
 Group Alternating Gradient Flows
 
-# Installing Dependancies
+# Installing Dependencies
 
 ```
 conda env create -f conda.yaml
