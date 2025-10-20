@@ -24,6 +24,8 @@ pytest = "^8.3.4"
 ipykernel = "^6.29.5"
 pykernel = "^0.1.6"
 scikit-learn = "^1.7.2"
+tqdm = "^4.67.1"
+seaborn = "^0.13.2"
 
 
 [build-system]
