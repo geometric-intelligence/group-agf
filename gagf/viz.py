@@ -95,6 +95,11 @@ def plot_model_outputs(model, X, Y, idx, num_samples=5, save_path=None):
 
         # Infer image size
         image_size = int(np.sqrt(x_np.shape[-1] // 2)) if x_np.shape[-1] % 2 == 0 else int(np.sqrt(x_np.shape[-1]))
+        print(image_size)
+        print(x_np.shape)
+        print(output_np.shape)
+        print(target_np.shape)
+        x_np = x_np.squeeze()
 
         fig, axs = plt.subplots(1, 4, figsize=(15, 3), sharey=True)
         axs[0].imshow(x_np[:image_size*image_size].reshape(image_size, image_size))
