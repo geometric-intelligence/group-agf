@@ -5,6 +5,11 @@ __pycache__/
 poetry.lock
 loss-without-lines.pdf
 training_history.pkl
+fourier_power_only.pdf
+notebooks/figs/
+notebooks/figs_temp/
+gagf/fourier_power_only.png
+notebooks/saved_models/
 
 # C extensions
 *.so
