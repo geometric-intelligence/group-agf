@@ -1,0 +1,27 @@
+# Data configuration
+data:
+  p1: 28
+  p2: 28
+  k: 3  # sequence length
+  mode: sampled
+  num_samples: 100000
+  n_freqs: 10
+  batch_size: 1000
+  seed: 5
+
+# Model configuration
+model:
+  hidden_dim: 36
+  init_scale: 1.0e-5
+
+# Training configuration
+training:
+  epochs: 150
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  betas: [0.9, 0.999]
+  grad_clip: 0.1
+  verbose_interval: 5
+
+# Experiment metadata
+device: cuda
