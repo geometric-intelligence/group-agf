@@ -53,7 +53,7 @@ def plot_loss_curve(loss_history, template, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(template_2d, model, device, param_history, X_tensor, p, save_path=None, show=False):
+def plot_training_power_over_time(template_2d, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
@@ -85,8 +85,9 @@ def plot_training_power_over_time(template_2d, model, device, param_history, X_t
         plt.axhline(flattened_template_power[i], color=f"C{i}", linestyle='dotted', linewidth=2, alpha=0.5, zorder=-10)
 
     # Labeling and formatting
+    if logscale:
+        plt.yscale('log')
     plt.xscale('log')
-    plt.yscale('log')
     plt.xlim(0, len(param_history) - 1)
     plt.ylim(1e-7, 2)
     plt.xticks(
@@ -117,7 +118,7 @@ def plot_training_power_over_time(template_2d, model, device, param_history, X_t
 
 
 
-def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
+def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=True):
     """
     Plots the weights of specified neurons in the first linear layer of the model.
     
@@ -173,7 +174,7 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
     plt.close(fig)
 
 
-def plot_model_outputs(model, X, Y, idx, num_samples=5, save_path=None):
+def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None):
     """Plot a training target vs the model output.
 
     Parameters
@@ -191,45 +192,63 @@ def plot_model_outputs(model, X, Y, idx, num_samples=5, save_path=None):
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
+    # Vectorized function to support multiple indices (idx can be int or list/array of ints)
+    import collections.abc
+
     with torch.no_grad():
-        x = X[idx].view(1, -1)
-        y = Y[idx].view(1, -1)
+        # Accept single int or list/array of ints for idx
+        idx_list = idx if isinstance(idx, collections.abc.Sequence) and not isinstance(idx, str) else [idx]
+        n_samples = len(idx_list)
 
-        output = model(x)
-        output_np = output.cpu().numpy().squeeze()
-        target_np = y.cpu().numpy().squeeze() if hasattr(y, 'cpu') else y.numpy().squeeze()
+        # Prepare output for all idx
+        # Model may only accept batch input, so collect batch inputs
+        x = X[idx_list]   # (n_samples, input_size)
+        y = Y[idx_list]   # (n_samples, output_size)
+        print(f"x shape: {x.shape}, y shape: {y.shape}")
 
-        # Try to infer image size if possible
-        # Ensure x, output, and target are on CPU and numpy arrays for plotting
-        if torch.is_tensor(x):
-            x_np = x.detach().cpu().numpy()
-        else:
-            x_np = np.array(x)
-        if torch.is_tensor(output):
-            output_np = output.detach().cpu().numpy().squeeze()
-        # output_np already defined above, but ensure it's on CPU and numpy
-        if torch.is_tensor(y):
-            target_np = y.detach().cpu().numpy().squeeze()
-        else:
-            target_np = np.array(y).squeeze()
+        if hasattr(model, 'eval'):
+            model.eval()
+        output = model(x)   # (n_samples, output_size)
 
-        # Infer image size
-        image_size = int(np.sqrt(x_np.shape[-1] // 2)) if x_np.shape[-1] % 2 == 0 else int(np.sqrt(x_np.shape[-1]))
-        print(image_size)
-        print(x_np.shape)
-        print(output_np.shape)
-        print(target_np.shape)
-        x_np = x_np.squeeze()
+        # Convert tensors to numpy arrays
+        def to_numpy(t):
+            if torch.is_tensor(t):
+                return t.detach().cpu().numpy()
+            return np.array(t)
 
-        fig, axs = plt.subplots(1, 4, figsize=(15, 3), sharey=True)
-        axs[0].imshow(x_np[:image_size*image_size].reshape(image_size, image_size))
-        axs[0].set_title('Input 1')
-        axs[1].imshow(x_np[image_size*image_size:].reshape(image_size, image_size))
-        axs[1].set_title('Input 2')
-        axs[2].imshow(output_np.reshape(image_size, image_size))
-        axs[2].set_title('Output')
-        axs[3].imshow(target_np.reshape(image_size, image_size))
-        axs[3].set_title('Target')
+        x_np = to_numpy(x)
+        y_np = to_numpy(y)
+        output_np = to_numpy(output)
+
+        image_size = p
+        # If inputs are 2*p*p (concatenated two images) shape, split accordingly
+        input_flat_dim = x_np.shape[-1]
+        split_point = input_flat_dim // 2
+
+        # Plot for each index
+        fig, axs = plt.subplots(n_samples, 4, figsize=(15, 3 * n_samples), sharey=True,
+                                squeeze=False)
+
+        for row, (x_item, output_item, y_item) in enumerate(zip(x_np, output_np, y_np)):
+            # ensure all items are 1d or flat
+            x_item = np.squeeze(x_item)
+            y_item = np.squeeze(y_item)
+            output_item = np.squeeze(output_item)
+            # For input, show two images side by side if x_item has two images
+            axs[row, 0].imshow(x_item[:split_point].reshape(image_size, image_size), cmap='viridis')
+            axs[row, 0].set_title('Input 1')
+
+            axs[row, 1].imshow(x_item[split_point:].reshape(image_size, image_size), cmap='viridis')
+            axs[row, 1].set_title('Input 2')
+
+            axs[row, 2].imshow(output_item.reshape(image_size, image_size), cmap='viridis')
+            axs[row, 2].set_title('Output')
+
+            axs[row, 3].imshow(y_item.reshape(image_size, image_size), cmap='viridis')
+            axs[row, 3].set_title('Target')
+            for col in range(4):
+                axs[row, col].axis('off')
+
         plt.tight_layout()
         if save_path is not None:
             plt.savefig(save_path, bbox_inches='tight')
