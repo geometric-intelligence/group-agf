@@ -12,7 +12,7 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
 
-import theory
+import gagf.group_learning.power as power
 
 
 def one_hot2D(p):

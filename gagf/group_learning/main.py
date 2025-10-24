@@ -21,11 +21,11 @@ import importlib
 import pickle
 
 import gagf.group_learning.models as models
-import datasets
-import theory
-import train
-import plot
-import saved_datasets
+import gagf.group_learning.datasets as datasets
+import gagf.group_learning.power as power
+import gagf.group_learning.train as train
+import gagf.group_learning.plot as plot
+import gagf.group_learning.saved_datasets as saved_datasets
 
 import wandb
 import itertools
@@ -78,28 +78,12 @@ def main_run(config):
         loss = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
 
-        loss_history, accuracy_history, param_history = train.train(model, dataloader, loss, optimizer, epochs=config['epochs'], verbose_interval=config['verbose_interval'])
+        loss_history, accuracy_history, param_history = train.train(model, dataloader, loss, optimizer, epochs=config['epochs'], verbose_interval=config['verbose_interval'], model_save_path=config['model_save_path'])
 
-        model_save_path = (
-            f"{config['model_save_dir']}model_"
-            f"p{config['p']}_"
-            f"digit{config['mnist_digit']}_"
-            f"frac{config['dataset_fraction']}_"
-            f"type{config['template_type']}_"
-            f"seed{config['seed']}.pkl"
-        )
-
-        with open(model_save_path, "wb") as f:
-            pickle.dump({
-                "loss_history": loss_history,
-                "accuracy_history": accuracy_history,
-                "param_history": param_history
-            }, f)
-
-        print(f"Training history saved to {model_save_path}. You can reload it later with pickle.load(open({model_save_path}, 'rb')).")
-
-        
-
+        loss_plot = plot.plot_loss_curve(loss_history, template)
+        power_over_training_plot = plot.plot_power_over_time(model, param_history, X, template, config['p'])
+        neuron_weights_plot = plot.plot_neuron_weights_evolution(model, param_history, template, config['p'])
+        wandb.log({"loss_plot": wandb.Image(loss_plot)})
 
         # wandb.log({"mse": mse})
         # for plot_name, plot in plots.items():
@@ -117,8 +101,7 @@ def main_run(config):
         wandb_config.update({"full_run": full_run})
         logging.exception(e)
         wandb.finish()
-
-
+    
 
 def choose_template(p, template_type="mnist", digit=4):
     """Choose template based on type."""
@@ -216,6 +199,15 @@ def main():
         default_config.hidden_size,
     ):
 
+        model_save_path = (
+            f"{default_config.model_save_dir}model_"
+            f"p{p}_"
+            f"digit{mnist_digit}_"
+            f"frac{dataset_fraction}_"
+            f"type{template_type}_"
+            f"seed{seed}.pkl"
+        )
+
         main_config = {
             "p": p,
             "mnist_digit": mnist_digit,
@@ -232,7 +224,7 @@ def main():
             "epochs": epochs,
             "verbose_interval": verbose_interval,
             "hidden_size": hidden_size,
-            "model_save_path": default_config.model_save_path 
+            "model_save_path": model_save_path,
         }
 
         main_run(main_config)

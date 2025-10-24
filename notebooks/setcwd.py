@@ -35,6 +35,9 @@ def main():
     sys_dir = os.path.dirname(os.getcwd())
     sys.path.append(sys_dir) # /home/adele/code/group-agf
     print("Directory added to path: ", sys_dir) 
+    group_learning_dir = os.path.join(sys_dir, "gagf", "group_learning")
+    sys.path.append(group_learning_dir)
+    print("Directory added to path: ", group_learning_dir)
     notebook_dir = os.path.join(os.getcwd(), "notebooks")
     sys.path.append(notebook_dir)
     print("Directory added to path: ", notebook_dir)
