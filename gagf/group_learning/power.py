@@ -83,6 +83,11 @@ def get_power_2d(points, no_freq=False):
 def get_alpha_values(template):
     """Compute theoretical alpha values from the template's power spectrum.
 
+    If desired:
+    original_indices_nonzero_power = np.where(nonzero_power_mask)
+    freq_tuples = np.array([(x_freq, y_freq) for x_freq in x_freqs for y_freq in y_freqs])
+    nonzero_power_frequencies = freq_tuples[original_indices_nonzero_power]
+
     Parameters
     ----------
     template : ndarray (p*p,)
@@ -104,7 +109,7 @@ def get_alpha_values(template):
         Frequency tuples corresponding to nonzero power values.
     """
     p = int(np.sqrt(len(template)))
-    x_freq, y_freq, power = get_power_2d(template.reshape((p, p)))
+    x_freqs, y_freqs, power = get_power_2d(template.reshape((p, p)))
     print(power)
     power = power.flatten()
 
@@ -118,13 +123,7 @@ def get_alpha_values(template):
     coef = 1 / (p * p)
     alpha_values = [alpha * coef for alpha in alpha_values]
 
-    original_indices_nonzero_power = np.where(nonzero_power_mask)
-
-    freq_tuples = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
-    nonzero_power_frequencies = freq_tuples[original_indices_nonzero_power]
-
-    return alpha_values, power, original_indices_nonzero_power, nonzero_power_frequencies
-
+    return alpha_values
 
 def model_power_over_time(model, param_history, model_inputs, p):
     """Compute the power spectrum of the model's learned weights over time.

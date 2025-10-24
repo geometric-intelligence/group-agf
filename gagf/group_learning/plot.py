@@ -32,6 +32,7 @@ def plot_loss_curve(loss_history, template, save_path=None, show=False):
     alpha_values = power.get_alpha_values(template)
 
     for k, alpha in enumerate(alpha_values):
+        print(f"Plotting alpha value {k}: {alpha}")
         plt.axhline(y=alpha, color='black', linestyle='--', linewidth=2, zorder=-2)
 
     plt.xscale("log")
