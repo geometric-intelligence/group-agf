@@ -12,7 +12,8 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
 
-import theory
+import gagf.group_learning.power as power
+import setcwd
 
 
 def one_hot2D(p):
@@ -224,9 +225,10 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
     """
     file_name = f'modular_addition_2d_dataset_type{template_type}_p{p}_fraction{fraction:.2f}.npz'
 
-    load_path = os.path.join('saved_datasets', file_name)
+    root_dir = setcwd.get_root_dir()
+    load_path = os.path.join(root_dir, 'gagf', 'group_learning', 'saved_datasets', file_name)
 
-    if load_path is not None and os.path.exists(load_path):
+    if os.path.exists(load_path):
         data = np.load(load_path)
         X = data['X']
         Y = data['Y']
@@ -241,3 +243,60 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
             save_path=load_path
         )
         return X, Y, translations
+
+
+def choose_template(p, template_type="mnist", digit=4):
+    """Choose template based on type."""
+    if template_type == "znz_znz_fixed":
+        template = generate_fixed_template(p)
+    elif template_type == "mnist":
+        template = mnist_template(p, digit=digit)
+    else:
+        raise ValueError(f"Unknown template_type: {template_type}")
+
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
+    
+    return template
+
+
+def move_dataset_to_device_and_flatten(X, Y, p, device=None):
+    """Move dataset tensors to available or specified device.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data of shape (num_samples, 2, p*p)
+    Y : np.ndarray
+        Target data of shape (num_samples, p*p)
+    p : int
+        Image length. Images are of shape (p, p)
+    device : torch.device, optional 
+        Device to move tensors to. If None, automatically choose GPU if available.
+        
+    Returns
+    -------
+    X : torch.Tensor
+        Input data tensor on specified device, flattened to (num_samples, 2*p*p)
+    Y : torch.Tensor
+        Target data tensor on specified device, flattened to (num_samples, p*p)
+    """
+    # Flatten X to shape (num_samples, 2*p*p) before converting to tensor
+    X_flat = X.reshape(X.shape[0], 2 * p * p)
+    Y_flat = Y.reshape(Y.shape[0], p * p)
+    X_tensor = torch.tensor(X_flat, dtype=torch.float32)
+    Y_tensor = torch.tensor(Y_flat, dtype=torch.float32)  # Targets (num_samples, p*p)
+    print(f"X_tensor shape: {X_tensor.shape}, Y_tensor shape: {Y_tensor.shape}")
+
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            print("GPU is available. Using CUDA.")
+        else:
+            device = torch.device("cpu")
+            print("GPU is not available. Using CPU.")
+
+    X_tensor = X_tensor.to(device)
+    Y_tensor = Y_tensor.to(device)
+
+    return X_tensor, Y_tensor, device

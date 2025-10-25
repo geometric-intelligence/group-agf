@@ -36,9 +36,9 @@ def get_power_2d(points, no_freq=False):
 
     Returns
     -------
-    freqs_u : ndarray (M,)
+    row_freqs : ndarray (M,)
         Frequency bins for the first axis (rows).
-    freqs_v : ndarray (N//2 + 1,)
+    column_freqs : ndarray (N//2 + 1,)
         Frequency bins for the second axis (columns).
     power : ndarray (M, N//2 + 1)
         Power spectrum of the input.
@@ -74,52 +74,87 @@ def get_power_2d(points, no_freq=False):
         return power
 
     # Frequency bins
-    freqs_u = np.fft.fftfreq(M)          # full symmetric frequencies (rows)
-    freqs_v = np.fft.rfftfreq(N)         # only non-negative frequencies (columns)
+    row_freqs = np.fft.fftfreq(M)          # full symmetric frequencies (rows)
+    column_freqs = np.fft.rfftfreq(N)         # only non-negative frequencies (columns)
 
-    return freqs_u, freqs_v, power
+    return row_freqs, column_freqs, power
 
 
-def get_alpha_values_and_valid_freq(template):
+def get_alpha_values(template):
+    """Compute theoretical alpha values from the template's power spectrum.
+
+    If desired:
+    original_indices_nonzero_power = np.where(nonzero_power_mask)
+    freq_tuples = np.array([(x_freq, y_freq) for x_freq in x_freqs for y_freq in y_freqs])
+    nonzero_power_frequencies = freq_tuples[original_indices_nonzero_power]
+
+    Parameters
+    ----------
+    template : ndarray (p*p,)
+        Flattened 2D template array.
+    return_nonzero_power_indices : bool, optional
+        If True, also return the indices of nonzero power values.
+    return_nonzero_power_frequency_tuples : bool, optional
+        If True, also return the frequency tuples corresponding to nonzero power values.
+
+    Returns
+    -------
+    alpha_values : list of float
+        Theoretical alpha values for each nonzero power, in descending order.
+    power : ndarray
+        Power spectrum that has been filtered to non-zero values and sorted in descending order.
+    original_indices_nonzero_power : tuple of ndarray, optional
+        Indices of nonzero power values in the original power array.
+    nonzero_power_frequencies : ndarray, optional
+        Frequency tuples corresponding to nonzero power values.
+    """
     p = int(np.sqrt(len(template)))
-    x_freq, y_freq, power = get_power_2d(template.reshape((p, p)))
+    x_freqs, y_freqs, power = get_power_2d(template.reshape((p, p)))
     print(power)
     power = power.flatten()
 
-    valid = power > 1e-20
-    power = power[valid]
-    sorted_idx = np.argsort(power)[::-1]  # np.argsort with [::-1] gives descending order
-    power = power[sorted_idx]
+    nonzero_power_mask = power > 1e-20
+    power = power[nonzero_power_mask]
+    i_power_descending_order = np.argsort(power)[::-1]  # np.argsort with [::-1] gives descending order
+    power = power[i_power_descending_order]
 
     # Plot theoretical lines
     alpha_values = [np.sum(power[k:]) for k in range(len(power))]
     coef = 1 / (p * p)
     alpha_values = [alpha * coef for alpha in alpha_values]
 
-    return alpha_values, power, valid, sorted_idx
+    return alpha_values
 
-
-def model_power_over_time(model, param_history, model_inputs, template_power_length, p, valid_freqs=None):
+def model_power_over_time(model, param_history, model_inputs, p):
     """Compute the power spectrum of the model's learned weights over time.
 
     Parameters
     ----------
     model : TwoLayerNet
         The trained model.
-    valid_freqs : list of tuple, optional
-        List of frequency indices to track. If None, track all frequencies.
+    param_history : list of dict
+        List of model parameters at each training step.
+    model_inputs : torch.Tensor
+        Input data tensor.
+    template_power_length : int
+        Length of the template's (flattened) power spectrum.
+    p : int
+        Image length. Images are of shape (p, p).
+        Used to compute template power length, since
+        power has shape (p, p//2 + 1)
 
     Returns
     -------
     avg_power_history : list of ndarray (num_steps, num_freqs)
         List of average power spectra at each step.
     """
+    template_power_length = p * (p // 2 + 1)
+
     # Compute output power over time (GD)
     num_points = 1000
     X_tensor = model_inputs
     steps = np.unique(np.logspace(0, np.log10(len(param_history) - 1), num_points, dtype=int))
     powers_over_time = np.zeros([len(steps), template_power_length])  # shape: (steps, num_freqs) np.zeros([len(steps), len(X_tensor), template_power_length]) 
-    # powers_over_time = np.zeros([len(steps), len(X_tensor), template_power_length]) 
 
     for i_step, step in enumerate(steps):
         model.load_state_dict(param_history[step])
@@ -137,11 +172,6 @@ def model_power_over_time(model, param_history, model_inputs, template_power_len
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)
     print("Powers over time shape:", powers_over_time.shape)
-
-    if valid_freqs is not None:
-        valid_indices = [idx for idx, freq in enumerate(freq_tuples) if freq in valid_freqs]
-        powers_over_time = powers_over_time[:, valid_indices]
-        print(f"Filtered to {len(valid_indices)} valid frequencies.")
     
     return powers_over_time, steps
     

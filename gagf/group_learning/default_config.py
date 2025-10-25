@@ -1,7 +1,7 @@
 # Dataset Parameters
 import os
 
-p = [10]
+p = [5]
 mnist_digit = [4]
 dataset_fraction = [0.2] # fraction of the total dataset to train on
 group = ['znz_znz', 'dihedral']

@@ -10,6 +10,7 @@ notebooks/figs/
 notebooks/figs_temp/
 gagf/fourier_power_only.png
 notebooks/saved_models/
+gagf/group_learning/wandb/
 
 # C extensions
 *.so

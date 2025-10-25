@@ -11,10 +11,115 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
 
-import theory
+import gagf.group_learning.power as power
 
 
-def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
+def plot_loss_curve(loss_history, template, save_path=None, show=False):
+    """Plot loss curve over epochs.
+
+    Parameters
+    ----------
+    loss_history : list of float
+        List of loss values recorded at each epoch.
+    template : np.ndarray (p*p,)
+        The template used in training (used to calculate theoretical plateau lines for AGF).
+    save_path : str, optional
+        Path to save the plot. If None, the plot is not saved.
+    """
+    fig = plt.figure(figsize=(8, 6))
+    plt.plot(list(loss_history), lw=4)
+
+    alpha_values = power.get_alpha_values(template)
+
+    for k, alpha in enumerate(alpha_values):
+        print(f"Plotting alpha value {k}: {alpha}")
+        plt.axhline(y=alpha, color='black', linestyle='--', linewidth=2, zorder=-2)
+
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.ylim([1e-2, 0.1])
+
+    plt.xlabel('Epochs', fontsize=24)
+    plt.ylabel('Train Loss', fontsize=24)
+
+    style_axes(plt.gca())
+    plt.grid(False)
+    plt.tight_layout()
+
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
+    if show:
+        plt.show()
+    return fig
+
+
+def plot_training_power_over_time(template_flat, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
+    """Plot the power spectrum of the model's learned weights over time.
+
+    Parameters
+    ----------
+    avg_power_history : list of ndarray (num_steps, num_freqs)
+        List of average power spectra at each step.
+    save_path : str, optional
+        Path to save the plot. If None, the plot is not saved.
+    """
+    template_2d = template_flat.reshape((p, p))
+    row_freqs, column_freqs, template_power = power.get_power_2d(template_2d)
+    freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
+    flattened_template_power = template_power.flatten()
+    top_5_power_idx = np.argsort(flattened_template_power)[-5:][::-1]
+    print(f"top_5_power_idx: {top_5_power_idx}")
+
+    model_powers_over_time, steps = power.model_power_over_time(
+        model.to(device),
+        param_history=param_history,
+        model_inputs = X_tensor,
+        p=p,
+    )
+
+    # Create a new figure for this plot
+    fig = plt.figure(figsize=(10, 6))
+
+    for i in top_5_power_idx:
+        label = fr"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
+        plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
+        plt.axhline(flattened_template_power[i], color=f"C{i}", linestyle='dotted', linewidth=2, alpha=0.5, zorder=-10)
+
+    # Labeling and formatting
+    if logscale:
+        plt.yscale('log')
+    plt.xscale('log')
+    plt.xlim(0, len(param_history) - 1)
+    plt.ylim(1e-7, 2)
+    plt.xticks(
+        [1000, 10000, 100000, len(param_history) - 1],
+        [r'$10^3$', r'$10^4$', r'$10^5$', 'Final']
+    )
+    plt.ylabel("Power", fontsize=24)
+    plt.xlabel("Epochs", fontsize=24)
+    plt.legend(
+        fontsize=14,
+        title="Frequency",
+        title_fontsize=16,
+        loc='upper right',
+        bbox_to_anchor=(1, 0.9),
+        labelspacing=0.25
+    )
+    ax = plt.gca()
+    style_axes(ax)
+    plt.grid(False)
+    plt.tight_layout()
+
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches="tight")
+    if show:
+        plt.show()
+
+    return fig
+
+
+
+def plot_neuron_weights(model, p, neuron_indices=None, save_path=None, show=False):
     """
     Plots the weights of specified neurons in the first linear layer of the model.
     
@@ -23,29 +128,36 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
         neuron_indices: List of neuron indices to plot.
         p: The value of p (weights are of size p*p).
         save_path: Optional path to save the figure.
-    """
-
-    # Get the first linear layer's weights
-    first_layer = None
-    for module in model.modules():
+    """        
+    # Get the last linear layer's weights
+    last_layer = None
+    # Reverse list of modules to get the last nn.Linear if present
+    modules = list(model.modules())
+    for module in reversed(modules):
         if hasattr(module, 'weight') and hasattr(module, 'bias'):
-            first_layer = module
-            weights = first_layer.weight.detach().cpu().numpy()  # shape: (out_features, in_features)
+            last_layer = module
+            weights = last_layer.weight.detach().cpu().numpy()  # shape: (out_features, in_features)
             break
-    if first_layer is None:
+    if last_layer is None:
         # Support both nn.Linear and custom nn.Parameter-based models (like TwoLayerNet)
-        if hasattr(model, 'W'):
-            weights = model.W.detach().cpu().numpy()
-        elif first_layer is not None:
-            weights = first_layer.weight.detach().cpu().numpy()
+        if hasattr(model, 'U'):
+            weights = model.U.detach().cpu().numpy()
+        elif last_layer is not None:
+            weights = last_layer.weight.detach().cpu().numpy()
         else:
             raise ValueError("No suitable weights found in model (neither nn.Linear nor custom nn.Parameter 'U').")
 
+
+    if neuron_indices is None:
+        if len(weights) <= 16:
+            neuron_indices = list(range(len(weights)))
+        else:
+            neuron_indices = random.sample(range(len(weights)), 10)
+        
     # Determine number of rows and columns (max 5 per row)
     n_plots = len(neuron_indices)
     n_cols = min(5, n_plots)
     n_rows = (n_plots + 4) // 5  # integer division, round up
-
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(3*n_cols, 3*n_rows))
     # axs is 2D if n_rows > 1, else 1D
     axs = np.array(axs).reshape(-1)  # flatten for easy indexing
@@ -69,52 +181,94 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=False):
         plt.show()
     plt.close(fig)
 
+    return fig
 
-def plot_model_outputs(model, X, Y, idx, num_samples=5, save_path=None):
+
+def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None, show=False):
+    """Plot a training target vs the model output.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The trained model.
+    X : torch.Tensor
+        Input data of shape (num_samples, input_size).
+    Y : torch.Tensor
+        Target data of shape (num_samples, output_size).
+    idx : int
+        Index of the data sample to plot target vs output for.
+    num_samples : int
+        Total number of samples in the dataset.
+    save_path : str, optional
+        Path to save the plot. If None, the plot is not saved.
+    """
+    # Vectorized function to support multiple indices (idx can be int or list/array of ints)
+    import collections.abc
+
     with torch.no_grad():
-        x = X[idx].view(1, -1)
-        y = Y[idx].view(1, -1)
+        # Accept single int or list/array of ints for idx
+        idx_list = idx if isinstance(idx, collections.abc.Sequence) and not isinstance(idx, str) else [idx]
+        n_samples = len(idx_list)
 
-        output = model(x)
-        output_np = output.cpu().numpy().squeeze()
-        target_np = y.cpu().numpy().squeeze() if hasattr(y, 'cpu') else y.numpy().squeeze()
+        # Prepare output for all idx
+        # Model may only accept batch input, so collect batch inputs
+        x = X[idx_list]   # (n_samples, input_size)
+        y = Y[idx_list]   # (n_samples, output_size)
+        print(f"x shape: {x.shape}, y shape: {y.shape}")
 
-        # Try to infer image size if possible
-        # Ensure x, output, and target are on CPU and numpy arrays for plotting
-        if torch.is_tensor(x):
-            x_np = x.detach().cpu().numpy()
-        else:
-            x_np = np.array(x)
-        if torch.is_tensor(output):
-            output_np = output.detach().cpu().numpy().squeeze()
-        # output_np already defined above, but ensure it's on CPU and numpy
-        if torch.is_tensor(y):
-            target_np = y.detach().cpu().numpy().squeeze()
-        else:
-            target_np = np.array(y).squeeze()
+        if hasattr(model, 'eval'):
+            model.eval()
+        output = model(x)   # (n_samples, output_size)
 
-        # Infer image size
-        image_size = int(np.sqrt(x_np.shape[-1] // 2)) if x_np.shape[-1] % 2 == 0 else int(np.sqrt(x_np.shape[-1]))
-        print(image_size)
-        print(x_np.shape)
-        print(output_np.shape)
-        print(target_np.shape)
-        x_np = x_np.squeeze()
+        # Convert tensors to numpy arrays
+        def to_numpy(t):
+            if torch.is_tensor(t):
+                return t.detach().cpu().numpy()
+            return np.array(t)
 
-        fig, axs = plt.subplots(1, 4, figsize=(15, 3), sharey=True)
-        axs[0].imshow(x_np[:image_size*image_size].reshape(image_size, image_size))
-        axs[0].set_title('Input 1')
-        axs[1].imshow(x_np[image_size*image_size:].reshape(image_size, image_size))
-        axs[1].set_title('Input 2')
-        axs[2].imshow(output_np.reshape(image_size, image_size))
-        axs[2].set_title('Output')
-        axs[3].imshow(target_np.reshape(image_size, image_size))
-        axs[3].set_title('Target')
+        x_np = to_numpy(x)
+        y_np = to_numpy(y)
+        output_np = to_numpy(output)
+
+        image_size = p
+        # If inputs are 2*p*p (concatenated two images) shape, split accordingly
+        input_flat_dim = x_np.shape[-1]
+        split_point = input_flat_dim // 2
+
+        # Plot for each index
+        fig, axs = plt.subplots(n_samples, 4, figsize=(15, 3 * n_samples), sharey=True,
+                                squeeze=False)
+
+        for row, (x_item, output_item, y_item) in enumerate(zip(x_np, output_np, y_np)):
+            # ensure all items are 1d or flat
+            x_item = np.squeeze(x_item)
+            y_item = np.squeeze(y_item)
+            output_item = np.squeeze(output_item)
+            # For input, show two images side by side if x_item has two images
+            axs[row, 0].imshow(x_item[:split_point].reshape(image_size, image_size), cmap='viridis')
+            axs[row, 0].set_title('Input 1')
+
+            axs[row, 1].imshow(x_item[split_point:].reshape(image_size, image_size), cmap='viridis')
+            axs[row, 1].set_title('Input 2')
+
+            axs[row, 2].imshow(output_item.reshape(image_size, image_size), cmap='viridis')
+            axs[row, 2].set_title('Output')
+
+            axs[row, 3].imshow(y_item.reshape(image_size, image_size), cmap='viridis')
+            axs[row, 3].set_title('Target')
+            for col in range(4):
+                axs[row, col].axis('off')
+
+        fig.suptitle(f"Model Inputs, Outputs, and Targets at index {idx}", fontsize=20)
         plt.tight_layout()
         if save_path is not None:
             plt.savefig(save_path, bbox_inches='tight')
-        plt.show()
+        
+        if show:
+            plt.show()
         plt.close(fig)
+
+    return fig
 
 
 def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
@@ -198,7 +352,7 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(template_1d, p):
+def plot_top_template_components(template_flat, p, show=False):
     """Plot the top 5 Fourier components of the template.
 
     Parameters
@@ -208,26 +362,26 @@ def plot_top_template_components(template_1d, p):
     p : int
         p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
     """
-    template_2d = template_1d.reshape((p, p))
+    template_2d = template_flat.reshape((p, p))
 
-    freqs_u, freqs_v, power = theory.get_power_2d(template_2d)
+    _, _, template_power = power.get_power_2d(template_2d)
 
     # Flatten the power array and get the indices of the top 5 components
-    power_flat = power.flatten()
-    top_indices = np.argsort(power_flat)[-5:][::-1]  # Indices of top 5 components
+    template_power_flat = template_power.flatten()
+    top_indices = np.argsort(template_power_flat)[-5:][::-1]  # Indices of top 5 components
 
     fig, axs = plt.subplots(1, 5, figsize=(15, 3))
     
     # Initialize cumulative spectrum
-    cumulative_spectrum = np.zeros_like(power, dtype=complex)
+    cumulative_spectrum = np.zeros_like(template_power, dtype=complex)
     
     for i, idx in enumerate(top_indices):
-        u = idx // power.shape[1]
-        v = idx % power.shape[1]
+        u = idx // template_power.shape[1]
+        v = idx % template_power.shape[1]
         
         # Add current component to cumulative spectrum
-        cumulative_spectrum[u, v] = np.sqrt(power[u, v] * p * p)  # Scale back to amplitude
-        if v != 0 and v != power.shape[1] - 1:
+        cumulative_spectrum[u, v] = np.sqrt(template_power[u, v] * p * p)  # Scale back to amplitude
+        if v != 0 and v != template_power.shape[1] - 1:
             cumulative_spectrum[u, -v] = np.conj(cumulative_spectrum[u, v])  # Add negative frequency component if not DC or Nyquist
         
         # Convert cumulative spectrum to spatial domain
@@ -237,11 +391,11 @@ def plot_top_template_components(template_1d, p):
         components_list = []
         for j in range(i + 1):
             comp_idx = top_indices[j]
-            comp_u = comp_idx // power.shape[1]
-            comp_v = comp_idx % power.shape[1]
+            comp_u = comp_idx // template_power.shape[1]
+            comp_v = comp_idx % template_power.shape[1]
             components_list.append(f"({comp_u},{comp_v})")
         
-        title = f"Components: {', '.join(components_list)}\nNew: ({u},{v}) Power: {power[u,v]:.4f}"
+        title = f"Components: {', '.join(components_list)}\nNew: ({u},{v}) Power: {template_power[u,v]:.4f}"
         
         # Roll the spatial component by half the image length in both x and y directions
         spatial_component_rolled = np.roll(spatial_component, spatial_component.shape[0]//2, axis=0)
@@ -251,41 +405,8 @@ def plot_top_template_components(template_1d, p):
         axs[i].set_title(title)
         plt.colorbar(im, ax=axs[i])
     plt.tight_layout()
-    plt.show()
+    if show:
+        plt.show()
+    return fig
 
 
-def plot_set_template_components(v1, v2, v3, p):
-    spectrum = np.zeros((p,p), dtype=complex)
-
-    # Mode (1,0)
-    spectrum[1,0] = v1
-    spectrum[-1,0] = np.conj(v1) 
-
-    template_1 = np.fft.ifft2(spectrum).real
-
-    # Mode (0,1)
-    spectrum[0,1] = v2
-    spectrum[0,-1] = np.conj(v2)
-
-    template_2 = np.fft.ifft2(spectrum).real
-
-    # Mode (1,1)
-    spectrum[1,1] = v3
-    spectrum[-1,-1] = np.conj(v3)
-    
-    # Generate signal from spectrum
-    template_full = np.fft.ifft2(spectrum).real
-
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-    im1 = axs[0].imshow(template_1, cmap='viridis')
-    axs[0].set_title("Mode (1,0)")
-    plt.colorbar(im1, ax=axs[0])
-    im2 = axs[1].imshow(template_2, cmap='viridis')
-    axs[1].set_title("Mode (1,0)+(0,1)")
-    plt.colorbar(im2, ax=axs[1])
-    im3 = axs[2].imshow(template_full, cmap='viridis')
-    axs[2].set_title("Full Template")
-    plt.colorbar(im3, ax=axs[2])
-    plt.tight_layout()
-
-    plt.show()

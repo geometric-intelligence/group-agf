@@ -30,11 +30,17 @@ def main():
     print("Git root path: ", gitroot_path) # /home/adele/code/gagf-agf/
 
     os.chdir(os.path.join(gitroot_path[:-1], "gagf"))
-    print("Working directory: ", os.getcwd()) # /home/adele/code/group-agf/gagf-agf
+    print("Working directory: ", os.getcwd()) # /home/adele/code/group-agf/
 
     sys_dir = os.path.dirname(os.getcwd())
     sys.path.append(sys_dir) # /home/adele/code/group-agf
     print("Directory added to path: ", sys_dir) 
+    group_learning_dir = os.path.join(sys_dir, "gagf", "group_learning")
+    sys.path.append(group_learning_dir)
+    print("Directory added to path: ", group_learning_dir)
+    saved_datasets_dir = os.path.join(group_learning_dir, "saved_datasets")
+    sys.path.append(saved_datasets_dir)
+    print("Directory added to path: ", saved_datasets_dir)
     notebook_dir = os.path.join(os.getcwd(), "notebooks")
     sys.path.append(notebook_dir)
     print("Directory added to path: ", notebook_dir)
