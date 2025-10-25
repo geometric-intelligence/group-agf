@@ -21,7 +21,7 @@ def plot_loss_curve(loss_history, template, save_path=None, show=False):
     ----------
     loss_history : list of float
         List of loss values recorded at each epoch.
-    template : np.ndarray
+    template : np.ndarray (p*p,)
         The template used in training (used to calculate theoretical plateau lines for AGF).
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
@@ -53,7 +53,7 @@ def plot_loss_curve(loss_history, template, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(template_2d, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
+def plot_training_power_over_time(template_flat, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
@@ -63,6 +63,7 @@ def plot_training_power_over_time(template_2d, model, device, param_history, X_t
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
+    template_2d = template_flat.reshape((p, p))
     row_freqs, column_freqs, template_power = power.get_power_2d(template_2d)
     freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
     flattened_template_power = template_power.flatten()
@@ -77,7 +78,7 @@ def plot_training_power_over_time(template_2d, model, device, param_history, X_t
     )
 
     # Create a new figure for this plot
-    plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(10, 6))
 
     for i in top_5_power_idx:
         label = fr"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
@@ -114,11 +115,11 @@ def plot_training_power_over_time(template_2d, model, device, param_history, X_t
     if show:
         plt.show()
 
-    return plt.gcf()
+    return fig
 
 
 
-def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=True):
+def plot_neuron_weights(model, p, neuron_indices=None, save_path=None, show=False):
     """
     Plots the weights of specified neurons in the first linear layer of the model.
     
@@ -127,29 +128,36 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=True):
         neuron_indices: List of neuron indices to plot.
         p: The value of p (weights are of size p*p).
         save_path: Optional path to save the figure.
-    """
-
-    # Get the first linear layer's weights
-    first_layer = None
-    for module in model.modules():
+    """        
+    # Get the last linear layer's weights
+    last_layer = None
+    # Reverse list of modules to get the last nn.Linear if present
+    modules = list(model.modules())
+    for module in reversed(modules):
         if hasattr(module, 'weight') and hasattr(module, 'bias'):
-            first_layer = module
-            weights = first_layer.weight.detach().cpu().numpy()  # shape: (out_features, in_features)
+            last_layer = module
+            weights = last_layer.weight.detach().cpu().numpy()  # shape: (out_features, in_features)
             break
-    if first_layer is None:
+    if last_layer is None:
         # Support both nn.Linear and custom nn.Parameter-based models (like TwoLayerNet)
-        if hasattr(model, 'W'):
-            weights = model.W.detach().cpu().numpy()
-        elif first_layer is not None:
-            weights = first_layer.weight.detach().cpu().numpy()
+        if hasattr(model, 'U'):
+            weights = model.U.detach().cpu().numpy()
+        elif last_layer is not None:
+            weights = last_layer.weight.detach().cpu().numpy()
         else:
             raise ValueError("No suitable weights found in model (neither nn.Linear nor custom nn.Parameter 'U').")
 
+
+    if neuron_indices is None:
+        if len(weights) <= 16:
+            neuron_indices = list(range(len(weights)))
+        else:
+            neuron_indices = random.sample(range(len(weights)), 10)
+        
     # Determine number of rows and columns (max 5 per row)
     n_plots = len(neuron_indices)
     n_cols = min(5, n_plots)
     n_rows = (n_plots + 4) // 5  # integer division, round up
-
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(3*n_cols, 3*n_rows))
     # axs is 2D if n_rows > 1, else 1D
     axs = np.array(axs).reshape(-1)  # flatten for easy indexing
@@ -173,8 +181,10 @@ def plot_neuron_weights(model, neuron_indices, p, save_path=None, show=True):
         plt.show()
     plt.close(fig)
 
+    return fig
 
-def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None):
+
+def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None, show=False):
     """Plot a training target vs the model output.
 
     Parameters
@@ -249,11 +259,16 @@ def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None):
             for col in range(4):
                 axs[row, col].axis('off')
 
+        fig.suptitle(f"Model Inputs, Outputs, and Targets at index {idx}", fontsize=20)
         plt.tight_layout()
         if save_path is not None:
             plt.savefig(save_path, bbox_inches='tight')
-        plt.show()
+        
+        if show:
+            plt.show()
         plt.close(fig)
+
+    return fig
 
 
 def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
@@ -337,7 +352,7 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(template_flat, p):
+def plot_top_template_components(template_flat, p, show=False):
     """Plot the top 5 Fourier components of the template.
 
     Parameters
@@ -390,6 +405,8 @@ def plot_top_template_components(template_flat, p):
         axs[i].set_title(title)
         plt.colorbar(im, ax=axs[i])
     plt.tight_layout()
-    plt.show()
+    if show:
+        plt.show()
+    return fig
 
 

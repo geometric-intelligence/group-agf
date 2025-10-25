@@ -56,11 +56,8 @@ def main_run(config):
 
         template = datasets.choose_template(config['p'], template_type=config['template_type'], digit=config['mnist_digit'])
 
-        # load dataset
-        X, Y, translations = datasets.load_modular_addition_dataset_2d(config['p'], template, fraction=config['dataset_fraction'], random_state=config['seed'], template_type=config["mnist"])
-
-        top_frequency_plot = plot.plot_top_template_components(template, config['p'])
-
+        print("Generating dataset...")
+        X, Y, _ = datasets.load_modular_addition_dataset_2d(config['p'], template, fraction=config['dataset_fraction'], random_state=config['seed'], template_type=config["template_type"])
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, config['p'], device=None)
 
         dataset = TensorDataset(X, Y)
@@ -75,7 +72,7 @@ def main_run(config):
         loss = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
 
-        # Train the model and track training history for loss, accuracy, and parameters
+        print("Starting training...")
         loss_history, accuracy_history, param_history = train.train(
             model,
             dataloader,
@@ -86,21 +83,33 @@ def main_run(config):
             model_save_path=config['model_save_path']
         )
 
-        loss_plot = plot.plot_loss_curve(loss_history, template)
-        power_over_training_plot = plot.plot_power_over_time(model, param_history, X, template, config['p'])
-        neuron_weights_plot = plot.plot_neuron_weights_evolution(model, param_history, template, config['p'])
-        wandb.log({"loss_plot": wandb.Image(loss_plot)})
+        print("Training Complete. Generating plots...")
+        loss_plot = plot.plot_loss_curve(loss_history, template, show=False)
+        top_frequency_plot = plot.plot_top_template_components(template, config['p'], show=False)
+        power_over_training_plot = plot.plot_training_power_over_time(
+            template, 
+            model, 
+            device, 
+            param_history, 
+            X, 
+            config['p'], 
+            save_path=None, 
+            show=False
+        )
+        neuron_weights_plot = plot.plot_neuron_weights(model, config['p'], neuron_indices=None)
+        model_predictions_plot = plot.plot_model_outputs(config['p'], model, X, Y, idx=13, num_samples=5)        
+        wandb.log({
+            "loss_plot": wandb.Image(loss_plot),
+            "top_frequency_plot": wandb.Image(top_frequency_plot),
+            "power_over_training_plot": wandb.Image(power_over_training_plot),
+            "neuron_weights_plot": wandb.Image(neuron_weights_plot),
+            "model_predictions_plot": wandb.Image(model_predictions_plot),
+        })
 
-        # wandb.log({"mse": mse})
-        # for plot_name, plot in plots.items():
-        #     wandb.log({plot_name: wandb.Image(plot)})
-        # logging.info(f"mse: {mse}")
+        print("Plots generated and logged to wandb.")
 
         wandb_config.update({"full_run": full_run})
         wandb.finish()
-
-
-
 
     except Exception as e:
         full_run = False
