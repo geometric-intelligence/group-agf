@@ -14,6 +14,7 @@ from matplotlib.ticker import MaxNLocator
 
 import gagf.group_learning.power as power
 import setcwd
+from gagf.group_learning.group_fourier_transform import compute_group_inverse_fourier_transform
 
 
 def one_hot2D(p):
@@ -34,7 +35,7 @@ def one_hot2D(p):
     mat = mat.flatten()
     return mat
 
-def generate_fixed_template(p):
+def generate_fixed_template_znz_znz(p):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
@@ -79,6 +80,30 @@ def generate_fixed_template(p):
     template = template.flatten()
 
     return template
+
+
+def generate_fixed_template_dihedral(group):
+    """Generate a fixed template for a group, that has non-zero Fourier coefficients 
+    only for a few irreps.
+    
+    Parameters
+    ----------
+    group : Group (escnn object)
+        The group.
+
+    Returns
+    -------
+    template : np.ndarray, shape=[group.order()]
+        The template.
+    """
+     # TODO: This only works for D3 for now.
+    # Generate template array from Fourier spectrum
+    spectrum = [np.array([[10.]]), np.array([[10.]]), np.array([[5., 5.], [5., 5.]])]
+    # Generate signal from spectrum
+    template = compute_group_inverse_fourier_transform(group, spectrum)
+
+    return template
+
 
 
 def mnist_template(p, digit=0, sample_idx=0, random_state=42):

@@ -37,8 +37,7 @@ def plot_loss_curve(loss_history, template, save_path=None, show=False):
 
     plt.xscale("log")
     plt.yscale("log")
-    plt.ylim([1e-2, 0.1])
-
+ 
     plt.xlabel('Epochs', fontsize=24)
     plt.ylabel('Train Loss', fontsize=24)
 
@@ -90,7 +89,6 @@ def plot_training_power_over_time(template_flat, model, device, param_history, X
         plt.yscale('log')
     plt.xscale('log')
     plt.xlim(0, len(param_history) - 1)
-    plt.ylim(1e-7, 2)
     plt.xticks(
         [1000, 10000, 100000, len(param_history) - 1],
         [r'$10^3$', r'$10^4$', r'$10^5$', 'Final']
@@ -153,6 +151,9 @@ def plot_neuron_weights(model, p, neuron_indices=None, save_path=None, show=Fals
             neuron_indices = list(range(len(weights)))
         else:
             neuron_indices = random.sample(range(len(weights)), 10)
+
+    if isinstance(neuron_indices, int):
+        neuron_indices = [neuron_indices]
         
     # Determine number of rows and columns (max 5 per row)
     n_plots = len(neuron_indices)

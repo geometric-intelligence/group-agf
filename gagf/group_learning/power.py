@@ -69,7 +69,6 @@ def get_power_2d(points, no_freq=False):
     if not np.isclose(total_power, norm_squared, rtol=1e-3):
         print(f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}")
 
-
     if no_freq:
         return power
 
@@ -109,6 +108,7 @@ def get_alpha_values(template):
         Frequency tuples corresponding to nonzero power values.
     """
     p = int(np.sqrt(len(template)))
+    print("Computing alpha values for template of shape:", (p, p))
     x_freqs, y_freqs, power = get_power_2d(template.reshape((p, p)))
     print(power)
     power = power.flatten()
@@ -118,7 +118,6 @@ def get_alpha_values(template):
     i_power_descending_order = np.argsort(power)[::-1]  # np.argsort with [::-1] gives descending order
     power = power[i_power_descending_order]
 
-    # Plot theoretical lines
     alpha_values = [np.sum(power[k:]) for k in range(len(power))]
     coef = 1 / (p * p)
     alpha_values = [alpha * coef for alpha in alpha_values]

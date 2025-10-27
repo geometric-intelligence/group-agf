@@ -129,7 +129,6 @@ def main():
         mnist_digit,
         dataset_fraction,
         group,
-        n_frequencies_to_learn,
         init_scale,
         seed,
         template_type,
@@ -144,7 +143,6 @@ def main():
         default_config.mnist_digit,
         default_config.dataset_fraction,
         default_config.group,
-        default_config.n_frequencies_to_learn,
         default_config.init_scale,
         default_config.seed,
         default_config.template_type,
@@ -155,7 +153,7 @@ def main():
         default_config.verbose_interval,
     ):
 
-        hidden_size = 6 * n_frequencies_to_learn
+        hidden_size = 10 * p
 
         model_save_path = (
             f"{default_config.model_save_dir}model_"
@@ -171,7 +169,6 @@ def main():
             "mnist_digit": mnist_digit,
             "dataset_fraction": dataset_fraction,
             "group": group,
-            "n_frequencies_to_learn": n_frequencies_to_learn,
             "init_scale": init_scale,
             "run_start_time": run_start_time,
             "seed": seed,
