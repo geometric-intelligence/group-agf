@@ -138,7 +138,6 @@ def main():
         batch_size,
         epochs,
         verbose_interval,
-        hidden_size,        
         
     ) in itertools.product(
         default_config.p,
@@ -154,8 +153,9 @@ def main():
         default_config.batch_size,
         default_config.epochs,
         default_config.verbose_interval,
-        default_config.hidden_size,
     ):
+
+        hidden_size = 6 * n_frequencies_to_learn
 
         model_save_path = (
             f"{default_config.model_save_dir}model_"
