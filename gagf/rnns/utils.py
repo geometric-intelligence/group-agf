@@ -60,20 +60,21 @@ def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
 
 
 def plot_2d_signal(
-    ax,
     signal_2d,
     title="",
     cmap="RdBu_r",
     colorbar=True,
 ):
     """Plot a 2D signal as a heatmap."""
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
     im = ax.imshow(signal_2d, cmap=cmap, aspect="equal", interpolation="nearest")
     ax.set_title(title, fontsize=14)
     ax.set_xlabel("y", fontsize=12)
     ax.set_ylabel("x", fontsize=12)
     if colorbar:
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    return im
+    plt.tight_layout()
+    return fig, ax
 
 
 def plot_2d_power_spectrum(
@@ -271,3 +272,901 @@ def plot_training_loss_with_theory(
         plt.close()
     
     return fig, ax
+
+def plot_model_predictions_over_time(
+    model,
+    param_history,
+    X_data,
+    Y_data,
+    p1,
+    p2,
+    steps=None,
+    example_idx=None,
+    cmap="gray",
+    save_path=None,
+    show=False
+):
+    """
+    Plot model predictions at different training steps vs ground truth.
+    
+    Args:
+        model: The trained model
+        param_history: List of parameter snapshots from training
+        X_data: Input tensor (N, k, p1*p2)
+        Y_data: Target tensor (N, p1*p2)
+        p1, p2: Dimensions
+        steps: List of epoch indices to plot (default: [1, 5, 10, final])
+        example_idx: Index of example to visualize (default: random)
+        cmap: Colormap to use
+        save_path: Path to save figure
+        show: Whether to display the plot
+    """
+    import torch
+    
+    # Default steps
+    if steps is None:
+        final_step = len(param_history) - 1
+        steps = [1, min(5, final_step), min(10, final_step), final_step]
+        steps = sorted(list(set(steps)))  # Remove duplicates
+    
+    # Random example if not specified
+    if example_idx is None:
+        example_idx = int(np.random.randint(len(Y_data)))
+    
+    device = next(model.parameters()).device
+    model.to(device).eval()
+    
+    # Ground truth
+    with torch.no_grad():
+        truth_2d = Y_data[example_idx].reshape(p1, p2).cpu().numpy()
+    
+    # Collect predictions at each step
+    preds = []
+    for step in steps:
+        model.load_state_dict(param_history[step], strict=True)
+        with torch.no_grad():
+            x = X_data[example_idx:example_idx+1].to(device)
+            pred_2d = model(x).reshape(p1, p2).detach().cpu().numpy()
+            preds.append(pred_2d)
+    
+    # Shared color scale based on ground truth
+    vmin = np.min(truth_2d)
+    vmax = np.max(truth_2d)
+    
+    # Plot: rows = [Prediction, Target], cols = time steps
+    fig, axes = plt.subplots(
+        2, len(steps), 
+        figsize=(3.5*len(steps), 6), 
+        layout="constrained"
+    )
+    
+    # Handle case where there's only one step
+    if len(steps) == 1:
+        axes = axes.reshape(2, 1)
+    
+    for col, (step, pred_2d) in enumerate(zip(steps, preds)):
+        # Prediction
+        im = axes[0, col].imshow(
+            pred_2d, 
+            vmin=vmin, 
+            vmax=vmax, 
+            cmap=cmap, 
+            origin="upper"
+        )
+        axes[0, col].set_title(f"Epoch {step}", fontsize=12)
+        axes[0, col].set_xticks([])
+        axes[0, col].set_yticks([])
+        
+        # Target (same for all columns)
+        axes[1, col].imshow(
+            truth_2d, 
+            vmin=vmin, 
+            vmax=vmax, 
+            cmap=cmap, 
+            origin="upper"
+        )
+        axes[1, col].set_xticks([])
+        axes[1, col].set_yticks([])
+    
+    axes[0, 0].set_ylabel("Prediction", fontsize=14)
+    axes[1, 0].set_ylabel("Target", fontsize=14)
+    
+    # Single shared colorbar on the right
+    fig.colorbar(
+        im, 
+        ax=axes, 
+        location="right", 
+        shrink=0.9, 
+        pad=0.02
+    ).set_label("Value", fontsize=12)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved predictions plot to {save_path}")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    return fig, axes
+
+
+
+def plot_prediction_power_spectrum_over_time(
+    model,
+    param_history,
+    X_data,
+    Y_data,
+    template_2d,
+    p1,
+    p2,
+    loss_history,
+    num_freqs_to_track=10,
+    num_analysis_steps=100,
+    num_samples=100,
+    save_path=None,
+    show=False
+):
+    """
+    Plot training loss with power spectrum analysis of predictions over time.
+    
+    Creates a two-panel plot:
+    - Top: Training loss with colored bands for theory lines
+    - Bottom: Power in tracked frequencies over time
+    
+    Args:
+        model: The trained model
+        param_history: List of parameter snapshots (includes epoch 0)
+        X_data: Input tensor (N, k, p1*p2)
+        Y_data: Target tensor (N, p1*p2) - used to compute loss history
+        template_2d: The 2D template array
+        p1, p2: Dimensions
+        loss_history: List of loss values over epochs
+        num_freqs_to_track: Number of top frequencies to track
+        num_analysis_steps: Number of checkpoints to analyze (log-spaced)
+        num_samples: Number of samples to average for power computation
+        save_path: Path to save figure
+        show: Whether to display the plot
+    """
+    import torch
+    from matplotlib.ticker import FormatStrFormatter
+    from tqdm import tqdm
+    
+    device = next(model.parameters()).device
+    
+    # Identify top-K frequencies from template
+    tracked_freqs = topk_template_freqs(template_2d, K=num_freqs_to_track)
+    template_power_2d, _, _ = get_power_2d(template_2d)
+    target_powers = {(kx, ky): template_power_2d[kx, ky] for (kx, ky) in tracked_freqs}
+    
+    # Choose analysis steps (log-spaced to capture early and late dynamics)
+    T = len(param_history)
+    steps_analysis = np.unique(
+        np.logspace(0, np.log10(max(T - 1, 1)), num_analysis_steps, dtype=int)
+    )
+    steps_analysis = steps_analysis[steps_analysis < T]
+    steps_analysis = np.insert(steps_analysis, 0, 0)  # Include epoch 0
+    
+    # Track average output power at those frequencies over training
+    powers_over_time = {freq: [] for freq in tracked_freqs}
+    
+    print(f"  Analyzing {len(steps_analysis)} checkpoints for power spectrum...")
+    
+    with torch.no_grad():
+        for step in tqdm(steps_analysis, desc="  Computing power spectra", leave=False):
+            model.load_state_dict(param_history[step], strict=True)
+            model.eval()
+            
+            # Get predictions for a batch
+            outputs_flat = (
+                model(X_data[:num_samples].to(device)).detach().cpu().numpy()
+            )  # (num_samples, p1*p2)
+            
+            # Compute power spectrum for each sample, then average
+            powers_batch = []
+            for i in range(outputs_flat.shape[0]):
+                out_2d = outputs_flat[i].reshape(p1, p2)
+                power_i, _, _ = get_power_2d(out_2d)  # (p1, p2)
+                powers_batch.append(power_i)
+            avg_power = np.mean(powers_batch, axis=0)  # (p1, p2)
+            
+            # Record power at each tracked frequency
+            for kx, ky in tracked_freqs:
+                powers_over_time[(kx, ky)].append(avg_power[kx, ky])
+    
+    # Convert lists to arrays
+    for freq in tracked_freqs:
+        powers_over_time[freq] = np.array(powers_over_time[freq])
+    
+    # Compute loss history (already have this, but reconstruct for alignment)
+    # We'll use the length of param_history as epochs
+    loss_epochs = np.arange(len(param_history))
+    
+    # --- Create the plot ---
+    colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.96, bottom=0.10, hspace=0.12)
+    
+    # --- Top panel: Training loss with theory bands ---
+    ax1.plot(loss_epochs, loss_history, lw=4, color='#1f77b4', label='Training Loss')
+    
+    # Compute power spectrum of template for theory lines
+    _, _, power = get_power_2d_adele(template_2d)
+    power_flat = np.sort(power.flatten()[power.flatten() > 1e-20])[::-1]
+    
+    # Theory levels (cumulative tail sums)
+    alpha_values = np.array([np.sum(power_flat[k:]) for k in range(len(power_flat))])
+    coef = 1.0 / (p1 * p2)
+    y_levels = coef * alpha_values  # strictly decreasing
+    
+    # Shade horizontal bands between successive theory lines
+    n_bands = min(len(tracked_freqs), len(y_levels) - 1)
+    for i in range(n_bands):
+        y_top = y_levels[i]
+        y_bot = y_levels[i + 1]
+        ax1.axhspan(y_bot, y_top, facecolor=colors[i], alpha=0.15, zorder=-3)
+    
+    # Draw the black theory lines
+    for y in y_levels[:n_bands + 1]:
+        ax1.axhline(y=y, color="black", linestyle="--", linewidth=2, zorder=-2)
+    
+    ax1.set_ylabel("Theory Loss Levels", fontsize=20)
+    ax1.set_ylim(y_levels[n_bands], y_levels[0] * 1.1)
+    style_axes(ax1)
+    ax1.grid(False)
+    ax1.tick_params(labelbottom=False)
+    
+    # --- Bottom panel: Tracked mode power over time ---
+    for i, (kx, ky) in enumerate(tracked_freqs):
+        ax2.plot(
+            steps_analysis, 
+            powers_over_time[(kx, ky)], 
+            color=colors[i], 
+            lw=3,
+            label=f"({kx},{ky})"
+        )
+        ax2.axhline(
+            target_powers[(kx, ky)],
+            color=colors[i],
+            linestyle="dotted",
+            linewidth=2,
+            alpha=0.5,
+        )
+    
+    ax2.set_xlabel("Epochs", fontsize=20)
+    ax2.set_ylabel("Power in Prediction", fontsize=20)
+    ax2.grid(True, alpha=0.3)
+    style_axes(ax2)
+    ax2.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved power spectrum plot to {save_path}")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    return fig, (ax1, ax2), powers_over_time, tracked_freqs
+
+
+
+def plot_fourier_modes_reference(
+    tracked_freqs,
+    colors,
+    p1,
+    p2,
+    save_path=None,
+    save_individual=False,
+    individual_dir=None,
+    show=False
+):
+    """
+    Create a reference visualization of tracked Fourier modes.
+    
+    Generates a stacked vertical image showing all tracked frequency modes
+    with colored borders matching the power spectrum analysis.
+    
+    Args:
+        tracked_freqs: List of (kx, ky) tuples for tracked frequencies
+        colors: Array of colors for each frequency (from plt.cm.tab10 or similar)
+        p1, p2: Dimensions of the template
+        save_path: Path to save the stacked visualization
+        save_individual: Whether to also save individual mode images
+        individual_dir: Directory for individual mode images (if save_individual=True)
+        show: Whether to display the plot
+    
+    Returns:
+        fig: The matplotlib figure
+    """
+    import matplotlib.patheffects as pe
+    import matplotlib.gridspec as gridspec
+    from pathlib import Path
+    
+    def fourier_mode_2d(p1: int, p2: int, kx: int, ky: int, phase: float = 0.0):
+        """Generate a 2D Fourier mode (cosine wave)."""
+        y = np.arange(p1)[:, None]
+        x = np.arange(p2)[None, :]
+        mode = np.cos(2 * np.pi * (ky * y / p1 + kx * x / p2) + phase)
+        mmin, mmax = mode.min(), mode.max()
+        return (mode - mmin) / (mmax - mmin) if mmax > mmin else mode
+    
+    def signed_k(k: int, n: int) -> int:
+        """Convert to signed frequency representation."""
+        return k if k <= n // 2 else k - n
+    
+    def pretty_k(k: int, n: int) -> str:
+        """Format frequency for display (handles Nyquist frequency)."""
+        if n % 2 == 0 and k == n // 2:
+            return r"\pm{}".format(n // 2)
+        return f"{signed_k(k, n)}"
+    
+    # --- Save individual mode images (optional) ---
+    if save_individual and individual_dir is not None:
+        individual_dir = Path(individual_dir)
+        individual_dir.mkdir(exist_ok=True)
+        
+        for i, (kx, ky) in enumerate(tracked_freqs):
+            img = fourier_mode_2d(p1, p2, kx, ky)
+            
+            fig_ind, ax = plt.subplots(figsize=(3.2, 2.2))
+            ax.imshow(img, cmap="RdBu_r", origin="upper")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            
+            # Colored border
+            for side in ("left", "right", "top", "bottom"):
+                ax.spines[side].set_edgecolor(colors[i])
+                ax.spines[side].set_linewidth(8)
+            
+            # Frequency label
+            kx_label = pretty_k(kx, p2)
+            ky_label = pretty_k(ky, p1)
+            ax.text(
+                0.5, 0.5,
+                f"$k=({kx_label},{ky_label})$",
+                color=colors[i],
+                fontsize=25,
+                fontweight="bold",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                path_effects=[pe.withStroke(linewidth=3, foreground="white", alpha=0.8)],
+            )
+            
+            plt.tight_layout()
+            
+            # Save with signed indices in filename
+            kx_signed, ky_signed = signed_k(kx, p2), signed_k(ky, p1)
+            base = f"mode_{i:03d}_kx{kx}_ky{ky}_signed_{kx_signed}_{ky_signed}"
+            fig_ind.savefig(individual_dir / f"{base}.png", dpi=300, bbox_inches="tight")
+            np.save(individual_dir / f"{base}.npy", img)
+            plt.close(fig_ind)
+        
+        print(f"  ✓ Saved {len(tracked_freqs)} individual mode images to {individual_dir}")
+    
+    # --- Create stacked vertical visualization ---
+    n = len(tracked_freqs)
+    
+    # Panel geometry and spacing
+    panel_h_in = 2.2
+    gap_h_in = 0.35  # whitespace between rows
+    fig_w_in = 4.6
+    fig_h_in = n * panel_h_in + (n - 1) * gap_h_in
+    
+    fig = plt.figure(figsize=(fig_w_in, fig_h_in), dpi=150)
+    
+    # Rows alternate: [panel, gap, panel, gap, ..., panel]
+    rows = 2 * n - 1
+    height_ratios = []
+    for i in range(n):
+        height_ratios.append(panel_h_in)
+        if i < n - 1:
+            height_ratios.append(gap_h_in)
+    
+    # Layout: image on LEFT, label on RIGHT
+    gs = gridspec.GridSpec(
+        nrows=rows, ncols=2,
+        width_ratios=[1.0, 0.46],
+        height_ratios=height_ratios,
+        wspace=0.0, hspace=0.0
+    )
+    
+    for i, (kx, ky) in enumerate(tracked_freqs):
+        r = 2 * i  # even rows are content; odd rows are spacers
+        
+        # Image axis (left)
+        ax_img = fig.add_subplot(gs[r, 0])
+        img = fourier_mode_2d(p1, p2, kx, ky)
+        ax_img.imshow(img, cmap="RdBu_r", origin="upper", aspect="equal")
+        ax_img.set_xticks([])
+        ax_img.set_yticks([])
+        
+        # Colored border around the image
+        for side in ("left", "right", "top", "bottom"):
+            ax_img.spines[side].set_edgecolor(colors[i])
+            ax_img.spines[side].set_linewidth(8)
+        
+        # Label axis (right)
+        ax_label = fig.add_subplot(gs[r, 1])
+        ax_label.set_axis_off()
+        kx_label = pretty_k(kx, p2)
+        ky_label = pretty_k(ky, p1)
+        ax_label.text(
+            0.0, 0.5, f"$k=({kx_label},{ky_label})$",
+            color=colors[i], fontsize=45, fontweight="bold",
+            ha="left", va="center", transform=ax_label.transAxes,
+            path_effects=[pe.withStroke(linewidth=3, foreground="white", alpha=0.8)]
+        )
+    
+    # Adjust to prevent clipping of thick borders
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.985, bottom=0.015)
+    
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight", pad_inches=0.12)
+        print(f"  ✓ Saved Fourier modes reference to {save_path}")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    return fig
+
+def plot_wout_neuron_specialization(
+    param_history,
+    tracked_freqs,
+    colors,
+    p1,
+    p2,
+    steps=None,
+    dead_thresh_l2=0.25,
+    save_dir=None,
+    show=False
+):
+    """
+    Visualize W_out neurons colored by their dominant tracked frequency.
+    
+    Creates grid visualizations of output weight neurons at different training steps,
+    with colored borders indicating which Fourier mode each neuron is tuned to.
+    
+    Args:
+        param_history: List of parameter snapshots from training
+        tracked_freqs: List of (kx, ky) tuples for tracked frequencies
+        colors: Array of colors for each frequency (from plt.cm.tab10 or similar)
+        p1, p2: Dimensions of the template
+        steps: List of epoch indices to plot (default: [1, 5, final])
+        dead_thresh_l2: L2 norm threshold below which neurons are considered "dead"
+        save_dir: Directory to save figures (Path object)
+        show: Whether to display the plots
+    
+    Returns:
+        List of figure objects
+    """
+    from matplotlib.patches import Patch
+    from matplotlib.colors import Normalize
+    import matplotlib.cm as cm
+    import matplotlib.gridspec as gridspec
+    from pathlib import Path
+    
+    # Helper functions
+    def squareish_grid(n):
+        """Compute nearly-square grid dimensions."""
+        c = int(np.ceil(np.sqrt(n)))
+        r = int(np.ceil(n / c))
+        return r, c
+    
+    def tracked_power_from_fft2(power2d, kx, ky, p1, p2):
+        """Sum power at (kx,ky) and its real-signal mirror (-kx,-ky)."""
+        i0, j0 = kx % p1, ky % p2
+        i1, j1 = (-kx) % p1, (-ky) % p2
+        if (i0, j0) == (i1, j1):
+            return power2d[i0, j0]
+        return power2d[i0, j0] + power2d[i1, j1]
+    
+    # Default steps
+    if steps is None:
+        final_step = len(param_history) - 1
+        steps = [1, min(5, final_step), final_step]
+        steps = sorted(list(set(steps)))
+    
+    # Get dimensions
+    W0 = param_history[steps[0]]["W_out"].detach().cpu().numpy().T  # (H, D)
+    H, D = W0.shape
+    assert p1 * p2 == D, f"p1*p2 ({p1*p2}) must equal D ({D})."
+    
+    # Compute global color limits across all steps
+    vmin, vmax = np.inf, -np.inf
+    for step in steps:
+        W = param_history[step]["W_out"].detach().cpu().numpy().T
+        vmin = min(vmin, W.min())
+        vmax = max(vmax, W.max())
+    
+    # Grid layout
+    R_ner, C_ner = squareish_grid(H)
+    tile_w, tile_h = 2, 2  # inches per neuron tile
+    figsize = (C_ner * tile_w, R_ner * tile_h)
+    
+    heat_cmap = "RdBu_r"
+    border_lw = 5.0
+    dead_color = (0.6, 0.6, 0.6, 1.0)
+    
+    figures = []
+    
+    # Create one figure per time step
+    for step in steps:
+        W = param_history[step]["W_out"].detach().cpu().numpy().T  # (H, D)
+        
+        # Determine dominant frequency for each neuron
+        dom_idx = np.empty(H, dtype=int)
+        l2 = np.linalg.norm(W, axis=1)
+        dead_mask = l2 < dead_thresh_l2
+        
+        for j in range(H):
+            m = W[j].reshape(p1, p2)
+            F = np.fft.fft2(m)
+            P = (F.conj() * F).real
+            tp = [tracked_power_from_fft2(P, kx, ky, p1, p2) 
+                  for (kx, ky) in tracked_freqs]
+            dom_idx[j] = int(np.argmax(tp))
+        
+        # Assign colors
+        edge_colors = colors[dom_idx].copy()
+        edge_colors[dead_mask] = dead_color
+        
+        # Build figure
+        fig = plt.figure(figsize=figsize)
+        gs = gridspec.GridSpec(R_ner, C_ner, figure=fig, wspace=0.06, hspace=0.06)
+        
+        # Plot neuron tiles
+        for j in range(R_ner * C_ner):
+            ax = fig.add_subplot(gs[j // C_ner, j % C_ner])
+            if j < H:
+                m = W[j].reshape(p1, p2)
+                ax.imshow(
+                    m, vmin=vmin, vmax=vmax, origin="lower", 
+                    aspect="equal", cmap=heat_cmap
+                )
+                # Colored border
+                ec = edge_colors[j]
+                for sp in ax.spines.values():
+                    sp.set_edgecolor(ec)
+                    sp.set_linewidth(border_lw)
+            else:
+                ax.axis("off")
+            
+            ax.set_xticks([])
+            ax.set_yticks([])
+        
+        if save_dir:
+            save_path = Path(save_dir) / f"wout_neurons_epoch_{step:04d}.pdf"
+            fig.savefig(save_path, bbox_inches="tight", dpi=200)
+            print(f"  ✓ Saved W_out visualization for epoch {step}")
+        
+        if show:
+            plt.show()
+        else:
+            plt.close()
+        
+        figures.append(fig)
+    
+    # Create standalone colorbar figure
+    fig_cb = plt.figure(figsize=(6, 1.2))
+    ax_cb = fig_cb.add_axes([0.1, 0.35, 0.8, 0.3])
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    sm = cm.ScalarMappable(norm=norm, cmap=heat_cmap)
+    cbar = fig_cb.colorbar(sm, cax=ax_cb, orientation="horizontal")
+    cbar.set_label("Weight value", fontsize=12)
+    
+    if save_dir:
+        save_path = Path(save_dir) / "wout_colorbar.pdf"
+        fig_cb.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved colorbar")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    figures.append(fig_cb)
+    
+    # Create standalone legend figure
+    fig_legend = plt.figure(figsize=(6, 2.0))
+    ax_leg = fig_legend.add_subplot(111)
+    ax_leg.axis("off")
+    
+    # Colored edge patches (matching tile borders)
+    handles = [
+        Patch(
+            facecolor="white", 
+            edgecolor=colors[i], 
+            linewidth=2.5, 
+            label=f"k={tracked_freqs[i]}"
+        )
+        for i in range(len(tracked_freqs))
+    ]
+    handles.append(
+        Patch(
+            facecolor="white", 
+            edgecolor=dead_color, 
+            linewidth=2.5, 
+            label="dead"
+        )
+    )
+    
+    ax_leg.legend(
+        handles=handles, 
+        ncol=min(4, len(handles)), 
+        frameon=True, 
+        loc="center", 
+        title="Dominant frequency",
+        fontsize=10
+    )
+    
+    if save_dir:
+        save_path = Path(save_dir) / "wout_legend.pdf"
+        fig_legend.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved legend")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    figures.append(fig_legend)
+    
+    return figures
+
+def analyze_wout_frequency_dominance(state_dict, tracked_freqs, p1, p2):
+    """
+    Analyze W_out to find dominant frequency for each neuron.
+    
+    Args:
+        state_dict: Model parameters (expects 'W_out' key)
+        tracked_freqs: List of (kx, ky) tuples
+        p1, p2: Template dimensions
+    
+    Returns:
+        dom_idx: Dominant frequency index for each neuron
+        phase: Phase at dominant frequency for each neuron
+        dom_power: Power at dominant frequency for each neuron
+        l2: L2 norm of each neuron's weights
+    """
+    def tracked_power_from_fft2(power2d, kx, ky, p1, p2):
+        """Sum power at (kx,ky) and its mirror (-kx,-ky)."""
+        i0, j0 = kx % p1, ky % p2
+        i1, j1 = (-kx) % p1, (-ky) % p2
+        if (i0, j0) == (i1, j1):
+            return float(power2d[i0, j0])
+        return float(power2d[i0, j0] + power2d[i1, j1])
+    
+    Wo = state_dict["W_out"].detach().cpu().numpy()  # (p, H)
+    W = Wo.T  # (H, p)
+    H, D = W.shape
+    assert D == p1 * p2
+    
+    dom_idx = np.empty(H, dtype=int)
+    dom_pow = np.empty(H, dtype=float)
+    phase = np.empty(H, dtype=float)
+    l2 = np.linalg.norm(W, axis=1)
+    
+    for j in range(H):
+        m = W[j].reshape(p1, p2)
+        F = np.fft.fft2(m)
+        P = (F.conj() * F).real
+        # Power at tracked frequencies
+        tp = [tracked_power_from_fft2(P, kx, ky, p1, p2) 
+              for (kx, ky) in tracked_freqs]
+        jj = int(np.argmax(tp))
+        dom_idx[j] = jj
+        # Phase at representative bin
+        i0, j0 = tracked_freqs[jj][0] % p1, tracked_freqs[jj][1] % p2
+        phase[j] = np.angle(F[i0, j0])
+        dom_pow[j] = tp[jj]
+    
+    return dom_idx, phase, dom_pow, l2
+
+
+def plot_wmix_frequency_structure(
+    param_history,
+    tracked_freqs,
+    colors,
+    p1,
+    p2,
+    steps=None,
+    within_group_order="phase",
+    dead_l2_thresh=0.1,
+    save_path=None,
+    show=False
+):
+    """
+    Visualize W_mix structure grouped by W_out frequency specialization.
+    
+    Creates heatmaps of W_mix reordered to show block structure based on
+    which Fourier mode each neuron is tuned to in W_out.
+    
+    Args:
+        param_history: List of parameter snapshots
+        tracked_freqs: List of (kx, ky) frequency tuples
+        colors: Array of colors for each frequency
+        p1, p2: Template dimensions
+        steps: List of epoch indices to plot (default: [1, 5, final])
+        within_group_order: How to order neurons within each frequency group
+                           ('phase', 'power', 'phase_power', 'none')
+        dead_l2_thresh: L2 threshold for dead neurons
+        save_path: Path to save figure
+        show: Whether to display plot
+    
+    Returns:
+        fig, axes
+    """
+    from matplotlib.patches import Rectangle
+    
+    def permutation_from_groups_with_dead(
+        dom_idx, phase, dom_power, l2, *,
+        within="phase", dead_l2_thresh=1e-1
+    ):
+        """Create neuron permutation grouped by dominant frequency."""
+        dead_mask = l2 < float(dead_l2_thresh)
+        groups = {}
+        for i, f in enumerate(dom_idx):
+            key = -1 if dead_mask[i] else int(f)
+            groups.setdefault(key, []).append(i)
+        
+        freq_keys = sorted([k for k in groups.keys() if k >= 0])
+        ordered_keys = freq_keys + ([-1] if -1 in groups else [])
+        
+        perm, boundaries = [], []
+        for f in ordered_keys:
+            idxs = groups[f]
+            if f == -1:
+                idxs = sorted(idxs, key=lambda i: l2[i])
+            else:
+                if within == "phase" and phase is not None:
+                    idxs = sorted(idxs, key=lambda i: (phase[i] + 2*np.pi) % (2*np.pi))
+                elif within == "power" and dom_power is not None:
+                    idxs = sorted(idxs, key=lambda i: -dom_power[i])
+                elif within == "phase_power":
+                    idxs = sorted(idxs, key=lambda i: 
+                                 ((phase[i] + 2*np.pi) % (2*np.pi), -dom_power[i]))
+            perm.extend(idxs)
+            boundaries.append(len(perm))
+        
+        return np.array(perm, dtype=int), ordered_keys, boundaries
+    
+    # Default steps
+    if steps is None:
+        final_step = len(param_history) - 1
+        steps = [1, min(5, final_step), final_step]
+        steps = sorted(list(set(steps)))
+    
+    # Labels for frequencies
+    tracked_labels = [
+        ("DC" if (kx, ky) == (0, 0) else f"({kx},{ky})") 
+        for (kx, ky) in tracked_freqs
+    ]
+    
+    # Analyze and reorder for each step
+    Wmix_perm_list = []
+    group_info_list = []
+    
+    for s in steps:
+        sd = param_history[s]
+        
+        # Analyze W_out
+        dom_idx, phase, dom_power, l2 = analyze_wout_frequency_dominance(
+            sd, tracked_freqs, p1, p2
+        )
+        
+        # Get W_mix (fallback to W_h for compatibility)
+        if "W_mix" in sd:
+            M = sd["W_mix"].detach().cpu().numpy()
+        elif "W_h" in sd:
+            M = sd["W_h"].detach().cpu().numpy()
+        else:
+            raise KeyError("Neither 'W_mix' nor 'W_h' found in state dict.")
+        
+        # Compute permutation
+        perm, group_keys, boundaries = permutation_from_groups_with_dead(
+            dom_idx, phase, dom_power, l2,
+            within=within_group_order,
+            dead_l2_thresh=dead_l2_thresh
+        )
+        
+        # Reorder
+        M_perm = M[perm][:, perm]
+        Wmix_perm_list.append(M_perm)
+        group_info_list.append((group_keys, boundaries))
+    
+    # Shared color limits
+    vmax = max(np.max(np.abs(M)) for M in Wmix_perm_list)
+    vmin = -vmax if vmax > 0 else 0.0
+    
+    # Create figure
+    n = len(steps)
+    fig, axes = plt.subplots(1, n, figsize=(3.8 * n, 3.8), constrained_layout=True)
+    if n == 1:
+        axes = [axes]
+    
+    cmap = "RdBu_r"
+    dead_gray = "0.35"
+    
+    im = None
+    for j, (s, M_perm) in enumerate(zip(steps, Wmix_perm_list)):
+        ax = axes[j]
+        im = ax.imshow(
+            M_perm, cmap=cmap, vmin=vmin, vmax=vmax,
+            aspect="equal", interpolation="nearest"
+        )
+        
+        ax.set_yticks([])
+        ax.tick_params(axis="x", bottom=False)
+        
+        group_keys, boundaries = group_info_list[j]
+        
+        # Draw separators between groups
+        for b in boundaries[:-1]:
+            ax.axhline(b - 0.5, color="k", lw=0.9, alpha=0.65)
+            ax.axvline(b - 0.5, color="k", lw=0.9, alpha=0.65)
+        
+        # Draw colored boxes around frequency groups
+        starts = [0] + boundaries[:-1]
+        ends = [b - 1 for b in boundaries]
+        for kk, s0, e0 in zip(group_keys, starts, ends):
+            if kk == -1:  # Skip dead neurons
+                continue
+            size = e0 - s0 + 1
+            rect = Rectangle(
+                (s0 - 0.5, s0 - 0.5),
+                width=size, height=size,
+                fill=False,
+                linewidth=2.0,
+                edgecolor=colors[kk],
+                alpha=0.95,
+                joinstyle="miter"
+            )
+            ax.add_patch(rect)
+        
+        # Add labels at top
+        centers = [(s + e) / 2.0 for s, e in zip(starts, ends)]
+        sizes = [e - s + 1 for s, e in zip(starts, ends)]
+        
+        labels = []
+        label_colors = []
+        for kk, nn in zip(group_keys, sizes):
+            if kk == -1:
+                labels.append(f"DEAD\n(n={nn})")
+                label_colors.append(dead_gray)
+            else:
+                labels.append(f"{tracked_labels[kk]}\n(n={nn})")
+                label_colors.append(colors[kk])
+        
+        ax.set_xticks(centers)
+        ax.set_xticklabels(labels, fontsize=11, ha="center")
+        ax.tick_params(
+            axis="x", bottom=False, top=True,
+            labelbottom=False, labeltop=True, labelsize=11
+        )
+        for lbl, clr in zip(ax.get_xticklabels(), label_colors):
+            lbl.set_color(clr)
+        
+        ax.set_xlabel(f"Epoch {s}", fontsize=18, labelpad=8)
+    
+    # Shared colorbar
+    cbar = fig.colorbar(im, ax=axes, shrink=1.0, pad=0.012, aspect=18)
+    cbar.ax.tick_params(labelsize=11)
+    cbar.set_label("Weight value", fontsize=12)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight", dpi=200)
+        print(f"  ✓ Saved W_mix structure plot")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    return fig, axes

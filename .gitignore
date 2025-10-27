@@ -12,6 +12,7 @@ gagf/fourier_power_only.png
 notebooks/saved_models/
 
 runs/
+data/
 
 # C extensions
 *.so
