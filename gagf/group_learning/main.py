@@ -56,12 +56,9 @@ def main_run(config):
 
         model_save_path = model_save_path(config)
 
-        template = datasets.choose_template(config['p'], group=config['group'], digit=config['mnist_digit'])
-
         print("Generating dataset...")
-        if config['group'] == 'znz_znz':
-            X, Y, _ = datasets.load_modular_addition_dataset_2d(config['p'], template, fraction=config['dataset_fraction'], random_state=config['seed'], template_type=config["template_type"])
-            X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, config['p'], device=None)
+        X, Y, template = datasets.load_dataset(config)
+        X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=False)
@@ -70,7 +67,7 @@ def main_run(config):
         torch.manual_seed(config['seed'])
         torch.cuda.manual_seed_all(config['seed'])  # if using GPU
 
-        model = models.TwoLayerNet(p=config['p'], hidden_size=config['hidden_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
+        model = models.TwoLayerNet(group_size=config['group_size'], hidden_size=config['hidden_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
         model = model.to(device)
         loss = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
@@ -95,19 +92,19 @@ def main_run(config):
             raise ValueError(f"Unknown group: {config['group']}")
 
         loss_plot = plot.plot_loss_curve(loss_history, TemplatePower, show=False)
-        top_frequency_plot = plot.plot_top_template_components(TemplatePower, config['p'], show=False)
+        top_frequency_plot = plot.plot_top_template_components(TemplatePower, config['group_size'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             TemplatePower, 
             model, 
             device, 
             param_history, 
             X, 
-            config['p'], 
+            config['group'], 
             save_path=None, 
             show=False
         )
-        neuron_weights_plot = plot.plot_neuron_weights(config['group'], model, config['p'], neuron_indices=None)
-        model_predictions_plot = plot.plot_model_outputs(config['group'], config['p'], model, X, Y, idx=13)        
+        neuron_weights_plot = plot.plot_neuron_weights(config['group'], model, config['group_size'], neuron_indices=None)
+        model_predictions_plot = plot.plot_model_outputs(config['group'], config['group_size'], model, X, Y, idx=13)        
         wandb.log({
             "loss_plot": wandb.Image(loss_plot),
             "top_frequency_plot": wandb.Image(top_frequency_plot),
@@ -132,7 +129,7 @@ def model_save_path(config):
     model_save_path = (
             f"{default_config.model_save_dir}model_"
             f"group{config['group']}_"
-            f"p{config['p']}_"
+            f"group_size{config['group_size']}_"
             f"digit{config['mnist_digit']}_"
             f"frac{config['dataset_fraction']}_"
             f"type{config['template_type']}_"
@@ -155,8 +152,6 @@ def main():
     """
     run_start_time = time.strftime("%m-%d_%H-%M-%S")
     for (
-        p,
-        mnist_digit,
         dataset_fraction,
         group,
         init_scale,
@@ -169,8 +164,6 @@ def main():
         frequencies_to_learn,
         
     ) in itertools.product(
-        default_config.p,
-        default_config.mnist_digit,
         default_config.dataset_fraction,
         default_config.group,
         default_config.init_scale,
@@ -184,7 +177,6 @@ def main():
     ):
 
         main_config = {
-            "p": p,
             "mnist_digit": mnist_digit,
             "dataset_fraction": dataset_fraction,
             "group": group,
@@ -202,20 +194,39 @@ def main():
         }
 
         if group == "znz_znz":
-            for frequencies_to_learn in itertools.product(
+            for (
+                frequencies_to_learn,
+                mnist_digit,
+                image_length,
+            ) in itertools.product(
                 default_config.frequencies_to_learn,
+                default_config.mnist_digit,
+                default_config.image_length,
             ):
+                group_size = image_length * image_length
                 template_type = 'mnist'
-                hidden_size = 6 * frequencies_to_learn
+                hidden_size = group_size * frequencies_to_learn
                 main_config["hidden_size"] = hidden_size
                 main_config["template_type"] = template_type
+                main_config["mnist_digit"] = mnist_digit
+                main_config["group_size"] = group_size
                 main_run(main_config)
 
         elif group == "dihedral":
-            template_type = 'dihedral_fixed'
-            hidden_size = 6*6
-            main_config["hidden_size"] = hidden_size
-            main_config["template_type"] = template_type
+            for (
+                frequencies_to_learn,
+                signal_length_1d,
+            ) in itertools.product(
+                default_config.frequencies_to_learn,
+                default_config.mnist_digit,
+                default_config.signal_length_1d,
+            ):
+                group_size = signal_length_1d
+                template_type = 'dihedral_fixed'
+                hidden_size = 6*group_size
+                main_config["hidden_size"] = hidden_size
+                main_config["template_type"] = template_type
+                main_config["group_size"] = group_size
             main_run(main_config)
 
         else:

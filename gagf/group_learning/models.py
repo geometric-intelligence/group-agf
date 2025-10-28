@@ -12,22 +12,19 @@ from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
 
 class TwoLayerNet(nn.Module):
-    def __init__(self, p, hidden_size=None, nonlinearity='square', init_scale=1.0, output_scale=1.0):
+    def __init__(self, group_size, hidden_size=None, nonlinearity='square', init_scale=1.0, output_scale=1.0):
         super(TwoLayerNet, self).__init__()
-        
-        # Store dimensions
-        self.p = p
+        self.group_size = group_size
         if hidden_size is None:
-            hidden_size = 6 * p * p
+            hidden_size = 6 * group_size
         self.hidden_size = hidden_size
         self.nonlinearity = nonlinearity
         self.init_scale = init_scale
         self.output_scale = output_scale
-        self.group_size = p * p  # Since input is flattened p x p matrix
         
         # Initialize parameters 
-        self.U = nn.Parameter(self.init_scale * torch.randn(hidden_size, self.group_size) / np.sqrt(2 * self.group_size))  # First p elements
-        self.V = nn.Parameter(self.init_scale * torch.randn(hidden_size, self.group_size) / np.sqrt(2 * self.group_size))  # Second p elements
+        self.U = nn.Parameter(self.init_scale * torch.randn(hidden_size, self.group_size) / np.sqrt(2 * self.group_size))  
+        self.V = nn.Parameter(self.init_scale * torch.randn(hidden_size, self.group_size) / np.sqrt(2 * self.group_size))  
         self.W = nn.Parameter(self.init_scale * torch.randn(hidden_size, self.group_size) / np.sqrt(self.group_size)) # Second layer weights
 
     def forward(self, x):

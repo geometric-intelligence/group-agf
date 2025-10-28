@@ -53,7 +53,7 @@ def plot_loss_curve(loss_history, TemplatePower, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(TemplatePower, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
+def plot_training_power_over_time(TemplatePower, model, device, param_history, X_tensor, group, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
@@ -71,10 +71,10 @@ def plot_training_power_over_time(TemplatePower, model, device, param_history, X
     print(f"top_5_power_idx: {top_5_power_idx}")
 
     model_powers_over_time, steps = power.model_power_over_time(
-        model.to(device),
+        group=group,
+        model=model.to(device),
         param_history=param_history,
-        model_inputs = X_tensor,
-        p=p,
+        model_inputs=X_tensor,
     )
 
     # Create a new figure for this plot
@@ -118,15 +118,15 @@ def plot_training_power_over_time(TemplatePower, model, device, param_history, X
 
 
 
-def plot_neuron_weights(group, model, p, neuron_indices=None, save_path=None, show=False):
+def plot_neuron_weights(group, model, group_size, neuron_indices=None, save_path=None, show=False):
     """Plot the weights of specified neurons in the model."""
     if group == 'znz_znz':
-        return plot_neuron_weights_2D(model, p, neuron_indices, save_path, show)
+        return plot_neuron_weights_2D(model, group_size, neuron_indices, save_path, show)
     elif group == 'dihedral':
-        return plot_neuron_weights_1D(model, p, neuron_indices, save_path, show)
+        return plot_neuron_weights_1D(model, group_size, neuron_indices, save_path, show)
 
 
-def plot_neuron_weights_1D(model, p, neuron_indices=None, save_path=None, show=False):
+def plot_neuron_weights_1D(model, group_size, neuron_indices=None, save_path=None, show=False):
     """Plot the weights of specified neurons in the last linear layer of the model.
 
     Parameters
@@ -134,8 +134,8 @@ def plot_neuron_weights_1D(model, p, neuron_indices=None, save_path=None, show=F
     model : nn.Module
     neuron_indices : list of int, optional
         List of neuron indices to plot. If None, random neurons are selected.
-    p : int
-        The value of p (weights are of size 2*p).
+    group_size : int
+        The value of group_size (weights are of size signal_len).
     save_path : str, optional
         Path to save the figure. If None, the figure is not saved.
     """
@@ -176,9 +176,9 @@ def plot_neuron_weights_1D(model, p, neuron_indices=None, save_path=None, show=F
 
     for i, idx in enumerate(neuron_indices):
         w = weights[idx]  # shape: (2*p,)
-        if w.shape[0] != 2*p:
-            raise ValueError(f"Expected weight size 2*p={2*p}, got {w.shape[0]}")
-        axs[i].plot(np.arange(2*p), w, lw=2)
+        if w.shape[0] != group_size:
+            raise ValueError(f"Expected weight size group_size={group_size}, got {w.shape[0]}")
+        axs[i].plot(np.arange(group_size), w, lw=2)
         axs[i].set_title(f'Neuron {idx}')
         axs[i].set_xlabel('Input Index')
         axs[i].set_ylabel('Weight Value')
@@ -196,14 +196,14 @@ def plot_neuron_weights_1D(model, p, neuron_indices=None, save_path=None, show=F
 
 
 
-def plot_neuron_weights_2D(model, p, neuron_indices=None, save_path=None, show=False):
+def plot_neuron_weights_2D(model, group_size, neuron_indices=None, save_path=None, show=False):
     """
     Plots the weights of specified neurons in the last linear layer of the model.
     
     Args:
         model: The neural network model (assumes first layer is nn.Linear).
         neuron_indices: List of neuron indices to plot.
-        p: The value of p (weights are of size p*p).
+        group_size: The value of group_size (weights are of size img_len*img_len).
         save_path: Optional path to save the figure.
     """        
     # Get the last linear layer's weights
@@ -242,11 +242,11 @@ def plot_neuron_weights_2D(model, p, neuron_indices=None, save_path=None, show=F
     axs = np.array(axs).reshape(-1)  # flatten for easy indexing
 
     for i, idx in enumerate(neuron_indices):
-        w = weights[idx]  # shape: (p*p,)
-        if w.shape[0] != p*p:
-            raise ValueError(f"Expected weight size p*p={p*p}, got {w.shape[0]}")
-        # Reshape to (p, p)
-        w_img = w.reshape(p, p)
+        w = weights[idx]  
+        if w.shape[0] != group_size:
+            raise ValueError(f"Expected weight size img_len*img_len={group_size}, got {w.shape[0]}")
+        img_len = int(np.sqrt(group_size))        
+        w_img = w.reshape(img_len, img_len)
         axs[i].imshow(w_img, cmap='viridis')
         axs[i].set_title(f'Neuron {idx}')
         axs[i].axis('off')
@@ -263,19 +263,21 @@ def plot_neuron_weights_2D(model, p, neuron_indices=None, save_path=None, show=F
     return fig
 
 
-def plot_model_outputs(group, p, model, X, Y, idx, save_path=None, show=False):
+def plot_model_outputs(group, group_size, model, X, Y, idx, save_path=None, show=False):
     """Plot a training target vs the model output."""
     if group == 'znz_znz':
-        return plot_model_outputs_2D(p, model, X, Y, idx, save_path, show)
+        return plot_model_outputs_2D(group_size, model, X, Y, idx, save_path, show)
     elif group == 'dihedral':
-        return plot_model_outputs_1D(p, model, X, Y, idx, save_path, show)
+        return plot_model_outputs_1D(group_size, model, X, Y, idx, save_path, show)
 
 
-def plot_model_outputs_1D(p, model, X, Y, idx, save_path=None, show=False):
+def plot_model_outputs_1D(group_size, model, X, Y, idx, save_path=None, show=False):
     """Plot a training target vs the model output in 1D case.
 
     Parameters
     ----------
+    group_size : int
+        The value of group_size.
     model : nn.Module
         The trained model.
     X : torch.Tensor
@@ -310,29 +312,24 @@ def plot_model_outputs_1D(p, model, X, Y, idx, save_path=None, show=False):
                 return t.detach().cpu().numpy()
             return np.array(t)
 
-        x_np = to_numpy(x)
         y_np = to_numpy(y)
         output_np = to_numpy(output)
 
-        input_size = p * 2
         # Plot for each index
-        fig, axs = plt.subplots(n_samples, 3, figsize=(12, 3 * n_samples), sharey=True,
+        fig, axs = plt.subplots(n_samples, 2, figsize=(12, 3 * n_samples), sharey=True,
                                 squeeze=False)
 
-        for row, (x_item, output_item, y_item) in enumerate(zip(x_np, output_np, y_np)):
+        for row, (output_item, y_item) in enumerate(zip(output_np, y_np)):
             # ensure all items are 1d or flat
-            x_item = np.squeeze(x_item)
             y_item = np.squeeze(y_item)
             output_item = np.squeeze(output_item)
-            axs[row, 0].plot(np.arange(input_size), x_item, lw=2)
-            axs[row, 0].set_title('Input')
 
-            axs[row, 1].plot(np.arange(p), output_item, lw=2)
-            axs[row, 1].set_title('Output')
+            axs[row, 0].plot(np.arange(group_size), output_item, lw=2)
+            axs[row, 0].set_title('Output')
 
-            axs[row, 2].plot(np.arange(p), y_item, lw=2)
-            axs[row, 2].set_title('Target')
-            for col in range(3):
+            axs[row, 1].plot(np.arange(group_size), y_item, lw=2)
+            axs[row, 1].set_title('Target')
+            for col in range(2):
                 axs[row, col].set_xlabel('Index')
                 axs[row, col].set_ylabel('Value')
 
@@ -348,11 +345,13 @@ def plot_model_outputs_1D(p, model, X, Y, idx, save_path=None, show=False):
 
 
 
-def plot_model_outputs_2D(p, model, X, Y, idx, save_path=None, show=False):
+def plot_model_outputs_2D(group_size, model, X, Y, idx, save_path=None, show=False):
     """Plot a training target vs the model output in 2D case.
 
     Parameters
     ----------
+    group_size : int
+        The value of group_size.
     model : nn.Module
         The trained model.
     X : torch.Tensor
@@ -391,8 +390,8 @@ def plot_model_outputs_2D(p, model, X, Y, idx, save_path=None, show=False):
         y_np = to_numpy(y)
         output_np = to_numpy(output)
 
-        image_size = p
-        # If inputs are 2*p*p (concatenated two images) shape, split accordingly
+        image_size = int(np.sqrt(group_size))
+        # If inputs are 2*group_size (concatenated two images) shape, split accordingly
         input_flat_dim = x_np.shape[-1]
         split_point = input_flat_dim // 2
 
@@ -513,15 +512,15 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(TemplatePower, p, show=False):
+def plot_top_template_components(TemplatePower, group_size, show=False):
     """Plot the top 5 Fourier components of the template.
 
     Parameters
     ----------
     template : np.ndarray
-        A flattened 2D array of shape (p, p) representing the template.
-    p : int
-        p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
+        A flattened 2D array of shape [group_size] representing the template.
+    group_size : int
+        group_size of Z/pZ x Z/pZ. 
     """
     template_power = TemplatePower.template_power
 
@@ -539,7 +538,7 @@ def plot_top_template_components(TemplatePower, p, show=False):
         v = idx % template_power.shape[1]
         
         # Add current component to cumulative spectrum
-        cumulative_spectrum[u, v] = np.sqrt(template_power[u, v] * p * p)  # Scale back to amplitude
+        cumulative_spectrum[u, v] = np.sqrt(template_power[u, v] * group_size)  # Scale back to amplitude
         if v != 0 and v != template_power.shape[1] - 1:
             cumulative_spectrum[u, -v] = np.conj(cumulative_spectrum[u, v])  # Add negative frequency component if not DC or Nyquist
         

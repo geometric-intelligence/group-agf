@@ -195,6 +195,34 @@ class GroupPower:
             
         return np.array(power_spectrum)
 
+    def get_alpha_values(self):
+        """Compute theoretical alpha values from the template's power spectrum.
+
+        Parameters
+        ----------
+        template : ndarray (p,)
+            1D template array.
+
+        Returns
+        -------
+        alpha_values : list of float
+            Theoretical alpha values for each nonzero power, in descending order.
+        power : ndarray
+            Power spectrum that has been filtered to non-zero values and sorted in descending order.
+        """
+        p = len(self.template)
+        print("Computing alpha values for template of shape:", (p,))
+        power = self.compute_group_power_spectrum(self.template)
+        print(power)
+        nonzero_power_mask = power > 1e-20
+        power = power[nonzero_power_mask]
+        i_power_descending_order = np.argsort(power)[::-1]
+        power = power[i_power_descending_order]
+        alpha_values = [np.sum(power[k:]) for k in range(len(power))]
+        coef = 1 / p
+        alpha_values = [alpha * coef for alpha in alpha_values]
+        return alpha_values
+
 
 def model_power_over_time(group, model, param_history, model_inputs):
     """Compute the power spectrum of the model's learned weights over time.

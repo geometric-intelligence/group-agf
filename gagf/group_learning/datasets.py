@@ -11,6 +11,11 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
+from sklearn.datasets import fetch_openml
+from sklearn.utils import shuffle
+from skimage.transform import resize
+
+from escnn.group import *
 
 import gagf.group_learning.power as power
 import setcwd
@@ -79,6 +84,9 @@ def generate_fixed_template_znz_znz(p):
 
     template = template.flatten()
 
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
+
     return template
 
 
@@ -102,8 +110,10 @@ def generate_fixed_template_dihedral(group):
     # Generate signal from spectrum
     template = compute_group_inverse_fourier_transform(group, spectrum)
 
-    return template
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
 
+    return template
 
 
 def mnist_template(p, digit=0, sample_idx=0, random_state=42):
@@ -125,10 +135,6 @@ def mnist_template(p, digit=0, sample_idx=0, random_state=42):
     template : np.ndarray
         A flattened 2D array of shape (p, p) representing the template.
     """
-    from sklearn.datasets import fetch_openml
-    from sklearn.utils import shuffle
-    from skimage.transform import resize
-
     # Load MNIST dataset
     mnist = fetch_openml('mnist_784', version=1)
     X = mnist.data.values
@@ -154,7 +160,54 @@ def mnist_template(p, digit=0, sample_idx=0, random_state=42):
 
     template = sample_resized.flatten()
 
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
+
     return template
+
+
+# TODO: Check if dataset is correctly centered (see paper on generating dataset)
+def group_dataset(group, template):
+    """Generate a dataset of group elements acting on the template.
+
+    Using the regular representation.
+    
+    Parameters
+    ----------
+    group : Group (escnn object)
+        The group.
+    template : np.ndarray, shape=[group.order()]
+        The template to generate the dataset from.
+
+    Returns
+    -------
+    X : np.ndarray, shape=[group.order()**2, 2, group.order()]
+        The dataset of group elements acting on the template.   
+    Y : np.ndarray, shape=[group.order()**2, group.order()]
+        The dataset of group elements acting on the template.
+    """
+        
+    # Initialize data arrays
+    group_order = group.order()
+    assert len(template) == group_order, "template must have the same length as the group order"
+    n_samples = group_order ** 2
+    X = np.zeros((n_samples, 2, group_order))
+    Y = np.zeros((n_samples, group_order))
+    regular_rep = group.representations["regular"]
+    
+    idx = 0
+    for g1 in group.elements:
+        for g2 in group.elements:
+            g1_rep = regular_rep(g1)
+            g2_rep = regular_rep(g2)
+            g12_rep = g1_rep @ g2_rep
+
+            X[idx, 0, :] = g1_rep @ template
+            X[idx, 1, :] = g2_rep @ template
+            Y[idx, :] = g12_rep @ template
+            idx += 1
+            
+    return X, Y
 
 
 def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save_path=None):
@@ -223,7 +276,6 @@ def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save
     return X[indices], Y[indices], translations[indices]
 
 
-
 def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, template_type="mnist"):
     """
     Load the modular addition 2D dataset from a file if present. 
@@ -244,8 +296,8 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
 
     Returns
     -------
-    X : np.ndarray
-    Y : np.ndarray
+    X : np.ndarray (num_samples, 2, p*p)
+    Y : np.ndarray (num_samples, p*p)
     translations : np.ndarray
     """
     file_name = f'modular_addition_2d_dataset_type{template_type}_p{p}_fraction{fraction:.2f}.npz'
@@ -270,22 +322,43 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
         return X, Y, translations
 
 
-def choose_template(p, group="znz_znz", digit=4):
-    """Choose template based on type."""
-    if group == "dihedral":
-        template = generate_fixed_template_dihedral(p)
-    elif group == "znz_znz":
-        template = mnist_template(p, digit=digit)
-    else:
-        raise ValueError(f"Unknown group: {group}")
+# def choose_template(p, group="znz_znz", digit=4):
+#     """Choose template based on type."""
+#     if group == "dihedral":
+#         template = generate_fixed_template_dihedral(p)
+#     elif group == "znz_znz":
+#         template = mnist_template(p, digit=digit)
+#     else:
+#         raise ValueError(f"Unknown group: {group}")
 
-    zeroth_freq = np.mean(template)
-    template = template - zeroth_freq
+#     zeroth_freq = np.mean(template)
+#     template = template - zeroth_freq
     
-    return template
+#     return template
 
 
-def move_dataset_to_device_and_flatten(X, Y, p, device=None):
+def load_dataset(config):
+    """Load dataset based on configuration."""
+
+    if config['group'] == 'znz_znz':
+        template = mnist_template(config['p'], digit=config['mnist_digit'])
+        X, Y, _ = load_modular_addition_dataset_2d(
+            config['p'],
+            template,
+            fraction=config['dataset_fraction'],
+            random_state=config['seed'],
+            template_type="mnist"
+        )
+    elif config['group'] == 'dihedral':
+        N = 3
+        group = DihedralGroup(N) 
+        template = generate_fixed_template_dihedral(group)
+        X, Y = group_dataset(group, template)
+
+    return X, Y, template
+
+
+def move_dataset_to_device_and_flatten(X, Y, device=None):
     """Move dataset tensors to available or specified device.
     
     Parameters
@@ -306,11 +379,12 @@ def move_dataset_to_device_and_flatten(X, Y, p, device=None):
     Y : torch.Tensor
         Target data tensor on specified device, flattened to (num_samples, p*p)
     """
-    # Flatten X to shape (num_samples, 2*p*p) before converting to tensor
-    X_flat = X.reshape(X.shape[0], 2 * p * p)
-    Y_flat = Y.reshape(Y.shape[0], p * p)
+    # Reshape X to (num_samples, 2*num_data_features), where num_data_features is inferred from len(X[0][0])
+    num_data_features = len(X[0][0])
+    X_flat = X.reshape(X.shape[0], 2 * num_data_features)
+    Y_flat = Y.reshape(Y.shape[0], num_data_features)
     X_tensor = torch.tensor(X_flat, dtype=torch.float32)
-    Y_tensor = torch.tensor(Y_flat, dtype=torch.float32)  # Targets (num_samples, p*p)
+    Y_tensor = torch.tensor(Y_flat, dtype=torch.float32)
     print(f"X_tensor shape: {X_tensor.shape}, Y_tensor shape: {Y_tensor.shape}")
 
     if device is None:
