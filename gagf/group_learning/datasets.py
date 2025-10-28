@@ -270,14 +270,14 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
         return X, Y, translations
 
 
-def choose_template(p, template_type="mnist", digit=4):
+def choose_template(p, group="znz_znz", digit=4):
     """Choose template based on type."""
-    if template_type == "znz_znz_fixed":
-        template = generate_fixed_template(p)
-    elif template_type == "mnist":
+    if group == "dihedral":
+        template = generate_fixed_template_dihedral(p)
+    elif group == "znz_znz":
         template = mnist_template(p, digit=digit)
     else:
-        raise ValueError(f"Unknown template_type: {template_type}")
+        raise ValueError(f"Unknown group: {group}")
 
     zeroth_freq = np.mean(template)
     template = template - zeroth_freq

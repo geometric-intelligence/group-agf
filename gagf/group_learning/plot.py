@@ -10,26 +10,27 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
+import collections.abc
 
 import gagf.group_learning.power as power
 
 
-def plot_loss_curve(loss_history, template, save_path=None, show=False):
+def plot_loss_curve(loss_history, TemplatePower, save_path=None, show=False):
     """Plot loss curve over epochs.
 
     Parameters
     ----------
     loss_history : list of float
         List of loss values recorded at each epoch.
-    template : np.ndarray (p*p,)
-        The template used in training (used to calculate theoretical plateau lines for AGF).
+    TemplatePower : class object
+        Used to calculate theoretical plateau lines for AGF.
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
     fig = plt.figure(figsize=(8, 6))
     plt.plot(list(loss_history), lw=4)
 
-    alpha_values = power.get_alpha_values(template)
+    alpha_values = TemplatePower.alpha_values
 
     for k, alpha in enumerate(alpha_values):
         print(f"Plotting alpha value {k}: {alpha}")
@@ -52,7 +53,7 @@ def plot_loss_curve(loss_history, template, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(template_flat, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
+def plot_training_power_over_time(TemplatePower, model, device, param_history, X_tensor, p, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
@@ -62,8 +63,8 @@ def plot_training_power_over_time(template_flat, model, device, param_history, X
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    template_2d = template_flat.reshape((p, p))
-    row_freqs, column_freqs, template_power = power.get_power_2d(template_2d)
+    template_power = TemplatePower.template_power
+    row_freqs, column_freqs = TemplatePower.x_freqs, TemplatePower.y_freqs
     freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
     flattened_template_power = template_power.flatten()
     top_5_power_idx = np.argsort(flattened_template_power)[-5:][::-1]
@@ -117,9 +118,87 @@ def plot_training_power_over_time(template_flat, model, device, param_history, X
 
 
 
-def plot_neuron_weights(model, p, neuron_indices=None, save_path=None, show=False):
+def plot_neuron_weights(group, model, p, neuron_indices=None, save_path=None, show=False):
+    """Plot the weights of specified neurons in the model."""
+    if group == 'znz_znz':
+        return plot_neuron_weights_2D(model, p, neuron_indices, save_path, show)
+    elif group == 'dihedral':
+        return plot_neuron_weights_1D(model, p, neuron_indices, save_path, show)
+
+
+def plot_neuron_weights_1D(model, p, neuron_indices=None, save_path=None, show=False):
+    """Plot the weights of specified neurons in the last linear layer of the model.
+
+    Parameters
+    ----------
+    model : nn.Module
+    neuron_indices : list of int, optional
+        List of neuron indices to plot. If None, random neurons are selected.
+    p : int
+        The value of p (weights are of size 2*p).
+    save_path : str, optional
+        Path to save the figure. If None, the figure is not saved.
     """
-    Plots the weights of specified neurons in the first linear layer of the model.
+    # Get the last linear layer's weights
+    last_layer = None
+    # Reverse list of modules to get the last nn.Linear if present
+    modules = list(model.modules())
+    for module in reversed(modules):
+        if hasattr(module, 'weight') and hasattr(module, 'bias'):
+            last_layer = module
+            weights = last_layer.weight.detach().cpu().numpy()  # shape: (out_features, in_features)
+            break
+    if last_layer is None:
+        # Support both nn.Linear and custom nn.Parameter-based models (like TwoLayerNet)
+        if hasattr(model, 'U'):
+            weights = model.U.detach().cpu().numpy()
+        elif last_layer is not None:
+            weights = last_layer.weight.detach().cpu().numpy()
+        else:
+            raise ValueError("No suitable weights found in model (neither nn.Linear nor custom nn.Parameter 'U').")
+
+    if neuron_indices is None:
+        if len(weights) <= 16:
+            neuron_indices = list(range(len(weights)))
+        else:
+            neuron_indices = random.sample(range(len(weights)), 10)
+
+    if isinstance(neuron_indices, int):
+        neuron_indices = [neuron_indices]
+        
+    # Determine number of rows and columns (max 5 per row)
+    n_plots = len(neuron_indices)
+    n_cols = min(5, n_plots)
+    n_rows = (n_plots + 4) // 5  # integer division, round up
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(3*n_cols, 3*n_rows))
+    # axs is 2D if n_rows > 1, else 1D
+    axs = np.array(axs).reshape(-1)  # flatten for easy indexing
+
+    for i, idx in enumerate(neuron_indices):
+        w = weights[idx]  # shape: (2*p,)
+        if w.shape[0] != 2*p:
+            raise ValueError(f"Expected weight size 2*p={2*p}, got {w.shape[0]}")
+        axs[i].plot(np.arange(2*p), w, lw=2)
+        axs[i].set_title(f'Neuron {idx}')
+        axs[i].set_xlabel('Input Index')
+        axs[i].set_ylabel('Weight Value')
+    # Hide any unused subplots
+    for j in range(len(neuron_indices), len(axs)):
+        axs[j].axis('off')
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
+    if show:
+        plt.show()
+    plt.close(fig)
+    return fig
+
+
+
+
+def plot_neuron_weights_2D(model, p, neuron_indices=None, save_path=None, show=False):
+    """
+    Plots the weights of specified neurons in the last linear layer of the model.
     
     Args:
         model: The neural network model (assumes first layer is nn.Linear).
@@ -144,7 +223,6 @@ def plot_neuron_weights(model, p, neuron_indices=None, save_path=None, show=Fals
             weights = last_layer.weight.detach().cpu().numpy()
         else:
             raise ValueError("No suitable weights found in model (neither nn.Linear nor custom nn.Parameter 'U').")
-
 
     if neuron_indices is None:
         if len(weights) <= 16:
@@ -185,15 +263,23 @@ def plot_neuron_weights(model, p, neuron_indices=None, save_path=None, show=Fals
     return fig
 
 
-def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None, show=False):
-    """Plot a training target vs the model output.
+def plot_model_outputs(group, p, model, X, Y, idx, save_path=None, show=False):
+    """Plot a training target vs the model output."""
+    if group == 'znz_znz':
+        return plot_model_outputs_2D(p, model, X, Y, idx, save_path, show)
+    elif group == 'dihedral':
+        return plot_model_outputs_1D(p, model, X, Y, idx, save_path, show)
+
+
+def plot_model_outputs_1D(p, model, X, Y, idx, save_path=None, show=False):
+    """Plot a training target vs the model output in 1D case.
 
     Parameters
     ----------
     model : nn.Module
         The trained model.
     X : torch.Tensor
-        Input data of shape (num_samples, input_size).
+        Input data of shape (num_samples, 2, input_size). 2 images.
     Y : torch.Tensor
         Target data of shape (num_samples, output_size).
     idx : int
@@ -203,9 +289,83 @@ def plot_model_outputs(p, model, X, Y, idx, num_samples=5, save_path=None, show=
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    # Vectorized function to support multiple indices (idx can be int or list/array of ints)
-    import collections.abc
+    with torch.no_grad():
+        # Accept single int or list/array of ints for idx
+        idx_list = idx if isinstance(idx, collections.abc.Sequence) and not isinstance(idx, str) else [idx]
+        n_samples = len(idx_list)
 
+        # Prepare output for all idx
+        # Model may only accept batch input, so collect batch inputs
+        x = X[idx_list]   # (n_samples, input_size)
+        y = Y[idx_list]   # (n_samples, output_size)
+        print(f"x shape: {x.shape}, y shape: {y.shape}")
+
+        if hasattr(model, 'eval'):
+            model.eval()
+        output = model(x)   # (n_samples, output_size)
+
+        # Convert tensors to numpy arrays
+        def to_numpy(t):
+            if torch.is_tensor(t):
+                return t.detach().cpu().numpy()
+            return np.array(t)
+
+        x_np = to_numpy(x)
+        y_np = to_numpy(y)
+        output_np = to_numpy(output)
+
+        input_size = p * 2
+        # Plot for each index
+        fig, axs = plt.subplots(n_samples, 3, figsize=(12, 3 * n_samples), sharey=True,
+                                squeeze=False)
+
+        for row, (x_item, output_item, y_item) in enumerate(zip(x_np, output_np, y_np)):
+            # ensure all items are 1d or flat
+            x_item = np.squeeze(x_item)
+            y_item = np.squeeze(y_item)
+            output_item = np.squeeze(output_item)
+            axs[row, 0].plot(np.arange(input_size), x_item, lw=2)
+            axs[row, 0].set_title('Input')
+
+            axs[row, 1].plot(np.arange(p), output_item, lw=2)
+            axs[row, 1].set_title('Output')
+
+            axs[row, 2].plot(np.arange(p), y_item, lw=2)
+            axs[row, 2].set_title('Target')
+            for col in range(3):
+                axs[row, col].set_xlabel('Index')
+                axs[row, col].set_ylabel('Value')
+
+        fig.suptitle(f"Model Inputs, Outputs, and Targets at index {idx}", fontsize=20)
+        plt.tight_layout()
+        if save_path is not None:
+            plt.savefig(save_path, bbox_inches='tight')
+        
+        if show:
+            plt.show()
+        plt.close(fig)
+    return fig
+
+
+
+def plot_model_outputs_2D(p, model, X, Y, idx, save_path=None, show=False):
+    """Plot a training target vs the model output in 2D case.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The trained model.
+    X : torch.Tensor
+        Input data of shape (num_samples, 2, input_size). 2 images.
+    Y : torch.Tensor
+        Target data of shape (num_samples, output_size).
+    idx : int
+        Index of the data sample to plot target vs output for.
+    num_samples : int
+        Total number of samples in the dataset.
+    save_path : str, optional
+        Path to save the plot. If None, the plot is not saved.
+    """    
     with torch.no_grad():
         # Accept single int or list/array of ints for idx
         idx_list = idx if isinstance(idx, collections.abc.Sequence) and not isinstance(idx, str) else [idx]
@@ -353,7 +513,7 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(template_flat, p, show=False):
+def plot_top_template_components(TemplatePower, p, show=False):
     """Plot the top 5 Fourier components of the template.
 
     Parameters
@@ -363,9 +523,7 @@ def plot_top_template_components(template_flat, p, show=False):
     p : int
         p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
     """
-    template_2d = template_flat.reshape((p, p))
-
-    _, _, template_power = power.get_power_2d(template_2d)
+    template_power = TemplatePower.template_power
 
     # Flatten the power array and get the indices of the top 5 components
     template_power_flat = template_power.flatten()

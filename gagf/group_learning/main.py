@@ -54,11 +54,14 @@ def main_run(config):
     try:
         logging.info(f"\n\n---> START run: {run_name}.")
 
-        template = datasets.choose_template(config['p'], template_type=config['template_type'], digit=config['mnist_digit'])
+        model_save_path = model_save_path(config)
+
+        template = datasets.choose_template(config['p'], group=config['group'], digit=config['mnist_digit'])
 
         print("Generating dataset...")
-        X, Y, _ = datasets.load_modular_addition_dataset_2d(config['p'], template, fraction=config['dataset_fraction'], random_state=config['seed'], template_type=config["template_type"])
-        X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, config['p'], device=None)
+        if config['group'] == 'znz_znz':
+            X, Y, _ = datasets.load_modular_addition_dataset_2d(config['p'], template, fraction=config['dataset_fraction'], random_state=config['seed'], template_type=config["template_type"])
+            X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, config['p'], device=None)
 
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=False)
@@ -80,14 +83,21 @@ def main_run(config):
             optimizer,
             epochs=config['epochs'],
             verbose_interval=config['verbose_interval'],
-            model_save_path=config['model_save_path']
+            model_save_path=model_save_path
         )
 
         print("Training Complete. Generating plots...")
-        loss_plot = plot.plot_loss_curve(loss_history, template, show=False)
-        top_frequency_plot = plot.plot_top_template_components(template, config['p'], show=False)
+        if config['group'] == 'znz_znz':
+            TemplatePower = power.ZnZPower2D(template)
+        elif config['group'] == 'dihedral':
+            TemplatePower = power.GroupPower(template, group='dihedral')
+        else:
+            raise ValueError(f"Unknown group: {config['group']}")
+
+        loss_plot = plot.plot_loss_curve(loss_history, TemplatePower, show=False)
+        top_frequency_plot = plot.plot_top_template_components(TemplatePower, config['p'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
-            template, 
+            TemplatePower, 
             model, 
             device, 
             param_history, 
@@ -96,8 +106,8 @@ def main_run(config):
             save_path=None, 
             show=False
         )
-        neuron_weights_plot = plot.plot_neuron_weights(model, config['p'], neuron_indices=None)
-        model_predictions_plot = plot.plot_model_outputs(config['p'], model, X, Y, idx=13, num_samples=5)        
+        neuron_weights_plot = plot.plot_neuron_weights(config['group'], model, config['p'], neuron_indices=None)
+        model_predictions_plot = plot.plot_model_outputs(config['group'], config['p'], model, X, Y, idx=13)        
         wandb.log({
             "loss_plot": wandb.Image(loss_plot),
             "top_frequency_plot": wandb.Image(top_frequency_plot),
@@ -118,6 +128,26 @@ def main_run(config):
         wandb.finish()
 
 
+def model_save_path(config):
+    model_save_path = (
+            f"{default_config.model_save_dir}model_"
+            f"group{config['group']}_"
+            f"p{config['p']}_"
+            f"digit{config['mnist_digit']}_"
+            f"frac{config['dataset_fraction']}_"
+            f"type{config['template_type']}_"
+            f"init{config['init_scale']}_"
+            f"lr{config['lr']}_"
+            f"mom{config['mom']}_"
+            f"bs{config['batch_size']}_"
+            f"epochs{config['epochs']}_"
+            f"freq{config['frequencies_to_learn']}_"
+            f"seed{config['seed']}.pkl"
+        )
+
+    return model_save_path
+
+
 def main():
     """Parse the default_config file and launch all experiments.
 
@@ -131,12 +161,12 @@ def main():
         group,
         init_scale,
         seed,
-        template_type,
         lr,
         mom,
         batch_size,
         epochs,
         verbose_interval,
+        frequencies_to_learn,
         
     ) in itertools.product(
         default_config.p,
@@ -145,24 +175,13 @@ def main():
         default_config.group,
         default_config.init_scale,
         default_config.seed,
-        default_config.template_type,
         default_config.lr,
         default_config.mom,
         default_config.batch_size,
         default_config.epochs,
         default_config.verbose_interval,
+        default_config.frequencies_to_learn,
     ):
-
-        hidden_size = 10 * p
-
-        model_save_path = (
-            f"{default_config.model_save_dir}model_"
-            f"p{p}_"
-            f"digit{mnist_digit}_"
-            f"frac{dataset_fraction}_"
-            f"type{template_type}_"
-            f"seed{seed}.pkl"
-        )
 
         main_config = {
             "p": p,
@@ -179,9 +198,29 @@ def main():
             "epochs": epochs,
             "verbose_interval": verbose_interval,
             "hidden_size": hidden_size,
-            "model_save_path": model_save_path,
+            "freq_to_learn": frequencies_to_learn,
         }
 
-        main_run(main_config)
+        if group == "znz_znz":
+            for frequencies_to_learn in itertools.product(
+                default_config.frequencies_to_learn,
+            ):
+                template_type = 'mnist'
+                hidden_size = 6 * frequencies_to_learn
+                main_config["hidden_size"] = hidden_size
+                main_config["template_type"] = template_type
+                main_run(main_config)
+
+        elif group == "dihedral":
+            template_type = 'dihedral_fixed'
+            hidden_size = 6*6
+            main_config["hidden_size"] = hidden_size
+            main_config["template_type"] = template_type
+            main_run(main_config)
+
+        else:
+            raise ValueError(f"Unknown group: {group}")
+
+        
 
 main()

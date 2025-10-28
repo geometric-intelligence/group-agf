@@ -122,5 +122,6 @@ def compute_group_power_spectrum(group, template):
         fourier_coef = compute_group_fourier_coef(group, template, irrep)
         power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)  # TODO: check if this is correct 
         # print(f"Power of {irrep.name}: {power_spectrum[i]}, type: {type(power_spectrum[i])}")
+    power_spectrum = power_spectrum/group.order()
     return np.array(power_spectrum)
 
