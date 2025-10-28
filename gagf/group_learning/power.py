@@ -27,7 +27,7 @@ class ZnZPower2D:
         self.template = template
         self.p = int(np.sqrt(len(template)))
         self.template_2D = template.reshape((self.p, self.p))
-        self.x_freqs, self.y_freqs, self.template_power = self.get_power_2d(self.template_2D, no_freq=True)
+        self.x_freqs, self.y_freqs, self.power = self.get_power_2d(self.template_2D, no_freq=True)
         self.alpha_values = self.get_alpha_values(template)
 
     def get_power_2d(self, no_freq=False):
@@ -158,7 +158,7 @@ class GroupPower:
     def __init__(self, template, group):
         self.template = template
         self.p = len(template)
-        self.template_power = self.compute_group_power_spectrum(self.template)
+        self.power = self.compute_group_power_spectrum(self.template)
         self.group = group
 
     def compute_group_power_spectrum(self):  
@@ -282,7 +282,7 @@ def model_power_over_time(group, model, param_history, model_inputs):
                     raise NotImplementedError("Dihedral group power spectrum not implemented yet.")
                 else:
                     raise ValueError(f"Unknown group type: {group}")
-                this_power = OutputPower.template_power
+                this_power = OutputPower.power
                 # flatten to 1D for both 1D and 2D cases
                 this_power_flat = this_power.flatten()
                 powers.append(this_power_flat)

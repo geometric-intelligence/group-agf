@@ -85,16 +85,16 @@ def main_run(config):
 
         print("Training Complete. Generating plots...")
         if config['group'] == 'znz_znz':
-            TemplatePower = power.ZnZPower2D(template)
+            template_power = power.ZnZPower2D(template)
         elif config['group'] == 'dihedral':
-            TemplatePower = power.GroupPower(template, group='dihedral')
+            template_power = power.GroupPower(template, group='dihedral')
         else:
             raise ValueError(f"Unknown group: {config['group']}")
 
-        loss_plot = plot.plot_loss_curve(loss_history, TemplatePower, show=False)
-        top_frequency_plot = plot.plot_top_template_components(TemplatePower, config['group_size'], show=False)
+        loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
+        top_frequency_plot = plot.plot_top_template_components(template_power, config['group_size'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
-            TemplatePower, 
+            template_power, 
             model, 
             device, 
             param_history, 

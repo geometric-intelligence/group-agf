@@ -15,14 +15,14 @@ import collections.abc
 import gagf.group_learning.power as power
 
 
-def plot_loss_curve(loss_history, TemplatePower, save_path=None, show=False):
+def plot_loss_curve(loss_history, template_power, save_path=None, show=False):
     """Plot loss curve over epochs.
 
     Parameters
     ----------
     loss_history : list of float
         List of loss values recorded at each epoch.
-    TemplatePower : class object
+    template_power : class instance
         Used to calculate theoretical plateau lines for AGF.
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
@@ -30,7 +30,7 @@ def plot_loss_curve(loss_history, TemplatePower, save_path=None, show=False):
     fig = plt.figure(figsize=(8, 6))
     plt.plot(list(loss_history), lw=4)
 
-    alpha_values = TemplatePower.alpha_values
+    alpha_values = template_power.alpha_values
 
     for k, alpha in enumerate(alpha_values):
         print(f"Plotting alpha value {k}: {alpha}")
@@ -53,18 +53,20 @@ def plot_loss_curve(loss_history, TemplatePower, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(TemplatePower, model, device, param_history, X_tensor, group, save_path=None, logscale=False, show=False):
+def plot_training_power_over_time(template_power, model, device, param_history, X_tensor, group, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
     ----------
+    template_power : class instance
+        Instance of <>Power containing the template power spectrum.
     avg_power_history : list of ndarray (num_steps, num_freqs)
         List of average power spectra at each step.
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    template_power = TemplatePower.template_power
-    row_freqs, column_freqs = TemplatePower.x_freqs, TemplatePower.y_freqs
+    template_power = template_power.power
+    row_freqs, column_freqs = template_power.x_freqs, template_power.y_freqs
     freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
     flattened_template_power = template_power.flatten()
     top_5_power_idx = np.argsort(flattened_template_power)[-5:][::-1]
@@ -512,17 +514,17 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(TemplatePower, group_size, show=False):
+def plot_top_template_components(template_power, group_size, show=False):
     """Plot the top 5 Fourier components of the template.
 
     Parameters
     ----------
-    template : np.ndarray
-        A flattened 2D array of shape [group_size] representing the template.
+    template_power : class instance
+        Instance of <>Power containing the template power spectrum.
     group_size : int
         group_size of Z/pZ x Z/pZ. 
     """
-    template_power = TemplatePower.template_power
+    template_power = template_power.power
 
     # Flatten the power array and get the indices of the top 5 components
     template_power_flat = template_power.flatten()
