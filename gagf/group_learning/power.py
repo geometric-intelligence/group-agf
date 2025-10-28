@@ -10,7 +10,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator
-from escnn import *
+from escnn.group import *
 import gagf.group_learning.group_fourier_transform as gft
 
 
@@ -155,11 +155,18 @@ class GroupPower:
         Also specifies which fourier transform to apply, and thus
         which transform to compute the power spectrum for.
     """
-    def __init__(self, template, group):
+    def __init__(self, template, group_name='dihedral'):
         self.template = template
         self.p = len(template)
-        self.power = self.compute_group_power_spectrum(self.template)
-        self.group = group
+        if group_name == 'dihedral':
+            N = 3
+            self.group = DihedralGroup(N)
+        else:
+            raise ValueError(f"Unknown group name: {group_name}")
+
+        self.power = self.compute_group_power_spectrum()
+        self.alpha_values = self.get_alpha_values()
+        
 
     def compute_group_power_spectrum(self):  
         """Compute the (group) power spectrum of the template.
@@ -212,7 +219,7 @@ class GroupPower:
         """
         p = len(self.template)
         print("Computing alpha values for template of shape:", (p,))
-        power = self.compute_group_power_spectrum(self.template)
+        power = self.compute_group_power_spectrum()
         print(power)
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]

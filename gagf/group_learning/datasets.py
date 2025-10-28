@@ -90,7 +90,7 @@ def generate_fixed_template_znz_znz(p):
     return template
 
 
-def generate_fixed_template_dihedral(group):
+def generate_fixed_template_dihedral3(group):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients 
     only for a few irreps.
     
@@ -116,12 +116,12 @@ def generate_fixed_template_dihedral(group):
     return template
 
 
-def mnist_template(p, digit=0, sample_idx=0, random_state=42):
+def mnist_template(image_length, digit=0, sample_idx=0, random_state=42):
     """Generate a template from the MNIST dataset, resized to p x p, for a specified digit.
 
     Parameters
     ----------
-    p : int
+    image_length : int
         p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
     digit : int, optional
         The MNIST digit to use as a template (0-9). Default is 0.
@@ -133,7 +133,7 @@ def mnist_template(p, digit=0, sample_idx=0, random_state=42):
     Returns
     -------
     template : np.ndarray
-        A flattened 2D array of shape (p, p) representing the template.
+        A flattened 2D array of shape (image_length, image_length) representing the template.
     """
     # Load MNIST dataset
     mnist = fetch_openml('mnist_784', version=1)
@@ -153,7 +153,7 @@ def mnist_template(p, digit=0, sample_idx=0, random_state=42):
     sample = X_digit[sample_idx].reshape(28, 28)
 
     # Resize to p x p
-    sample_resized = resize(sample, (p, p), anti_aliasing=True)
+    sample_resized = resize(sample, (image_length, image_length), anti_aliasing=True)
 
     # Normalize to [0, 1]
     sample_resized = (sample_resized - np.min(sample_resized)) / (np.max(sample_resized) - np.min(sample_resized))
@@ -276,14 +276,14 @@ def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save
     return X[indices], Y[indices], translations[indices]
 
 
-def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, template_type="mnist"):
+def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, random_state=42, template_type="mnist"):
     """
     Load the modular addition 2D dataset from a file if present. 
     Otherwise, generate it and save to the given path.
 
     Parameters
     ----------
-    p : int
+    image_length : int
         Group size (Z/pZ x Z/pZ)
     template : np.ndarray
         The fixed template (flattened, shape (p*p,))
@@ -300,7 +300,7 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
     Y : np.ndarray (num_samples, p*p)
     translations : np.ndarray
     """
-    file_name = f'modular_addition_2d_dataset_type{template_type}_p{p}_fraction{fraction:.2f}.npz'
+    file_name = f'modular_addition_2d_dataset_type{template_type}_p{image_length}_fraction{fraction:.2f}.npz'
 
     root_dir = setcwd.get_root_dir()
     load_path = os.path.join(root_dir, 'gagf', 'group_learning', 'saved_datasets', file_name)
@@ -313,7 +313,7 @@ def load_modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42,
         return X, Y, translations
     else:
         X, Y, translations = modular_addition_dataset_2d(
-            p,
+            image_length,
             template,
             fraction=fraction,
             random_state=random_state,
@@ -341,18 +341,21 @@ def load_dataset(config):
     """Load dataset based on configuration."""
 
     if config['group'] == 'znz_znz':
-        template = mnist_template(config['p'], digit=config['mnist_digit'])
+        template = mnist_template(config['image_length'], digit=config['mnist_digit'])
         X, Y, _ = load_modular_addition_dataset_2d(
-            config['p'],
+            config['image_length'],
             template,
             fraction=config['dataset_fraction'],
             random_state=config['seed'],
             template_type="mnist"
         )
     elif config['group'] == 'dihedral':
+        # Note: only D3 is implemented for now
+        # When we implement other dihedral groups, we can modify this part
+        # to accept different N values.
         N = 3
         group = DihedralGroup(N) 
-        template = generate_fixed_template_dihedral(group)
+        template = generate_fixed_template_dihedral3(group)
         X, Y = group_dataset(group, template)
 
     return X, Y, template

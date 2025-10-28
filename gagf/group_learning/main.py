@@ -54,7 +54,7 @@ def main_run(config):
     try:
         logging.info(f"\n\n---> START run: {run_name}.")
 
-        model_save_path = model_save_path(config)
+        model_save_path = get_model_save_path(config)
 
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
@@ -87,7 +87,7 @@ def main_run(config):
         if config['group'] == 'znz_znz':
             template_power = power.ZnZPower2D(template)
         elif config['group'] == 'dihedral':
-            template_power = power.GroupPower(template, group='dihedral')
+            template_power = power.GroupPower(template, group_name='dihedral')
         else:
             raise ValueError(f"Unknown group: {config['group']}")
 
@@ -125,14 +125,30 @@ def main_run(config):
         wandb.finish()
 
 
-def model_save_path(config):
-    model_save_path = (
+def get_model_save_path(config):
+    """Generate a unique model save path based on the config parameters."""
+    if config['group'] == 'znz_znz':
+        model_save_path = (
             f"{default_config.model_save_dir}model_"
             f"group{config['group']}_"
             f"group_size{config['group_size']}_"
             f"digit{config['mnist_digit']}_"
             f"frac{config['dataset_fraction']}_"
             f"type{config['template_type']}_"
+            f"init{config['init_scale']}_"
+            f"lr{config['lr']}_"
+            f"mom{config['mom']}_"
+            f"bs{config['batch_size']}_"
+            f"epochs{config['epochs']}_"
+            f"freq{config['frequencies_to_learn']}_"
+            f"seed{config['seed']}.pkl"
+        )
+    elif config['group'] == 'dihedral':
+        model_save_path = (
+            f"{default_config.model_save_dir}model_"
+            f"group{config['group']}_"
+            f"group_size{config['group_size']}_"
+            f"frac{config['dataset_fraction']}_"
             f"init{config['init_scale']}_"
             f"lr{config['lr']}_"
             f"mom{config['mom']}_"
@@ -177,20 +193,17 @@ def main():
     ):
 
         main_config = {
-            "mnist_digit": mnist_digit,
             "dataset_fraction": dataset_fraction,
             "group": group,
             "init_scale": init_scale,
             "run_start_time": run_start_time,
             "seed": seed,
-            "template_type": template_type,
             "lr": lr,
             "mom": mom,
             "batch_size": batch_size,
             "epochs": epochs,
             "verbose_interval": verbose_interval,
-            "hidden_size": hidden_size,
-            "freq_to_learn": frequencies_to_learn,
+            "frequencies_to_learn": frequencies_to_learn,
         }
 
         if group == "znz_znz":
@@ -210,6 +223,7 @@ def main():
                 main_config["template_type"] = template_type
                 main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
+                main_config["image_length"] = image_length
                 main_run(main_config)
 
         elif group == "dihedral":
@@ -218,7 +232,6 @@ def main():
                 signal_length_1d,
             ) in itertools.product(
                 default_config.frequencies_to_learn,
-                default_config.mnist_digit,
                 default_config.signal_length_1d,
             ):
                 group_size = signal_length_1d
