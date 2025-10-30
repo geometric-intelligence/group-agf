@@ -5,7 +5,7 @@ dataset_fraction = [0.3, 0.4] # fraction of the total dataset to train on
 group = ['dihedral'] #, 'dihedral', 'znz_znz']
 mnist_digit = [4]
 image_length = [5, 10, 15] # length of one side of the square image patch
-signal_length_1d = [6] #only works for 6 rn, because only d3 implemented
+signal_length_1d = [6] # only works for 6 rn, because only d3 implemented
 
 # Learning Parameters
 seed = [10]

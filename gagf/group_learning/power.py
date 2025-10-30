@@ -163,9 +163,8 @@ class GroupPower:
             self.group = DihedralGroup(N)
         else:
             raise ValueError(f"Unknown group name: {group_name}")
-
         self.power = self.compute_group_power_spectrum()
-        self.alpha_values = self.get_alpha_values()
+        self.freqs = list(range(len(self.power)))
         
 
     def compute_group_power_spectrum(self):  
@@ -196,8 +195,7 @@ class GroupPower:
         power_spectrum = np.zeros(len(irreps))
         for i, irrep in enumerate(irreps):
             fourier_coef = gft.compute_group_fourier_coef(self.group, self.template, irrep)
-            power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)  # TODO: check if this is correct 
-            # print(f"Power of {irrep.name}: {power_spectrum[i]}, type: {type(power_spectrum[i])}")
+            power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)  # TODO: check if this is correct
         power_spectrum = power_spectrum/self.group.order()
             
         return np.array(power_spectrum)
@@ -219,10 +217,11 @@ class GroupPower:
         """
         p = len(self.template)
         print("Computing alpha values for template of shape:", (p,))
-        power = self.compute_group_power_spectrum()
+        power = self.power
         print(power)
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
+        print("Found ", len(power), "non-zero power coefficients.")
         i_power_descending_order = np.argsort(power)[::-1]
         power = power[i_power_descending_order]
         alpha_values = [np.sum(power[k:]) for k in range(len(power))]
@@ -258,7 +257,18 @@ def model_power_over_time(group, model, param_history, model_inputs):
 
     if len(output_shape) == 1:  # 1D template
         p1 = output_shape[0]
-        template_power_length = p1 // 2 + 1
+        # Compute number of irreps for dihedral group of order N = p1
+        if group == 'dihedral':
+            N = 3
+            if N % 2 == 1:
+                # Odd N: 1 one-dimensional irrep, 1 two-dimensional irrep for each 1 <= k <= (N-1)//2
+                n_1d_irreps = 1
+                n_2d_irreps = (N - 1) // 2
+            else:
+                # Even N: 2 one-dimensional irreps, 1 two-dimensional irrep for each 1 <= k <= N//2 - 1
+                n_1d_irreps = 2
+                n_2d_irreps = N // 2 - 1
+            template_power_length = n_1d_irreps + 2 * n_2d_irreps  # Each 2d irrep gives 2 columns of power
         reshape_dims = (-1, p1)
     elif len(output_shape) == 2:  # 2D template
         p1, p2 = output_shape
@@ -281,15 +291,17 @@ def model_power_over_time(group, model, param_history, model_inputs):
             outputs = model(X_tensor)
             outputs_arr = outputs.detach().cpu().numpy().reshape(reshape_dims)
 
+            print('Computing power at step', step, 'with output shape', outputs_arr.shape)
+
             powers = []
             for out in outputs_arr:
                 if group == 'znz_znz':
-                    OutputPower = ZnZPower2D(out.flatten())
+                    output_power = ZnZPower2D(out.flatten())
                 elif group == 'dihedral':
-                    raise NotImplementedError("Dihedral group power spectrum not implemented yet.")
+                    output_power = GroupPower(out.flatten(), group_name='dihedral')
                 else:
                     raise ValueError(f"Unknown group type: {group}")
-                this_power = OutputPower.power
+                this_power = output_power.power
                 # flatten to 1D for both 1D and 2D cases
                 this_power_flat = this_power.flatten()
                 powers.append(this_power_flat)

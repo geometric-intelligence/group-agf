@@ -106,7 +106,93 @@ def generate_fixed_template_dihedral3(group):
     """
      # TODO: This only works for D3 for now.
     # Generate template array from Fourier spectrum
-    spectrum = [np.array([[10.]]), np.array([[10.]]), np.array([[5., 5.], [5., 5.]])]
+    # spectrum = [np.array([[10.]]), np.array([[30.]]), np.array([[10., 10.], [10., 10.]])]
+    # spectrum = [np.array([[20.]]), np.array([[10.]]), np.array([[5., 5.], [5., 5.]])]
+    spectrum = [np.array([[50.]]), np.array([[40.]]), np.array([[5., 1.], [1., 5.]])]
+    # Generate signal from spectrum
+    template = compute_group_inverse_fourier_transform(group, spectrum)
+
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
+
+    return template
+
+
+def generate_fixed_template_dihedral(N):
+    """Generate a fixed template for the dihedral group D_N, that has non-zero Fourier coefficients 
+    only for a few irreps.
+
+    DRAFT. UNTESTED.
+
+    Parameters
+    ----------
+    N : int
+        The order of the dihedral group D_N.
+
+    Returns
+    -------
+    template : np.ndarray, shape=[group.order()]
+        The mean centered template.
+    """
+    group = DihedralGroup(N)
+
+    # Generate template array from Fourier spectrum
+    if N % 2 == 1:
+        n_1D_irreps = 2
+        n_2D_irreps = (N - 1) // 2
+    if N % 2 == 0:
+        n_1D_irreps = 4
+        n_2D_irreps = N/2 - 1
+
+    spectrum = []
+
+    for weight in np.linspace(50, 10, n_1D_irreps):
+        spectrum.append(np.array([[weight]]))
+
+    for a in np.linspace(50, 10, n_2D_irreps):
+        b = 1
+        mat = np.array([[a, b], [b, a]])
+        spectrum.append(mat)
+
+    # Generate signal from spectrum
+    template = compute_group_inverse_fourier_transform(group, spectrum)
+
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
+
+    return template
+
+
+
+def generate_fixed_group_template(group, num_irreps=3):
+    """Generate a fixed template for a group, that has non-zero Fourier coefficients
+    only for a few irreps.
+
+    DRAFT. UNTESTED.
+
+    Parameters
+    ----------
+    group : Group (escnn object)
+        The group.
+    num_irreps : int
+        Number of irreps to set non-zero Fourier coefficients for. (Default is 3.)
+
+    Returns
+    -------
+    template : np.ndarray, shape=[group.order()]
+        The mean centered template.
+    """
+    # Generate template array from Fourier spectrum
+    spectrum = []
+    for i, irrep in enumerate(group.irreps):
+        dim = irrep.size
+        if i < num_irreps:
+            weight = random.uniform(5.0, 20.0)
+            mat = np.full((dim, dim), weight)
+        else:
+            mat = np.zeros((dim, dim))
+        spectrum.append(mat)
+
     # Generate signal from spectrum
     template = compute_group_inverse_fourier_transform(group, spectrum)
 
@@ -349,6 +435,7 @@ def load_dataset(config):
             random_state=config['seed'],
             template_type="mnist"
         )
+        return X, Y, template
     elif config['group'] == 'dihedral':
         # Note: only D3 is implemented for now
         # When we implement other dihedral groups, we can modify this part
@@ -358,7 +445,7 @@ def load_dataset(config):
         template = generate_fixed_template_dihedral3(group)
         X, Y = group_dataset(group, template)
 
-    return X, Y, template
+        return X, Y, template
 
 
 def move_dataset_to_device_and_flatten(X, Y, device=None):

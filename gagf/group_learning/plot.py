@@ -30,7 +30,8 @@ def plot_loss_curve(loss_history, template_power, save_path=None, show=False):
     fig = plt.figure(figsize=(8, 6))
     plt.plot(list(loss_history), lw=4)
 
-    alpha_values = template_power.alpha_values
+    alpha_values = template_power.get_alpha_values()
+    print(f"Plotting {len(alpha_values)} theoretical plateau lines.")
 
     for k, alpha in enumerate(alpha_values):
         print(f"Plotting alpha value {k}: {alpha}")
@@ -53,21 +54,19 @@ def plot_loss_curve(loss_history, template_power, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(template_power, model, device, param_history, X_tensor, group, save_path=None, logscale=False, show=False):
+def plot_training_power_over_time(template_power_object, model, device, param_history, X_tensor, group, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
     ----------
-    template_power : class instance
+    template_power_object : class instance
         Instance of <>Power containing the template power spectrum.
     avg_power_history : list of ndarray (num_steps, num_freqs)
         List of average power spectra at each step.
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    template_power = template_power.power
-    row_freqs, column_freqs = template_power.x_freqs, template_power.y_freqs
-    freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
+    template_power = template_power_object.power
     flattened_template_power = template_power.flatten()
     top_5_power_idx = np.argsort(flattened_template_power)[-5:][::-1]
     print(f"top_5_power_idx: {top_5_power_idx}")
@@ -83,7 +82,13 @@ def plot_training_power_over_time(template_power, model, device, param_history, 
     fig = plt.figure(figsize=(10, 6))
 
     for i in top_5_power_idx:
-        label = fr"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
+        if group == 'znz_znz':
+            row_freqs, column_freqs = template_power_object.x_freqs, template_power_object.y_freqs
+            freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
+            label = fr"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
+        elif group == 'dihedral':
+            freqs = template_power_object.freqs
+            label = fr"$\xi = {freqs[i]:.1f}$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
         plt.axhline(flattened_template_power[i], color=f"C{i}", linestyle='dotted', linewidth=2, alpha=0.5, zorder=-10)
 
@@ -514,8 +519,64 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(template_power, group_size, show=False):
-    """Plot the top 5 Fourier components of the template.
+def plot_top_template_components(group, template_power, group_size, show=False):
+    """Plot the top 5 Fourier components of the template."""
+    if group == 'znz_znz':
+        return plot_top_template_components_2D(template_power, group_size, show)
+    elif group == 'dihedral':
+        return plot_top_template_components_1D(template_power, group_size, show)
+
+
+def plot_top_template_components_1D(template_power, group_size, show=False):
+    """Plot the top 5 Fourier components of the template for 1D case.
+
+    Parameters
+    ----------
+    template_power : class instance
+        Instance of <>Power containing the template power spectrum.
+    group_size : int
+        group_size of D_p.
+    """
+    template_power = template_power.power
+
+    # Get the indices of the top 5 components
+    top_indices = np.argsort(template_power)[-5:][::-1]  # Indices of top 5 components
+
+    fig, axs = plt.subplots(1, 5, figsize=(15, 3))
+    
+    # Initialize cumulative spectrum
+    cumulative_spectrum = np.zeros_like(template_power, dtype=complex)
+    
+    for i, idx in enumerate(top_indices):
+        # Add current component to cumulative spectrum
+        cumulative_spectrum[idx] = np.sqrt(template_power[idx] * group_size)  # Scale back to amplitude
+        if idx != 0 and idx != template_power.shape[0] - 1:
+            cumulative_spectrum[-idx] = np.conj(cumulative_spectrum[idx])  # Add negative frequency component if not DC or Nyquist
+        
+        # Convert cumulative spectrum to spatial domain
+        spatial_component = np.fft.ifft(cumulative_spectrum).real
+        
+        # Create title showing which components are included
+        components_list = []
+        for j in range(i + 1):
+            comp_idx = top_indices[j]
+            components_list.append(f"{comp_idx}")
+        
+        title = f"Components: {', '.join(components_list)}\nNew: {idx} Power: {template_power[idx]:.4f}"
+        
+        # Roll the spatial component by half the signal length
+        spatial_component_rolled = np.roll(spatial_component, spatial_component.shape[0]//2)
+        
+        im = axs[i].plot(spatial_component_rolled)
+        axs[i].set_title(title)
+    plt.tight_layout()
+    if show:
+        plt.show()
+    return fig
+
+
+def plot_top_template_components_2D(template_power, group_size, show=False):
+    """Plot the top 5 Fourier components of the template for 2D case.
 
     Parameters
     ----------

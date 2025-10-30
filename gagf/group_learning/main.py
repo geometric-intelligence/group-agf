@@ -92,7 +92,7 @@ def main_run(config):
             raise ValueError(f"Unknown group: {config['group']}")
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
-        top_frequency_plot = plot.plot_top_template_components(template_power, config['group_size'], show=False)
+        top_frequency_plot = plot.plot_top_template_components(config['group'], template_power, config['group_size'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power, 
             model, 
