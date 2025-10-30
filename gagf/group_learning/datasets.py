@@ -172,7 +172,7 @@ def generate_fixed_template_dihedral(N):
 
 
 
-def generate_fixed_group_template(group, num_irreps=3):
+def generate_fixed_group_template(group):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 
@@ -192,15 +192,14 @@ def generate_fixed_group_template(group, num_irreps=3):
     """
     # Generate template array from Fourier spectrum
     spectrum = []
-    for i, irrep in enumerate(group.irreps()):
+    for irrep in group.irreps():
         dim = irrep.size
-        if i < num_irreps:
-            # Create a random full rank matrix with unique diagonal entries
-            mat = np.zeros((dim, dim))
-            diag_values = np.random.uniform(5.0, 20.0, size=dim)
-            np.fill_diagonal(mat, diag_values)
-        else:
-            mat = np.zeros((dim, dim))
+        
+        # Create a random full rank matrix with unique diagonal entries
+        mat = np.zeros((dim, dim))
+        diag_values = np.random.uniform(5.0, 20.0, size=dim)
+        np.fill_diagonal(mat, diag_values)
+        
         spectrum.append(mat)
 
     # Generate signal from spectrum
