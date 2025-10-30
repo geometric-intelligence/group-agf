@@ -155,14 +155,10 @@ class GroupPower:
         Also specifies which fourier transform to apply, and thus
         which transform to compute the power spectrum for.
     """
-    def __init__(self, template, group_name='dihedral'):
+    def __init__(self, template, group):
         self.template = template
         self.p = len(template)
-        if group_name == 'dihedral':
-            N = 3
-            self.group = DihedralGroup(N)
-        else:
-            raise ValueError(f"Unknown group name: {group_name}")
+        self.group = group
         self.power = self.compute_group_power_spectrum()
         self.freqs = list(range(len(self.power)))
         
@@ -230,13 +226,15 @@ class GroupPower:
         return alpha_values
 
 
-def model_power_over_time(group, model, param_history, model_inputs):
+def model_power_over_time(group_name, group, model, param_history, model_inputs):
     """Compute the power spectrum of the model's learned weights over time.
 
     Parameters
     ----------
-    group : str
+    group_name : str
         Group type (e.g., 'znz_znz').
+    group : Group (escnn object)
+        The escnn group object.
     model : TwoLayerNet
         The trained model.
     param_history : list of dict
@@ -258,17 +256,18 @@ def model_power_over_time(group, model, param_history, model_inputs):
     if len(output_shape) == 1:  # 1D template
         p1 = output_shape[0]
         # Compute number of irreps for dihedral group of order N = p1
-        if group == 'dihedral':
-            N = 3
-            if N % 2 == 1:
-                # Odd N: 1 one-dimensional irrep, 1 two-dimensional irrep for each 1 <= k <= (N-1)//2
-                n_1d_irreps = 1
-                n_2d_irreps = (N - 1) // 2
-            else:
-                # Even N: 2 one-dimensional irreps, 1 two-dimensional irrep for each 1 <= k <= N//2 - 1
-                n_1d_irreps = 2
-                n_2d_irreps = N // 2 - 1
-            template_power_length = n_1d_irreps + 2 * n_2d_irreps  # Each 2d irrep gives 2 columns of power
+        if group_name == 'dihedral':
+            template_power_length = len(group.irreps())
+            # N = 3
+            # if N % 2 == 1:
+            #     # Odd N: 1 one-dimensional irrep, 1 two-dimensional irrep for each 1 <= k <= (N-1)//2
+            #     n_1d_irreps = 1
+            #     n_2d_irreps = (N - 1) // 2
+            # else:
+            #     # Even N: 2 one-dimensional irreps, 1 two-dimensional irrep for each 1 <= k <= N//2 - 1
+            #     n_1d_irreps = 2
+            #     n_2d_irreps = N // 2 - 1
+            # template_power_length = n_1d_irreps + 2 * n_2d_irreps  # Each 2d irrep gives 2 columns of power
         reshape_dims = (-1, p1)
     elif len(output_shape) == 2:  # 2D template
         p1, p2 = output_shape
@@ -295,12 +294,12 @@ def model_power_over_time(group, model, param_history, model_inputs):
 
             powers = []
             for out in outputs_arr:
-                if group == 'znz_znz':
+                if group_name == 'znz_znz':
                     output_power = ZnZPower2D(out.flatten())
-                elif group == 'dihedral':
-                    output_power = GroupPower(out.flatten(), group_name='dihedral')
+                elif group_name == 'dihedral':
+                    output_power = GroupPower(out.flatten(), group=group)
                 else:
-                    raise ValueError(f"Unknown group type: {group}")
+                    raise ValueError(f"Unknown group type: {group_name}")
                 this_power = output_power.power
                 # flatten to 1D for both 1D and 2D cases
                 this_power_flat = this_power.flatten()

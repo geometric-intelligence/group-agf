@@ -54,7 +54,7 @@ def plot_loss_curve(loss_history, template_power, save_path=None, show=False):
     return fig
 
 
-def plot_training_power_over_time(template_power_object, model, device, param_history, X_tensor, group, save_path=None, logscale=False, show=False):
+def plot_training_power_over_time(template_power_object, model, device, param_history, X_tensor, group_name, save_path=None, logscale=False, show=False):
     """Plot the power spectrum of the model's learned weights over time.
 
     Parameters
@@ -68,10 +68,14 @@ def plot_training_power_over_time(template_power_object, model, device, param_hi
     """
     template_power = template_power_object.power
     flattened_template_power = template_power.flatten()
-    top_5_power_idx = np.argsort(flattened_template_power)[-5:][::-1]
-    print(f"top_5_power_idx: {top_5_power_idx}")
+    if group_name == 'znz_znz':
+        power_idx = np.argsort(flattened_template_power)[-5:][::-1]
+    else:
+        power_idx = np.argsort(flattened_template_power)[::-1]
 
+    group = template_power_object.group
     model_powers_over_time, steps = power.model_power_over_time(
+        group_name=group_name,
         group=group,
         model=model.to(device),
         param_history=param_history,
@@ -81,12 +85,12 @@ def plot_training_power_over_time(template_power_object, model, device, param_hi
     # Create a new figure for this plot
     fig = plt.figure(figsize=(10, 6))
 
-    for i in top_5_power_idx:
-        if group == 'znz_znz':
+    for i in power_idx:
+        if group_name == 'znz_znz':
             row_freqs, column_freqs = template_power_object.x_freqs, template_power_object.y_freqs
             freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
             label = fr"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
-        elif group == 'dihedral':
+        elif group_name == 'dihedral':
             freqs = template_power_object.freqs
             label = fr"$\xi = {freqs[i]:.1f}$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
@@ -125,11 +129,11 @@ def plot_training_power_over_time(template_power_object, model, device, param_hi
 
 
 
-def plot_neuron_weights(group, model, group_size, neuron_indices=None, save_path=None, show=False):
+def plot_neuron_weights(group_name, model, group_size, neuron_indices=None, save_path=None, show=False):
     """Plot the weights of specified neurons in the model."""
-    if group == 'znz_znz':
+    if group_name == 'znz_znz':
         return plot_neuron_weights_2D(model, group_size, neuron_indices, save_path, show)
-    elif group == 'dihedral':
+    elif group_name == 'dihedral':
         return plot_neuron_weights_1D(model, group_size, neuron_indices, save_path, show)
 
 
@@ -270,11 +274,11 @@ def plot_neuron_weights_2D(model, group_size, neuron_indices=None, save_path=Non
     return fig
 
 
-def plot_model_outputs(group, group_size, model, X, Y, idx, save_path=None, show=False):
+def plot_model_outputs(group_name, group_size, model, X, Y, idx, save_path=None, show=False):
     """Plot a training target vs the model output."""
-    if group == 'znz_znz':
+    if group_name == 'znz_znz':
         return plot_model_outputs_2D(group_size, model, X, Y, idx, save_path, show)
-    elif group == 'dihedral':
+    elif group_name == 'dihedral':
         return plot_model_outputs_1D(group_size, model, X, Y, idx, save_path, show)
 
 
@@ -519,11 +523,11 @@ def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
     plt.show()
 
 
-def plot_top_template_components(group, template_power, group_size, show=False):
+def plot_top_template_components(group_name, template_power, group_size, show=False):
     """Plot the top 5 Fourier components of the template."""
-    if group == 'znz_znz':
+    if group_name == 'znz_znz':
         return plot_top_template_components_2D(template_power, group_size, show)
-    elif group == 'dihedral':
+    elif group_name == 'dihedral':
         return plot_top_template_components_1D(template_power, group_size, show)
 
 

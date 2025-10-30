@@ -32,6 +32,8 @@ import itertools
 import logging
 import default_config
 
+from escnn.group import *
+
 today = datetime.date.today()
 
 
@@ -58,6 +60,7 @@ def main_run(config):
 
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
+        assert len(template) == config['group_size'], "Template size does not match group size."
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
         dataset = TensorDataset(X, Y)
@@ -67,7 +70,7 @@ def main_run(config):
         torch.manual_seed(config['seed'])
         torch.cuda.manual_seed_all(config['seed'])  # if using GPU
 
-        model = models.TwoLayerNet(group_size=config['group_size'], hidden_size=config['hidden_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
+        model = models.TwoLayerNet(group_size=config['group_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
         model = model.to(device)
         loss = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
@@ -84,27 +87,27 @@ def main_run(config):
         )
 
         print("Training Complete. Generating plots...")
-        if config['group'] == 'znz_znz':
+        if config['group_name'] == 'znz_znz':
             template_power = power.ZnZPower2D(template)
-        elif config['group'] == 'dihedral':
-            template_power = power.GroupPower(template, group_name='dihedral')
+        elif config['group_name'] == 'dihedral':
+            template_power = power.GroupPower(template, group=config['group'])
         else:
-            raise ValueError(f"Unknown group: {config['group']}")
+            raise ValueError(f"Unknown group: {config['group_name']}")
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
-        top_frequency_plot = plot.plot_top_template_components(config['group'], template_power, config['group_size'], show=False)
+        top_frequency_plot = plot.plot_top_template_components(config['group_name'], template_power, config['group_size'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power, 
             model, 
             device, 
             param_history, 
             X, 
-            config['group'], 
+            config['group_name'], 
             save_path=None, 
             show=False
         )
-        neuron_weights_plot = plot.plot_neuron_weights(config['group'], model, config['group_size'], neuron_indices=None)
-        model_predictions_plot = plot.plot_model_outputs(config['group'], config['group_size'], model, X, Y, idx=13)        
+        neuron_weights_plot = plot.plot_neuron_weights(config['group_name'], model, config['group_size'], neuron_indices=None)
+        model_predictions_plot = plot.plot_model_outputs(config['group_name'], config['group_size'], model, X, Y, idx=13)        
         wandb.log({
             "loss_plot": wandb.Image(loss_plot),
             "top_frequency_plot": wandb.Image(top_frequency_plot),
@@ -127,14 +130,14 @@ def main_run(config):
 
 def get_model_save_path(config):
     """Generate a unique model save path based on the config parameters."""
-    if config['group'] == 'znz_znz':
+    if config['group_name'] == 'znz_znz':
         model_save_path = (
             f"{default_config.model_save_dir}model_"
-            f"group{config['group']}_"
+            f"group_name{config['group_name']}_"
             f"group_size{config['group_size']}_"
             f"digit{config['mnist_digit']}_"
             f"frac{config['dataset_fraction']}_"
-            f"type{config['template_type']}_"
+            f"group_size{config['group_size']}_"
             f"init{config['init_scale']}_"
             f"lr{config['lr']}_"
             f"mom{config['mom']}_"
@@ -143,10 +146,10 @@ def get_model_save_path(config):
             f"freq{config['frequencies_to_learn']}_"
             f"seed{config['seed']}.pkl"
         )
-    elif config['group'] == 'dihedral':
+    elif config['group_name'] == 'dihedral':
         model_save_path = (
             f"{default_config.model_save_dir}model_"
-            f"group{config['group']}_"
+            f"group_name{config['group_name']}_"
             f"group_size{config['group_size']}_"
             f"frac{config['dataset_fraction']}_"
             f"init{config['init_scale']}_"
@@ -169,7 +172,7 @@ def main():
     run_start_time = time.strftime("%m-%d_%H-%M-%S")
     for (
         dataset_fraction,
-        group,
+        group_name,
         init_scale,
         seed,
         lr,
@@ -181,7 +184,7 @@ def main():
         
     ) in itertools.product(
         default_config.dataset_fraction,
-        default_config.group,
+        default_config.group_name,
         default_config.init_scale,
         default_config.seed,
         default_config.lr,
@@ -194,7 +197,7 @@ def main():
 
         main_config = {
             "dataset_fraction": dataset_fraction,
-            "group": group,
+            "group_name": group_name,
             "init_scale": init_scale,
             "run_start_time": run_start_time,
             "seed": seed,
@@ -206,7 +209,7 @@ def main():
             "frequencies_to_learn": frequencies_to_learn,
         }
 
-        if group == "znz_znz":
+        if group_name == "znz_znz":
             for (
                 frequencies_to_learn,
                 mnist_digit,
@@ -217,29 +220,26 @@ def main():
                 default_config.image_length,
             ):
                 group_size = image_length * image_length
-                template_type = 'mnist'
-                hidden_size = group_size * frequencies_to_learn
-                main_config["hidden_size"] = hidden_size
-                main_config["template_type"] = template_type
                 main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
                 main_run(main_config)
 
-        elif group == "dihedral":
+        elif group_name == "dihedral":
             for (
                 frequencies_to_learn,
-                signal_length_1d,
+                # signal_length_1d,
+                dihedral_order_n,
             ) in itertools.product(
                 default_config.frequencies_to_learn,
-                default_config.signal_length_1d,
+                # default_config.signal_length_1d,
+                default_config.dihedral_order_n
             ):
-                group_size = signal_length_1d
-                template_type = 'dihedral_fixed'
-                hidden_size = 6*group_size
-                main_config["hidden_size"] = hidden_size
-                main_config["template_type"] = template_type
+                group = DihedralGroup(dihedral_order_n)
+                group_size = group.order()
+                main_config['group'] = group
                 main_config["group_size"] = group_size
+                main_config["dihedral_order_n"] = dihedral_order_n
             main_run(main_config)
 
         else:

@@ -136,13 +136,21 @@ def generate_fixed_template_dihedral(N):
     """
     group = DihedralGroup(N)
 
+    irreps = group.irreps()
+
+    for i, irrep in enumerate(irreps):
+        print(f"Irrep {i}: size {irrep.size}")
+
+    for i, irrep in enumerate(irreps):
+        print("Irrep", irrep)
+
     # Generate template array from Fourier spectrum
     if N % 2 == 1:
         n_1D_irreps = 2
-        n_2D_irreps = (N - 1) // 2
+        n_2D_irreps = int((N - 1) // 2)
     if N % 2 == 0:
         n_1D_irreps = 4
-        n_2D_irreps = N/2 - 1
+        n_2D_irreps = int(N/2 - 1)
 
     spectrum = []
 
@@ -184,11 +192,13 @@ def generate_fixed_group_template(group, num_irreps=3):
     """
     # Generate template array from Fourier spectrum
     spectrum = []
-    for i, irrep in enumerate(group.irreps):
+    for i, irrep in enumerate(group.irreps()):
         dim = irrep.size
         if i < num_irreps:
-            weight = random.uniform(5.0, 20.0)
-            mat = np.full((dim, dim), weight)
+            # Create a random full rank matrix with unique diagonal entries
+            mat = np.zeros((dim, dim))
+            diag_values = np.random.uniform(5.0, 20.0, size=dim)
+            np.fill_diagonal(mat, diag_values)
         else:
             mat = np.zeros((dim, dim))
         spectrum.append(mat)
@@ -426,7 +436,7 @@ def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, rando
 def load_dataset(config):
     """Load dataset based on configuration."""
 
-    if config['group'] == 'znz_znz':
+    if config['group_name'] == 'znz_znz':
         template = mnist_template(config['image_length'], digit=config['mnist_digit'])
         X, Y, _ = load_modular_addition_dataset_2d(
             config['image_length'],
@@ -436,13 +446,13 @@ def load_dataset(config):
             template_type="mnist"
         )
         return X, Y, template
-    elif config['group'] == 'dihedral':
+    elif config['group_name'] == 'dihedral':
         # Note: only D3 is implemented for now
         # When we implement other dihedral groups, we can modify this part
         # to accept different N values.
-        N = 3
-        group = DihedralGroup(N) 
-        template = generate_fixed_template_dihedral3(group)
+        group = DihedralGroup(config['dihedral_order_n']) 
+        # template = generate_fixed_template_dihedral(config['dihedral_order_n'])
+        template = generate_fixed_group_template(group)
         X, Y = group_dataset(group, template)
 
         return X, Y, template
