@@ -90,7 +90,7 @@ def plot_training_power_over_time(template_power_object, model, device, param_hi
             row_freqs, column_freqs = template_power_object.x_freqs, template_power_object.y_freqs
             freq = np.array([(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs])
             label = fr"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
-        elif group_name == 'dihedral':
+        else:
             freqs = template_power_object.freqs
             label = fr"$\xi = {freqs[i]:.1f}$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
@@ -133,7 +133,7 @@ def plot_neuron_weights(group_name, model, group_size, neuron_indices=None, save
     """Plot the weights of specified neurons in the model."""
     if group_name == 'znz_znz':
         return plot_neuron_weights_2D(model, group_size, neuron_indices, save_path, show)
-    elif group_name == 'dihedral':
+    else:
         return plot_neuron_weights_1D(model, group_size, neuron_indices, save_path, show)
 
 
@@ -278,7 +278,7 @@ def plot_model_outputs(group_name, group_size, model, X, Y, idx, save_path=None,
     """Plot a training target vs the model output."""
     if group_name == 'znz_znz':
         return plot_model_outputs_2D(group_size, model, X, Y, idx, save_path, show)
-    elif group_name == 'dihedral':
+    else:
         return plot_model_outputs_1D(group_size, model, X, Y, idx, save_path, show)
 
 
@@ -527,7 +527,7 @@ def plot_top_template_components(group_name, template_power, group_size, show=Fa
     """Plot the top 5 Fourier components of the template."""
     if group_name == 'znz_znz':
         return plot_top_template_components_2D(template_power, group_size, show)
-    elif group_name == 'dihedral':
+    else:
         return plot_top_template_components_1D(template_power, group_size, show)
 
 

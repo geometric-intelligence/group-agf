@@ -48,6 +48,10 @@ def main():
     sys.path.append(saved_models_dir)
     print("Directory added to path: ", saved_models_dir)
 
+    model_save_dir = "/tmp/adele/"
+    sys.path.append(model_save_dir)
+    print("Directory added to path: ", model_save_dir)
+
 
 def get_root_dir():
     """Return the root directory of the git repository."""
