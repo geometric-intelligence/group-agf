@@ -89,10 +89,8 @@ def main_run(config):
         print("Training Complete. Generating plots...")
         if config['group_name'] == 'znz_znz':
             template_power = power.ZnZPower2D(template)
-        elif config['group_name'] == 'dihedral':
-            template_power = power.GroupPower(template, group=config['group'])
         else:
-            raise ValueError(f"Unknown group: {config['group_name']}")
+            template_power = power.GroupPower(template, group=config['group'])
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
         top_frequency_plot = plot.plot_top_template_components(config['group_name'], template_power, config['group_size'], show=False)
@@ -146,7 +144,7 @@ def get_model_save_path(config):
             f"freq{config['frequencies_to_learn']}_"
             f"seed{config['seed']}.pkl"
         )
-    elif config['group_name'] == 'dihedral':
+    else:
         model_save_path = (
             f"{default_config.model_save_dir}model_"
             f"group_name{config['group_name']}_"
