@@ -1,0 +1,76 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            lgwudt314ft7p6gu9b7v75ugusdm6c3p:
+                codePath: gagf/group_learning/main.py
+                codePathLocal: main.py
+                cpu_count: 128
+                cpu_count_logical: 128
+                cudaVersion: "12.9"
+                disk:
+                    /:
+                        total: "924758052864"
+                        used: "524526366720"
+                email: adele@ucsb.edu
+                executable: /home/adele/anaconda3/envs/gagf/bin/python
+                git:
+                    commit: e484479c784e65bccba25705b2e5686db79c5290
+                    remote: https://github.com/geometric-intelligence/group-agf.git
+                gpu: NVIDIA A100 80GB PCIe
+                gpu_count: 2
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "85899345920"
+                      name: NVIDIA A100 80GB PCIe
+                      uuid: GPU-4b49ab48-3033-b858-ccf4-877f11ad24a5
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "85899345920"
+                      name: NVIDIA A100 80GB PCIe
+                      uuid: GPU-9573e3b6-419b-ed26-f7fa-3a5e9d8cbb67
+                host: bongo
+                memory:
+                    total: "1082004721664"
+                os: Linux-5.15.0-151-generic-x86_64-with-glibc2.35
+                program: /home/adele/group-agf/gagf/group_learning/main.py
+                python: CPython 3.12.12
+                root: /home/adele/group-agf/gagf/group_learning
+                startedAt: "2025-10-23T00:07:20.837125Z"
+                writerId: lgwudt314ft7p6gu9b7v75ugusdm6c3p
+        m: []
+        python_version: 3.12.12
+        t:
+            "1":
+                - 1
+                - 51
+            "2":
+                - 1
+                - 5
+                - 51
+                - 53
+            "3":
+                - 2
+                - 15
+                - 17
+            "4": 3.12.12
+            "5": 0.22.2
+            "12": 0.22.2
+            "13": linux-x86_64
+dataset_fraction:
+    value: 0.2
+full_run:
+    value: false
+group:
+    value: znz_znz
+init_scale:
+    value: 0.01
+mnist_digit:
+    value: 4
+n_frequencies_to_learn:
+    value: 6
+p:
+    value: 10
+run_start_time:
+    value: 10-22_17-07-20

@@ -1,0 +1,47 @@
+{
+  "os": "Linux-5.15.0-151-generic-x86_64-with-glibc2.35",
+  "python": "CPython 3.12.12",
+  "startedAt": "2025-10-23T00:22:08.448211Z",
+  "program": "/home/adele/group-agf/gagf/group_learning/main.py",
+  "codePath": "gagf/group_learning/main.py",
+  "codePathLocal": "main.py",
+  "git": {
+    "remote": "https://github.com/geometric-intelligence/group-agf.git",
+    "commit": "e484479c784e65bccba25705b2e5686db79c5290"
+  },
+  "email": "adele@ucsb.edu",
+  "root": "/home/adele/group-agf/gagf/group_learning",
+  "host": "bongo",
+  "executable": "/home/adele/anaconda3/envs/gagf/bin/python",
+  "cpu_count": 128,
+  "cpu_count_logical": 128,
+  "gpu": "NVIDIA A100 80GB PCIe",
+  "gpu_count": 2,
+  "disk": {
+    "/": {
+      "total": "924758052864",
+      "used": "524534398976"
+    }
+  },
+  "memory": {
+    "total": "1082004721664"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA A100 80GB PCIe",
+      "memoryTotal": "85899345920",
+      "cudaCores": 6912,
+      "architecture": "Ampere",
+      "uuid": "GPU-4b49ab48-3033-b858-ccf4-877f11ad24a5"
+    },
+    {
+      "name": "NVIDIA A100 80GB PCIe",
+      "memoryTotal": "85899345920",
+      "cudaCores": 6912,
+      "architecture": "Ampere",
+      "uuid": "GPU-9573e3b6-419b-ed26-f7fa-3a5e9d8cbb67"
+    }
+  ],
+  "cudaVersion": "12.9",
+  "writerId": "nw9ltuks2c4czyzam5teyevrhhbfu4kr"
+}

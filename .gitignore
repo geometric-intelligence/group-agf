@@ -10,6 +10,11 @@ notebooks/figs/
 notebooks/figs_temp/
 gagf/fourier_power_only.png
 notebooks/saved_models/
+gagf/group_learning/wandb/
+gagf/group_learning/saved_datasets/
+notebooks/checkpoint*
+notebooks/W-weights.pdf
+notebooks/predictions.pdf
 
 # C extensions
 *.so
