@@ -295,6 +295,7 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
             # shape: (num_samples, template_power_length)
             average_power = np.mean(powers, axis=0)
             powers_over_time[i_step, :] = average_power
+            
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)
     print("Powers over time shape:", powers_over_time.shape)
