@@ -1,7 +1,7 @@
 # Dataset Parameters
 import os
 
-group_name = ['dihedral'] #, 'dihedral', 'znz_znz']
+group_name = ['cyclic'] #, 'dihedral', 'znz_znz']
 group_n = [4]  # n in Dn [3, 4, 5]
 image_length = [5, 10, 15] # length of one side of the square image patch
 

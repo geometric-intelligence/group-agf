@@ -94,7 +94,7 @@ def main_run(config):
             template_power = power.GroupPower(template, group=config['group'])
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
-        irreps_plot = plot.plot_irreps(config['group'], template_power, config['group_size'], show=False)
+        irreps_plot = plot.plot_irreps(config['group'], config['group_name'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power, 
             model, 
@@ -105,8 +105,23 @@ def main_run(config):
             save_path=None, 
             show=False
         )
-        neuron_weights_plot = plot.plot_neuron_weights(config['group_name'], model, config['group_size'], neuron_indices=None)
-        model_predictions_plot = plot.plot_model_outputs(config['group_name'], config['group_size'], model, X, Y, idx=13)        
+        neuron_weights_plot = plot.plot_neuron_weights(
+            config['group_name'],
+            config['group'],
+            model,
+            config['group_size'],
+            neuron_indices=None
+        )
+
+        model_predictions_plot = plot.plot_model_outputs(
+            config['group_name'],
+            config['group_size'],
+            model,
+            X,
+            Y,
+            idx=13
+        )
+
         wandb.log({
             "loss_plot": wandb.Image(loss_plot),
             "irreps_plot": wandb.Image(irreps_plot),

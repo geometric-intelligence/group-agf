@@ -498,10 +498,6 @@ def plot_irreps(group, show=False):
     ----------
     group : class instance
         The group for which the irreps are being plotted. Should have a method `get_irreps()` that returns a list of irreps.
-    template_power : class instance
-        Instance of <>Power containing the template power spectrum. Should have a method `get_irrep_powers()` that returns a list of powers corresponding to each irrep.
-    group_size : int
-        The value of group_size (number of elements in the group). Used to scale the power values for plotting.
     show : bool, optional
         Whether to display the plot immediately. If False, the plot is not shown but the figure object is returned.
     """
@@ -532,15 +528,18 @@ def plot_irreps(group, show=False):
             axs[i].set_ylabel("Irrep value")
             axs[i].legend()
         else:
-            # >1D irrep: plot the real part of the matrix entries for each group element as an image
-            # Shape: (num_elements, d, d)
-            # We'll plot a grid, where each row corresponds to group element, column is flatten idx in matrix
             d = matrices.shape[1]
-            # Show real part
-            im = axs[i].imshow(matrices.real.reshape(len(group_elements), -1), aspect='auto', cmap='viridis')
-            axs[i].set_title(f"Irrep {i}: {str(irrep)} (dim={d}) [Re]")
-            axs[i].set_xlabel("Matrix entry (row-major)")
-            axs[i].set_ylabel("Group element idx")
+            num_group_elements = len(group_elements)
+            num_irrep_entries = d * d
+            irrep_matrix_entries = matrices.real.reshape(num_group_elements, num_irrep_entries)
+            im = axs[i].imshow(
+                irrep_matrix_entries,
+                aspect='auto',
+                cmap='viridis'
+            )
+            axs[i].set_title(f"Irrep {i}: {str(irrep)} (size={d}x{d})")
+            axs[i].set_xlabel("Flattened Irreps")
+            axs[i].set_ylabel("Irrep(g)")
             plt.colorbar(im, ax=axs[i])
     fig.suptitle("Irreducible Representations (matrix values for all group elements)", fontsize=16)
     plt.tight_layout()
