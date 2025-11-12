@@ -13,6 +13,7 @@ notebooks/saved_models/
 
 runs/
 data/
+sweeps/
 
 # C extensions
 *.so

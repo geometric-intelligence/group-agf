@@ -55,6 +55,20 @@ This will:
 - Generate summary statistics across seeds
 - Create experiment and sweep-level summary files
 
+**Multi-GPU Usage:**
+
+To leverage multiple GPUs, specify the GPU ID when launching sweeps:
+
+```bash
+# Terminal 1 - Run sweep on GPU 0
+python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/sweep1.yaml --gpu 0
+
+# Terminal 2 - Run sweep on GPU 1 simultaneously
+python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/sweep2.yaml --gpu 1
+```
+
+The `--gpu` flag overrides the device setting in the config file.
+
 ### Sweep Results Structure
 
 ```

@@ -64,6 +64,10 @@ def save_results(
     """Save all experiment results."""
     print(f"Saving results to {run_dir}...")
     
+    # Ensure checkpoints directory exists
+    checkpoints_dir = run_dir / "checkpoints"
+    checkpoints_dir.mkdir(exist_ok=True)
+    
     # Save config
     with open(run_dir / "config.yaml", 'w') as f:
         yaml.dump(config, f, default_flow_style=False)
@@ -77,7 +81,7 @@ def save_results(
     torch.save(param_hist, run_dir / "param_history.pt")
     
     # Save final model
-    torch.save(model.state_dict(), run_dir / "checkpoints" / "final_model.pt")
+    torch.save(model.state_dict(), checkpoints_dir / "final_model.pt")
     
     # Save metadata
     metadata = {

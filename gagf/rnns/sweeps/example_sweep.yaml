@@ -19,8 +19,3 @@ experiments:
       model:
         hidden_dim: 64
 
-  - name: "hidden_dim_128"
-    overrides:
-      model:
-        hidden_dim: 128
-

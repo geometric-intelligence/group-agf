@@ -21,7 +21,7 @@ model:
 training:
   mode: 'online' # 'online' | 'offline'
   epochs: 200 # used only when mode is 'offline'
-  num_steps: 50 #50000 #50000 # 20000 # used only when mode is 'online'
+  num_steps: 500 #50000 #50000 # 20000 # used only when mode is 'online'
 
   optimizer: 'adam' # 'adam' | 'hybrid'
   learning_rate: 0.001 #0.0001

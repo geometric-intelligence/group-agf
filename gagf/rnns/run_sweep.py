@@ -97,13 +97,23 @@ def save_sweep_metadata(
 
 
 def run_experiment(
-    exp_name: str, config: Dict, seeds: List[int], sweep_dir: Path
+    exp_name: str, config: Dict, seeds: List[int], sweep_dir: Path, gpu_id: int = None
 ) -> List[Dict[str, Any]]:
-    """Run a single experiment configuration with multiple seeds."""
+    """Run a single experiment configuration with multiple seeds.
+    
+    Args:
+        exp_name: Name of the experiment
+        config: Configuration dictionary
+        seeds: List of random seeds to run
+        sweep_dir: Directory to save sweep results
+        gpu_id: Optional GPU ID to use (overrides config device)
+    """
 
     print(f"\n{'='*80}")
     print(f"RUNNING EXPERIMENT: {exp_name}")
     print(f"Seeds: {seeds}")
+    if gpu_id is not None:
+        print(f"GPU: cuda:{gpu_id}")
     print(f"{'='*80}")
 
     # Create experiment directory
@@ -120,6 +130,10 @@ def run_experiment(
         # Create seed config
         seed_config = copy.deepcopy(config)
         seed_config["data"]["seed"] = seed
+        
+        # Override device if GPU ID specified
+        if gpu_id is not None:
+            seed_config["device"] = f"cuda:{gpu_id}"
 
         # Create seed-specific run directory
         seed_dir = exp_dir / f"seed_{seed}"
@@ -329,8 +343,13 @@ def generate_sweep_summary(
             print()
 
 
-def run_parameter_sweep(sweep_file: str):
-    """Run full parameter sweep experiment."""
+def run_parameter_sweep(sweep_file: str, gpu_id: int = None):
+    """Run full parameter sweep experiment.
+    
+    Args:
+        sweep_file: Path to sweep configuration file
+        gpu_id: Optional GPU ID to use for all runs (overrides config)
+    """
     print(f"Loading parameter sweep configuration: {sweep_file}")
 
     # Load sweep configuration
@@ -344,6 +363,8 @@ def run_parameter_sweep(sweep_file: str):
     print(f"  Seeds per experiment: {n_seeds}")
     print(f"  Total runs: {len(experiment_configs) * n_seeds}")
     print(f"  Experiments: {[name for name, _ in experiment_configs]}")
+    if gpu_id is not None:
+        print(f"  GPU: cuda:{gpu_id}")
 
     # Create sweep directory
     sweep_name = os.path.splitext(os.path.basename(sweep_file))[0]
@@ -362,7 +383,7 @@ def run_parameter_sweep(sweep_file: str):
     # Run all experiments
     all_results = {}
     for exp_name, config in experiment_configs:
-        results = run_experiment(exp_name, config, seeds, sweep_dir)
+        results = run_experiment(exp_name, config, seeds, sweep_dir, gpu_id=gpu_id)
         all_results[exp_name] = results
 
     # Generate sweep summary
@@ -374,9 +395,13 @@ def main():
     parser.add_argument(
         "--sweep", type=str, required=True, help="Path to sweep configuration file"
     )
+    parser.add_argument(
+        "--gpu", type=int, default=None, 
+        help="GPU ID to use (e.g., 0 or 1). Overrides device in config. If not specified, uses config default."
+    )
     args = parser.parse_args()
 
-    run_parameter_sweep(args.sweep)
+    run_parameter_sweep(args.sweep, gpu_id=args.gpu)
 
 
 if __name__ == "__main__":
