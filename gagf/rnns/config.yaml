@@ -1,32 +1,41 @@
 # Data configuration
 data:
-  p1: 28
-  p2: 28
-  k: 3  # sequence length
+  p1: 10 #28
+  p2: 10 #28
+  k: 5  # sequence length
   mode: sampled
   num_samples: 100000
   n_freqs: 10
-  batch_size: 1000
+  batch_size: 1000 #20000 #1000
   seed: 5
   mnist_label: 4 # only if template generated from mnist
 
 # Model configuration
 model:
-  hidden_dim: 36
-  init_scale: 1.0e-5
+  hidden_dim: 36 #36
+  init_scale: 1.0e-1 # effective init scale related to k (larger k, larger init scale to prevent gradient squashing)
+  return_all_outputs: false
+  transform_type: 'quadratic' # 'quadratic' | `multiplicative' 
 
 # Training configuration
 training:
-  epochs: 100
-  learning_rate: 0.0001
-  weight_decay: 0.0
-  betas: [0.9, 0.999]
-  grad_clip: 0.1
-  verbose_interval: 5
+  mode: 'online' # 'online' | 'offline'
+  epochs: 200 # used only when mode is 'offline'
+  num_steps: 50 #50000 #50000 # 20000 # used only when mode is 'online'
 
-# Experiment metadata
+  optimizer: 'adam' # 'adam' | 'hybrid'
+  learning_rate: 0.001 #0.0001
+  betas: [0.9, 0.999]
+
+  scaling_factor: -3 # for 'hybrid' optimizer only
+  weight_decay: 0.0
+  grad_clip: 0.1
+  verbose_interval: 10
+  save_param_interval: 100 #1000 #100
+
+
 device: cuda
 
 # Analysis
 analysis:
-  steps: [1, 50, 99]
+  checkpoints: [0.0, 0.25, 0.5, 0.75, 1.0] # At 0%, 25%, 50%, 75%, 100% of training

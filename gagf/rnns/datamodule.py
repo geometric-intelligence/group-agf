@@ -5,6 +5,122 @@ import torchvision.transforms as transforms
 import torch.nn as nn
 
 
+from torch.utils.data import IterableDataset
+
+class OnlineModularAdditionDataset2D(IterableDataset):
+    """
+    Online dataset that generates 2D modular addition samples on-the-fly.
+    Fully GPU-accelerated for maximum throughput.
+    """
+    def __init__(
+        self, 
+        p1: int,
+        p2: int, 
+        template: np.ndarray,
+        k: int,
+        batch_size: int,
+        device: str,
+        return_all_outputs: bool = False,
+    ):
+        super().__init__()
+        self.p1 = p1
+        self.p2 = p2
+        self.k = k
+        self.batch_size = batch_size
+        self.p_flat = p1 * p2
+        self.device = device
+        self.return_all_outputs = return_all_outputs
+        
+        # Store template on GPU for fast rolling
+        self.template_gpu = torch.tensor(template, device=device, dtype=torch.float32)
+        
+        # Pre-compute coordinate grids on GPU for efficient rolling
+        x_coords = torch.arange(p1, device=device)
+        y_coords = torch.arange(p2, device=device)
+        self.x_grid, self.y_grid = torch.meshgrid(x_coords, y_coords, indexing='ij')
+        
+    def _roll_2d_batch(self, shifts_x, shifts_y):
+        """
+        Roll the template by different amounts for each sample in a batch.
+        Fully vectorized on GPU.
+        
+        Args:
+            shifts_x: (batch_size,) or (batch_size, k) tensor of row shifts
+            shifts_y: (batch_size,) or (batch_size, k) tensor of col shifts
+        
+        Returns:
+            Rolled templates: (batch_size, p1, p2) or (batch_size, k, p1, p2)
+        """
+        # Determine output shape based on input
+        if shifts_x.dim() == 1:
+            # Single roll per sample: (batch_size,)
+            batch_size = shifts_x.shape[0]
+            # Broadcast: (1, p1, p2) -> (batch_size, p1, p2)
+            x_grid = self.x_grid.unsqueeze(0)  # (1, p1, p2)
+            y_grid = self.y_grid.unsqueeze(0)  # (1, p1, p2)
+            shifts_x = shifts_x.view(batch_size, 1, 1)  # (batch_size, 1, 1)
+            shifts_y = shifts_y.view(batch_size, 1, 1)  # (batch_size, 1, 1)
+        else:
+            # Multiple rolls per sample: (batch_size, k)
+            batch_size, k = shifts_x.shape
+            # Broadcast: (1, 1, p1, p2) -> (batch_size, k, p1, p2)
+            x_grid = self.x_grid.unsqueeze(0).unsqueeze(0)  # (1, 1, p1, p2)
+            y_grid = self.y_grid.unsqueeze(0).unsqueeze(0)  # (1, 1, p1, p2)
+            shifts_x = shifts_x.view(batch_size, k, 1, 1)  # (batch_size, k, 1, 1)
+            shifts_y = shifts_y.view(batch_size, k, 1, 1)  # (batch_size, k, 1, 1)
+        
+        # Compute shifted coordinates with modular arithmetic
+        x_shifted = (x_grid - shifts_x) % self.p1
+        y_shifted = (y_grid - shifts_y) % self.p2
+        
+        # Index into template using advanced indexing
+        rolled = self.template_gpu[x_shifted.long(), y_shifted.long()]
+        
+        return rolled
+        
+    def __iter__(self):
+        """Generate batches indefinitely on GPU."""
+        while True:
+            # Generate random shifts on GPU: (batch_size, k)
+            shifts_x = torch.randint(0, self.p1, (self.batch_size, self.k), 
+                                    device=self.device, dtype=torch.long)
+            shifts_y = torch.randint(0, self.p2, (self.batch_size, self.k), 
+                                    device=self.device, dtype=torch.long)
+            
+            # Generate X: roll template for each time step
+            # Shape: (batch_size, k, p1, p2)
+            X_rolled = self._roll_2d_batch(shifts_x, shifts_y)
+            
+            # Reshape to (batch_size, k, p_flat)
+            X = X_rolled.reshape(self.batch_size, self.k, self.p_flat)
+            
+            if self.return_all_outputs:
+                # Generate Y for ALL cumulative sums (intermediate targets)
+                # Compute cumulative sum at each timestep
+                sx_cumsum = torch.cumsum(shifts_x, dim=1) % self.p1  # (batch_size, k)
+                sy_cumsum = torch.cumsum(shifts_y, dim=1) % self.p2  # (batch_size, k)
+                
+                # Roll by all cumulative sums: (batch_size, k, p1, p2)
+                Y_rolled = self._roll_2d_batch(sx_cumsum, sy_cumsum)
+                
+                # Reshape to (batch_size, k, p_flat)
+                Y = Y_rolled.reshape(self.batch_size, self.k, self.p_flat)
+                Y = Y[:, 1:, :]
+
+            else:
+                # Generate Y: only final cumulative sum (current behavior)
+                sx_cumsum = shifts_x.sum(dim=1) % self.p1  # (batch_size,)
+                sy_cumsum = shifts_y.sum(dim=1) % self.p2  # (batch_size,)
+                
+                # Shape: (batch_size, p1, p2)
+                Y_rolled = self._roll_2d_batch(sx_cumsum, sy_cumsum)
+                
+                # Reshape to (batch_size, p_flat)
+                Y = Y_rolled.reshape(self.batch_size, self.p_flat)
+                
+            yield X, Y
+
+
 def build_modular_addition_sequence_dataset_2d(
     p1: int,
     p2: int,
@@ -12,6 +128,7 @@ def build_modular_addition_sequence_dataset_2d(
     k: int,
     mode: str = "sampled",
     num_samples: int = 65536,
+    return_all_outputs: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Build 2D modular addition dataset.
@@ -26,7 +143,7 @@ def build_modular_addition_sequence_dataset_2d(
 
     Returns:
         X:           (N, k, p1*p2) where token t is template rolled by (ax_t, ay_t), then flattened
-        Y:           (N, p1*p2) template rolled by (sum_t ax_t mod p1, sum_t ay_t mod p2), flattened
+        Y:           (N, k, p1*p2) target at each step, rolled by (sum_t ax_t mod p1, sum_t ay_t mod p2), flattened
         sequence_xy: (N, k, 2) integer group elements (ax_t, ay_t) per token (NOT cumulative)
 
     Notes:
@@ -56,7 +173,7 @@ def build_modular_addition_sequence_dataset_2d(
         sequence_xy[:, :, 1] = np.random.randint(0, p2, size=(N, k))  # ay (cols)
 
     X = np.zeros((N, k, p_flat), dtype=np.float32)
-    Y = np.zeros((N, p_flat), dtype=np.float32)
+    Y = np.zeros((N, k, p_flat), dtype=np.float32)
 
     for i in range(N):
         sx, sy = 0, 0  # cumulative shift for Y
@@ -66,7 +183,10 @@ def build_modular_addition_sequence_dataset_2d(
             X[i, t, :] = rolled.ravel()
             sx = (sx + ax) % p1
             sy = (sy + ay) % p2
-        Y[i, :] = np.roll(np.roll(template, shift=sx, axis=0), shift=sy, axis=1).ravel()
+            Y[i, t, :] = np.roll(np.roll(template, shift=sx, axis=0), shift=sy, axis=1).ravel()
+    
+    if not return_all_outputs:
+        Y = Y[:, -1, :]
 
     return X, Y, sequence_xy
 

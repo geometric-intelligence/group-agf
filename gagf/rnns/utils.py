@@ -59,6 +59,50 @@ def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
         ax.spines[spine].set_linewidth(3)
 
 
+
+def plot_train_val_loss(
+    train_loss_history, 
+    val_loss_history,
+    save_path=None,
+    show=True,
+    xlabel='Step'
+):
+    """
+    Plot training and validation loss vs steps.
+    
+    Args:
+        train_loss_history: List of training loss values
+        val_loss_history: List of validation loss values
+        save_path: Optional path to save figure
+        show: Whether to display the plot
+        xlabel: Label for x-axis (e.g., 'Step' or 'Epoch')
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    
+    steps = np.arange(len(train_loss_history))
+    
+    ax.plot(steps, train_loss_history, lw=2, color='#1f77b4', label='Training Loss', alpha=0.7)
+    ax.plot(steps, val_loss_history, lw=2, color='#ff7f0e', label='Validation Loss')
+    
+    ax.set_xlabel(xlabel, fontsize=14)
+    ax.set_ylabel('Loss', fontsize=14)
+    ax.set_title('Training vs Validation Loss', fontsize=16)
+    ax.legend(fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.set_yscale('log')  # Log scale often helps see loss curves
+    
+    if save_path:
+        fig.savefig(save_path, bbox_inches='tight', dpi=150)
+        print(f"  ✓ Saved to {save_path}")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+    
+    return fig, ax
+
+
 def plot_2d_signal(
     signal_2d,
     title="",
@@ -221,7 +265,9 @@ def plot_training_loss_with_theory(
     loss_history, 
     template_2d, 
     p1, 
-    p2, 
+    p2,
+    x_values=None,
+    x_label="Step",
     save_path=None,
     show=True
 ):
@@ -229,17 +275,22 @@ def plot_training_loss_with_theory(
     Plot training loss with theoretical power spectrum lines.
     
     Args:
-        loss_history: List of loss values over epochs
+        loss_history: List of loss values
         template_2d: The 2D template array (p1, p2)
         p1, p2: Dimensions
+        x_values: X-axis values (if None, uses indices 0, 1, 2, ...)
+        x_label: Label for x-axis (e.g., "Samples Seen", "Fraction of Space")
         save_path: Optional path to save figure
         show: Whether to display the plot
     """
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
     
+    # Use provided x_values or default to indices
+    if x_values is None:
+        x_values = np.arange(len(loss_history))
+    
     # Plot loss
-    epochs = np.arange(len(loss_history))
-    ax.plot(epochs, loss_history, lw=4, color='#1f77b4', label='Training Loss')
+    ax.plot(x_values, loss_history, lw=4, color='#1f77b4', label='Training Loss')
     
     # Compute power spectrum of template
     x_freq, y_freq, power = get_power_2d_adele(template_2d)
@@ -254,7 +305,7 @@ def plot_training_loss_with_theory(
     for k, alpha in enumerate(alpha_values):
         ax.axhline(y=coef * alpha, color="black", linestyle="--", linewidth=2, zorder=-2)
     
-    ax.set_xlabel("Epochs", fontsize=24)
+    ax.set_xlabel(x_label, fontsize=24)
     ax.set_ylabel("Train Loss", fontsize=24)
     
     style_axes(ax)
@@ -402,8 +453,9 @@ def plot_prediction_power_spectrum_over_time(
     p1,
     p2,
     loss_history,
+    param_save_indices=None,
     num_freqs_to_track=10,
-    num_analysis_steps=100,
+    checkpoint_indices=None,
     num_samples=100,
     save_path=None,
     show=False
@@ -442,11 +494,14 @@ def plot_prediction_power_spectrum_over_time(
     
     # Choose analysis steps (log-spaced to capture early and late dynamics)
     T = len(param_history)
-    steps_analysis = np.unique(
-        np.logspace(0, np.log10(max(T - 1, 1)), num_analysis_steps, dtype=int)
-    )
-    steps_analysis = steps_analysis[steps_analysis < T]
-    steps_analysis = np.insert(steps_analysis, 0, 0)  # Include epoch 0
+
+    steps_analysis = checkpoint_indices  # Indices into param_history
+    
+    # Get the actual step/epoch numbers for x-axis plotting
+    if param_save_indices is not None:
+        actual_steps = [param_save_indices[i] for i in checkpoint_indices]
+    else:
+        actual_steps = checkpoint_indices  # If None, indices = actual steps
     
     # Track average output power at those frequencies over training
     powers_over_time = {freq: [] for freq in tracked_freqs}
@@ -479,9 +534,15 @@ def plot_prediction_power_spectrum_over_time(
     for freq in tracked_freqs:
         powers_over_time[freq] = np.array(powers_over_time[freq])
     
-    # Compute loss history (already have this, but reconstruct for alignment)
-    # We'll use the length of param_history as epochs
-    loss_epochs = np.arange(len(param_history))
+    if param_save_indices is None:
+        # Assume params were saved at every step (old behavior)
+        loss_epochs = np.arange(len(param_history))
+        loss_history_subset = loss_history
+    else:
+        # Use the provided indices
+        loss_epochs = np.array(param_save_indices)
+        # Extract only the loss values at those indices
+        loss_history_subset = [loss_history[i] for i in param_save_indices]
     
     # --- Create the plot ---
     colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
@@ -490,7 +551,7 @@ def plot_prediction_power_spectrum_over_time(
     fig.subplots_adjust(left=0.12, right=0.98, top=0.96, bottom=0.10, hspace=0.12)
     
     # --- Top panel: Training loss with theory bands ---
-    ax1.plot(loss_epochs, loss_history, lw=4, color='#1f77b4', label='Training Loss')
+    ax1.plot(loss_epochs, loss_history_subset, lw=4, color='#1f77b4', label='Training Loss')
     
     # Compute power spectrum of template for theory lines
     _, _, power = get_power_2d_adele(template_2d)
@@ -521,7 +582,7 @@ def plot_prediction_power_spectrum_over_time(
     # --- Bottom panel: Tracked mode power over time ---
     for i, (kx, ky) in enumerate(tracked_freqs):
         ax2.plot(
-            steps_analysis, 
+            actual_steps,  # Use actual step/epoch numbers, not indices
             powers_over_time[(kx, ky)], 
             color=colors[i], 
             lw=3,
