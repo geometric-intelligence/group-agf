@@ -368,6 +368,8 @@ def plot_model_predictions_over_time(
     model.to(device).eval()
     
     # Ground truth
+    if Y_data.dim() == 3:
+        Y_data = Y_data[:,-1,:] # only final time step
     with torch.no_grad():
         truth_2d = Y_data[example_idx].reshape(p1, p2).cpu().numpy()
     
@@ -377,7 +379,12 @@ def plot_model_predictions_over_time(
         model.load_state_dict(param_history[step], strict=True)
         with torch.no_grad():
             x = X_data[example_idx:example_idx+1].to(device)
-            pred_2d = model(x).reshape(p1, p2).detach().cpu().numpy()
+            pred_2d = model(x)
+            if pred_2d.dim() == 3:
+                pred_2d = pred_2d[:,-1,:] # only final time step
+            
+            pred_2d = pred_2d.reshape(p1, p2).detach().cpu().numpy()
+            
             preds.append(pred_2d)
     
     # Shared color scale based on ground truth
@@ -521,7 +528,11 @@ def plot_prediction_power_spectrum_over_time(
             # Compute power spectrum for each sample, then average
             powers_batch = []
             for i in range(outputs_flat.shape[0]):
-                out_2d = outputs_flat[i].reshape(p1, p2)
+                if outputs_flat.ndim == 3:
+                    out_2d = outputs_flat[i][-1,:] # only final time step
+                else:
+                    out_2d = outputs_flat[i]
+                out_2d = out_2d.reshape(p1, p2)
                 power_i, _, _ = get_power_2d(out_2d)  # (p1, p2)
                 powers_batch.append(power_i)
             avg_power = np.mean(powers_batch, axis=0)  # (p1, p2)

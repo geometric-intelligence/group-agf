@@ -322,11 +322,6 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     ### ----- GENERATE DATA ----- ###
     print("Generating data...")
     
-    # template_2d = generate_template_unique_freqs(
-    #     config['data']['p1'], 
-    #     config['data']['p2'], 
-    #     n_freqs=config['data']['n_freqs']
-    # )
     template_2d = mnist_template_2d(
         config['data']['p1'],
         config['data']['p2'],
