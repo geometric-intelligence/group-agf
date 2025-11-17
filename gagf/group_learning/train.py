@@ -1,19 +1,6 @@
-import numpy as np
-import random
-import torch
-import os
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FormatStrFormatter
-from matplotlib.ticker import FuncFormatter
-from matplotlib.ticker import MaxNLocator
-import pickle
 
-import gagf.group_learning.plot as plot
+import torch
+import pickle
 
 def test_accuracy(model, dataloader):
     correct = 0

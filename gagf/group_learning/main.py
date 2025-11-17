@@ -1,32 +1,17 @@
-from email.policy import default
+
 import numpy as np
-import random
 import torch
 import time
 import datetime
-import os
 import torch.nn as nn
 import torch.optim as optim
-import shutil
 from torch.utils.data import DataLoader, TensorDataset
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FormatStrFormatter
-from matplotlib.ticker import FuncFormatter
-from matplotlib.ticker import MaxNLocator
-# import setcwd
-# setcwd.main()
-
-import importlib
-import pickle
 
 import gagf.group_learning.models as models
 import gagf.group_learning.datasets as datasets
 import gagf.group_learning.power as power
 import gagf.group_learning.train as train
 import gagf.group_learning.plot as plot
-import gagf.group_learning.saved_datasets as saved_datasets
 
 import wandb
 import itertools
