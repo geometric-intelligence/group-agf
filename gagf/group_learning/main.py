@@ -19,6 +19,7 @@ import logging
 import default_config
 
 from escnn.group import *
+from gagf.group_learning.optimizer import PerNeuronScaledSGD
 
 today = datetime.date.today()
 
@@ -59,7 +60,15 @@ def main_run(config):
         model = models.TwoLayerNet(group_size=config['group_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
         model = model.to(device)
         loss = nn.MSELoss()
-        optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
+
+        if config['optimizer_name'] == 'Adam':
+            optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
+        elif config['optimizer_name'] == 'SGD':
+            optimizer = optim.SGD(model.parameters(), lr=config['lr'], momentum=config['mom'])
+        elif config['optimizer_name'] == 'PerNeuronScaledSGD':
+            optimizer = PerNeuronScaledSGD(model, lr=config['lr'])
+        else:
+            raise ValueError(f"Unknown optimizer: {config['optimizer_name']}. Expected one of ['Adam', 'SGD', 'PerNeuronScaledSGD'].")
 
         print("Starting training...")
         loss_history, accuracy_history, param_history = train.train(
@@ -140,6 +149,7 @@ def main():
         seed,
         lr,
         mom,
+        optimizer_name,
         batch_size,
         epochs,
         verbose_interval,
@@ -150,6 +160,7 @@ def main():
         default_config.seed,
         default_config.lr,
         default_config.mom,
+        default_config.optimizer_name,
         default_config.batch_size,
         default_config.epochs,
         default_config.verbose_interval,
@@ -162,6 +173,7 @@ def main():
             "seed": seed,
             "lr": lr,
             "mom": mom,
+            "optimizer_name": optimizer_name,
             "batch_size": batch_size,
             "epochs": epochs,
             "verbose_interval": verbose_interval,

@@ -6,7 +6,11 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
     where theta_i = (W_in[i,:], W_drive[i,:], W_out[:,i]).
     """
     def __init__(self, model, lr=1e-2, k=2):
-        params = [model.W_in, model.W_drive, model.W_out]
+        params = [model.U, model.V, model.W]
+        # Print shape of parameters with their names
+        print(f"model.U shape: {model.U.shape}")
+        print(f"model.V shape: {model.V.shape}")
+        print(f"model.W shape: {model.W.shape}")
         super().__init__([{'params': params, 'model': model}], dict(lr=lr, k=k))
 
     @torch.no_grad()
@@ -15,22 +19,34 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         model = group['model']
         lr = group['lr']
         k = group['k']
-        W_in, W_drive, W_out = model.W_in, model.W_drive, model.W_out
-        g_in, g_drive, g_out = W_in.grad, W_drive.grad, W_out.grad
-        if g_in is None or g_drive is None or g_out is None:
+        U, V, W = model.U, model.V, model.W
+        print(f"U shape: {U.shape}")
+        print(f"V shape: {V.shape}")
+        print(f"W shape: {W.shape}")
+        g_U, g_V, g_W = U.grad, V.grad, W.grad
+        if g_U is None or g_V is None or g_W is None:
             return
         # per-neuron norms
-        u2 = (W_in**2).sum(dim=1)
-        v2 = (W_drive**2).sum(dim=1)
-        w2 = (W_out**2).sum(dim=0)
+        # TODO(nina): check if this is correct.
+        u2 = (U**2).sum(dim=1)
+        v2 = (V**2).sum(dim=1)
+        w2 = (W**2).sum(dim=1)
+        print(f"u2 shape: {u2.shape}")
+        print(f"v2 shape: {v2.shape}")
+        print(f"w2 shape: {w2.shape}")
         theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)
+        print(f"theta_norm shape: {theta_norm.shape}")
         # scale = ||theta_i||^(1 - k)
         scale = theta_norm.pow(1 - k)
+        print(f"scale shape: {scale.shape}")
         # scale each neuron's grads
-        g_in.mul_(scale.view(-1, 1))
-        g_drive.mul_(scale.view(-1, 1))
-        g_out.mul_(scale.view(1, -1))
+        g_U.mul_(scale.view(-1, 1))
+        g_V.mul_(scale.view(-1, 1))
+        g_W.mul_(scale.view(-1, 1))
+        print(f"g_U shape: {g_U.shape}")
+        print(f"g_V shape: {g_V.shape}")
+        print(f"g_W shape: {g_W.shape}")
         # SGD update
-        W_in.add_(g_in, alpha=-lr)
-        W_drive.add_(g_drive, alpha=-lr)
-        W_out.add_(g_out, alpha=-lr)
+        U.add_(g_U, alpha=-lr)
+        V.add_(g_V, alpha=-lr)
+        W.add_(g_W, alpha=-lr)

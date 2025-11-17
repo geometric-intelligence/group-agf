@@ -1,6 +1,6 @@
 # Dataset Parameters
-group_name = ['octahedral'] #, 'cyclic', 'dihedral', 'znz_znz']
-group_n = [6]  # n in Dn [3, 4, 5]
+group_name = ['dihedral'] #, 'cyclic', 'dihedral', 'znz_znz']
+group_n = [3]  # n in Dn [3, 4, 5]
 image_length = [5] #, 10, 15] # length of one side of the square image patch
 
 # Learning Parameters
@@ -8,6 +8,7 @@ seed = [10]
 init_scale = [1e-2] #, 1e-1]  # originally 1e-2
 lr = [0.01] #, 0.001, 0.001]  # originaly 0.01
 mom = [0.9] # originaly 0.9
+optimizer_name = ['PerNeuronScaledSGD'] #, 'SGD' Adam', "Custom'"]
 
 # Training parameters
 epochs = [5000] #, 10000, 20000, 30000] 
