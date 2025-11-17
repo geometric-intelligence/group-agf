@@ -79,7 +79,7 @@ def main_run(config):
             template_power = power.GroupPower(template, group=config['group'])
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
-        irreps_plot = plot.plot_irreps(config['group'], config['group_name'], show=False)
+        irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power, 
             model, 
@@ -91,10 +91,11 @@ def main_run(config):
             show=False
         )
         neuron_weights_plot = plot.plot_neuron_weights(
-            config['group_name'],
+            config['group_name'], # TODO: remove this, since the group_name can be accessed from the group object: 
+            # group.name (will give "D3") or group.__class__.__name__ (will give "DihedralGroup")
             config['group'],
             model,
-            config['group_size'],
+            config['group_size'], # TODO: remove this, since the group_size can be accessed from the group object: group.order()
             neuron_indices=None
         )
 

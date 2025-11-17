@@ -265,8 +265,11 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
 
     # Compute output power over time (GD)
     num_points = 1000
-    X_tensor = model_inputs
+    num_inputs_to_compute_power = len(model_inputs) // 10
+    X_tensor = model_inputs[:num_inputs_to_compute_power]  # Added by Nina to speed up computation with octahedral.
     steps = np.unique(np.logspace(0, np.log10(len(param_history) - 1), num_points, dtype=int))
+    # FIXME: This computes the first 100s steps without skipping any. We might want to skip some steps to speed up computation.
+    print("Computing power over time for", len(steps), f"steps: {steps}")
     powers_over_time = np.zeros([len(steps), template_power_length])
 
     for i_step, step in enumerate(steps):

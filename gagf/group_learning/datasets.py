@@ -311,14 +311,14 @@ def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save
 
     General idea: We are generating a dataset where each sample consists of 
     two inputs (a*template and b*template) and an output (a*b)*template,
-    where a, b \in Z/pZ x Z/pZ. The template is a flattened 2D array
+    where $a, b \in Z/pZ x Z/pZ$. The template is a flattened 2D array
     representing the modular addition operation in a 2D space.
 
-    Each element X_i will contain the template with a different a_i, b_i, and
-    in fact X contains the template at all possible a, b shifts.
-    The output Y_i will contain the template shifted by a_i*b_i.
+    Each element $X_i$ will contain the template with a different $a_i$, $b_i$, and
+    in fact $X$ contains the template at all possible $a$, $b$ shifts.
+    The output $Y_i$ will contain the template shifted by $a_i*b_i$.
     * refers to the composition of two group actions (but by an abuse of notation, 
-    also refers to group action on the template. oops.)
+    also refers to group action on the template.)
     
     Parameters
     ----------

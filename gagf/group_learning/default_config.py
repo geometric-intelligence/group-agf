@@ -1,6 +1,6 @@
 # Dataset Parameters
-group_name = ['dihedral'] #, 'cyclic', 'dihedral', 'znz_znz']
-group_n = [4]  # n in Dn [3, 4, 5]
+group_name = ['octahedral'] #, 'cyclic', 'dihedral', 'znz_znz']
+group_n = [6]  # n in Dn [3, 4, 5]
 image_length = [5] #, 10, 15] # length of one side of the square image patch
 
 # Learning Parameters
