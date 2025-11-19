@@ -19,33 +19,22 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         model = group['model']
         lr = group['lr']
         k = group['k']
-        U, V, W = model.U, model.V, model.W
-        print(f"U shape: {U.shape}")
-        print(f"V shape: {V.shape}")
-        print(f"W shape: {W.shape}")
-        g_U, g_V, g_W = U.grad, V.grad, W.grad
+        U, V, W = model.U, model.V, model.W # each of shape (hidden_size, group_size)
+        g_U, g_V, g_W = U.grad, V.grad, W.grad # each of shape (hidden_size, group_size)
         if g_U is None or g_V is None or g_W is None:
             return
         # per-neuron norms
         # TODO(nina): check if this is correct.
-        u2 = (U**2).sum(dim=1)
-        v2 = (V**2).sum(dim=1)
-        w2 = (W**2).sum(dim=1)
-        print(f"u2 shape: {u2.shape}")
-        print(f"v2 shape: {v2.shape}")
-        print(f"w2 shape: {w2.shape}")
-        theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)
-        print(f"theta_norm shape: {theta_norm.shape}")
+        u2 = (U**2).sum(dim=1)  # shape: (hidden_size,): nb of hidden neurons.
+        v2 = (V**2).sum(dim=1)  # shape: (hidden_size,): nb of hidden neurons.
+        w2 = (W**2).sum(dim=1)  # shape: (hidden_size,): nb of hidden neurons.
+        theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)  # shape: (hidden_size,): nb of hidden neurons.
         # scale = ||theta_i||^(1 - k)
-        scale = theta_norm.pow(1 - k)
-        print(f"scale shape: {scale.shape}")
+        scale = theta_norm.pow(1 - k)  # shape: (hidden_size,): nb of hidden neurons.
         # scale each neuron's grads
-        g_U.mul_(scale.view(-1, 1))
+        g_U.mul_(scale.view(-1, 1)) 
         g_V.mul_(scale.view(-1, 1))
         g_W.mul_(scale.view(-1, 1))
-        print(f"g_U shape: {g_U.shape}")
-        print(f"g_V shape: {g_V.shape}")
-        print(f"g_W shape: {g_W.shape}")
         # SGD update
         U.add_(g_U, alpha=-lr)
         V.add_(g_V, alpha=-lr)
