@@ -9,7 +9,7 @@ hidden_factor = [20] # hidden size = hidden_factor * group_size
 
 # Learning Parameters
 seed = [10, 20, 30, 40]  # , 30, 40, 50] #, 60, 70, 80, 90, 100]
-init_scale = [1e-3, 1e-4, 1e-5]  # originally 1e-2
+init_scale = [1e-5, 1e-6, 1e-4]  # originally 1e-2
 lr = [0.01]  # , 0.001]  # originaly 0.01
 mom = [0.9]  # originaly 0.9
 optimizer_name = ["PerNeuronScaledSGD"]  # , 'SGD' Adam', "Custom'"]
