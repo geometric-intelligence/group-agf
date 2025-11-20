@@ -37,7 +37,6 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         if g_U is None or g_V is None or g_W is None:
             return
         # per-neuron norms
-        # TODO(nina): check if this is correct.
         u2 = (U**2).sum(dim=1)  # shape: (hidden_size,): nb of hidden neurons.
         v2 = (V**2).sum(dim=1)  # shape: (hidden_size,): nb of hidden neurons.
         w2 = (W**2).sum(dim=1)  # shape: (hidden_size,): nb of hidden neurons.
