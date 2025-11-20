@@ -16,7 +16,8 @@ class TwoLayerNet(nn.Module):
         super(TwoLayerNet, self).__init__()
         self.group_size = group_size
         if hidden_size is None:
-            hidden_size = 6 * group_size
+            # hidden_size = 6 * group_size
+            hidden_size = 50 * group_size
         self.hidden_size = hidden_size
         self.nonlinearity = nonlinearity
         self.init_scale = init_scale

@@ -57,7 +57,7 @@ def main_run(config):
         torch.manual_seed(config['seed'])
         torch.cuda.manual_seed_all(config['seed'])  # if using GPU
 
-        model = models.TwoLayerNet(group_size=config['group_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
+        model = models.TwoLayerNet(group_size=config['group_size'], hidden_size=config['hidden_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
         model = model.to(device)
         loss = nn.MSELoss()
 
@@ -88,7 +88,7 @@ def main_run(config):
             template_power = power.GroupPower(template, group=config['group'])
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
-        irreps_plot = plot.plot_irreps(config['group'], show=False)
+        # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power, 
             model, 
@@ -119,7 +119,7 @@ def main_run(config):
 
         wandb.log({
             "loss_plot": wandb.Image(loss_plot),
-            "irreps_plot": wandb.Image(irreps_plot),
+            # "irreps_plot": wandb.Image(irreps_plot),
             "power_over_training_plot": wandb.Image(power_over_training_plot),
             "neuron_weights_plot": wandb.Image(neuron_weights_plot),
             "model_predictions_plot": wandb.Image(model_predictions_plot),
@@ -145,7 +145,8 @@ def main():
     run_start_time = time.strftime("%m-%d_%H-%M-%S")
     for (
         group_name,
-        init_scale,
+        init_scale, 
+        hidden_size,
         seed,
         lr,
         mom,
@@ -157,6 +158,7 @@ def main():
     ) in itertools.product(
         default_config.group_name,
         default_config.init_scale,
+        default_config.hidden_size,
         default_config.seed,
         default_config.lr,
         default_config.mom,
@@ -170,6 +172,7 @@ def main():
             "group_name": group_name,
             "init_scale": init_scale,
             "run_start_time": run_start_time,
+            "hidden_size": hidden_size,
             "seed": seed,
             "lr": lr,
             "mom": mom,
