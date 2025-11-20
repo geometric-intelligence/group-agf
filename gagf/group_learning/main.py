@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 import time
@@ -33,7 +32,7 @@ def main_run(config):
         tags=[
             f"{today}",
             f"run_start_{config['run_start_time']}",
-        ]
+        ],
     )
     wandb_config = wandb.config
     wandb_config.update(config)
@@ -47,28 +46,42 @@ def main_run(config):
 
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
-        assert len(template) == config['group_size'], "Template size does not match group size."
+        assert (
+            len(template) == config["group_size"]
+        ), "Template size does not match group size."
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
         dataset = TensorDataset(X, Y)
-        dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=False)
+        dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
 
-        np.random.seed(config['seed'])
-        torch.manual_seed(config['seed'])
-        torch.cuda.manual_seed_all(config['seed'])  # if using GPU
+        np.random.seed(config["seed"])
+        torch.manual_seed(config["seed"])
+        torch.cuda.manual_seed_all(config["seed"])  # if using GPU
 
-        model = models.TwoLayerNet(group_size=config['group_size'], hidden_size=config['hidden_size'], nonlinearity='square', init_scale=config['init_scale'], output_scale=1e0)
+        model = models.TwoLayerNet(
+            group_size=config["group_size"],
+            hidden_size=config["hidden_size"],
+            nonlinearity="square",
+            init_scale=config["init_scale"],
+            output_scale=1e0,
+        )
         model = model.to(device)
         loss = nn.MSELoss()
 
-        if config['optimizer_name'] == 'Adam':
-            optimizer = optim.Adam(model.parameters(), lr=config['lr'], betas=(config['mom'], 0.999))
-        elif config['optimizer_name'] == 'SGD':
-            optimizer = optim.SGD(model.parameters(), lr=config['lr'], momentum=config['mom'])
-        elif config['optimizer_name'] == 'PerNeuronScaledSGD':
-            optimizer = PerNeuronScaledSGD(model, lr=config['lr'])
+        if config["optimizer_name"] == "Adam":
+            optimizer = optim.Adam(
+                model.parameters(), lr=config["lr"], betas=(config["mom"], 0.999)
+            )
+        elif config["optimizer_name"] == "SGD":
+            optimizer = optim.SGD(
+                model.parameters(), lr=config["lr"], momentum=config["mom"]
+            )
+        elif config["optimizer_name"] == "PerNeuronScaledSGD":
+            optimizer = PerNeuronScaledSGD(model, lr=config["lr"])
         else:
-            raise ValueError(f"Unknown optimizer: {config['optimizer_name']}. Expected one of ['Adam', 'SGD', 'PerNeuronScaledSGD'].")
+            raise ValueError(
+                f"Unknown optimizer: {config['optimizer_name']}. Expected one of ['Adam', 'SGD', 'PerNeuronScaledSGD']."
+            )
 
         print("Starting training...")
         loss_history, accuracy_history, param_history = train.train(
@@ -76,54 +89,55 @@ def main_run(config):
             dataloader,
             loss,
             optimizer,
-            epochs=config['epochs'],
-            verbose_interval=config['verbose_interval'],
-            model_save_path=model_save_path
+            epochs=config["epochs"],
+            verbose_interval=config["verbose_interval"],
+            model_save_path=model_save_path,
         )
 
         print("Training Complete. Generating plots...")
-        if config['group_name'] == 'znz_znz':
+        if config["group_name"] == "znz_znz":
             template_power = power.ZnZPower2D(template)
         else:
-            template_power = power.GroupPower(template, group=config['group'])
+            template_power = power.GroupPower(template, group=config["group"])
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
-            template_power, 
-            model, 
-            device, 
-            param_history, 
-            X, 
-            config['group_name'], 
-            save_path=None, 
-            show=False
+            template_power,
+            model,
+            device,
+            param_history,
+            X,
+            config["group_name"],
+            save_path=None,
+            show=False,
         )
         neuron_weights_plot = plot.plot_neuron_weights(
-            config['group_name'], # TODO: remove this, since the group_name can be accessed from the group object: 
+            config[
+                "group_name"
+            ],  # TODO: remove this, since the group_name can be accessed from the group object:
             # group.name (will give "D3") or group.__class__.__name__ (will give "DihedralGroup")
-            config['group'],
+            config["group"],
             model,
-            config['group_size'], # TODO: remove this, since the group_size can be accessed from the group object: group.order()
-            neuron_indices=None
+            config[
+                "group_size"
+            ],  # TODO: remove this, since the group_size can be accessed from the group object: group.order()
+            neuron_indices=None,
         )
 
         model_predictions_plot = plot.plot_model_outputs(
-            config['group_name'],
-            config['group_size'],
-            model,
-            X,
-            Y,
-            idx=13
+            config["group_name"], config["group_size"], model, X, Y, idx=13
         )
 
-        wandb.log({
-            "loss_plot": wandb.Image(loss_plot),
-            # "irreps_plot": wandb.Image(irreps_plot),
-            "power_over_training_plot": wandb.Image(power_over_training_plot),
-            "neuron_weights_plot": wandb.Image(neuron_weights_plot),
-            "model_predictions_plot": wandb.Image(model_predictions_plot),
-        })
+        wandb.log(
+            {
+                "loss_plot": wandb.Image(loss_plot),
+                # "irreps_plot": wandb.Image(irreps_plot),
+                "power_over_training_plot": wandb.Image(power_over_training_plot),
+                "neuron_weights_plot": wandb.Image(neuron_weights_plot),
+                "model_predictions_plot": wandb.Image(model_predictions_plot),
+            }
+        )
 
         print("Plots generated and logged to wandb.")
 
@@ -145,7 +159,7 @@ def main():
     run_start_time = time.strftime("%m-%d_%H-%M-%S")
     for (
         group_name,
-        init_scale, 
+        init_scale,
         hidden_size,
         seed,
         lr,
@@ -154,7 +168,6 @@ def main():
         batch_size,
         epochs,
         verbose_interval,
-        
     ) in itertools.product(
         default_config.group_name,
         default_config.init_scale,
@@ -207,10 +220,10 @@ def main():
         elif group_name == "octahedral":
             group = Octahedral()
             group_size = group.order()
-            main_config['group'] = group
+            main_config["group"] = group
             main_config["group_size"] = group_size
             main_run(main_config)
-            
+
         else:
             for (
                 # signal_length_1d,
@@ -229,11 +242,10 @@ def main():
                         f"Expected one of ['dihedral', 'cyclic', 'octahedral']."
                     )
                 group_size = group.order()
-                main_config['group'] = group
+                main_config["group"] = group
                 main_config["group_size"] = group_size
                 main_config["group_n"] = group_n
             main_run(main_config)
 
-        
 
 main()
