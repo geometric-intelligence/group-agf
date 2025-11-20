@@ -273,6 +273,9 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
         reshape_dims = (-1, p1)
 
     # Compute output power over time (GD)
+    # TODO: the number of points and the number of inputs to compute the power over time should depend on the group.
+    # For example, for Octahedral and A5 groups, we should compute the power over time for a smaller number of points.
+    # Because the dataset is very large for these groups, so we don't need to compute the power over time for all steps.
     num_points = 200
     num_inputs_to_compute_power = len(model_inputs) // 10
     X_tensor = model_inputs[

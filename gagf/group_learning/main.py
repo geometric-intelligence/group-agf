@@ -60,7 +60,7 @@ def main_run(config):
 
         model = models.TwoLayerNet(
             group_size=config["group_size"],
-            hidden_size=config["hidden_size"],
+            hidden_size=config["hidden_factor"] * config["group_size"],
             nonlinearity="square",
             init_scale=config["init_scale"],
             output_scale=1e0,
@@ -160,7 +160,7 @@ def main():
     for (
         group_name,
         init_scale,
-        hidden_size,
+        hidden_factor,
         seed,
         lr,
         mom,
@@ -171,7 +171,7 @@ def main():
     ) in itertools.product(
         default_config.group_name,
         default_config.init_scale,
-        default_config.hidden_size,
+        default_config.hidden_factor,
         default_config.seed,
         default_config.lr,
         default_config.mom,
@@ -185,7 +185,7 @@ def main():
             "group_name": group_name,
             "init_scale": init_scale,
             "run_start_time": run_start_time,
-            "hidden_size": hidden_size,
+            "hidden_factor": hidden_factor,
             "seed": seed,
             "lr": lr,
             "mom": mom,
@@ -219,6 +219,13 @@ def main():
 
         elif group_name == "octahedral":
             group = Octahedral()
+            group_size = group.order()
+            main_config["group"] = group
+            main_config["group_size"] = group_size
+            main_run(main_config)
+
+        elif group_name == "A5":
+            group = Icosahedral()
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size

@@ -177,7 +177,7 @@ def generate_fixed_template_dihedral(N):
 
     return template
 
-
+# TODO: Design a template with a few irreps that more separation in power spectrum
 def generate_fixed_group_template(group, seed):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
