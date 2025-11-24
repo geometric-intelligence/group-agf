@@ -176,8 +176,6 @@ def generate_fixed_group_template(group, seed):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 
-    DRAFT. UNTESTED.
-
     Parameters
     ----------
     group : Group (escnn object)

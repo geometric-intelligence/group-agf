@@ -80,13 +80,11 @@ def get_model_save_path(config):
             f"{config['model_save_dir']}model_"
             f"group_name{config['group_name']}_"
             f"group_size{config['group_size']}_"
-            # f"frac{config['dataset_fraction']}_"
             f"init{config['init_scale']}_"
             f"lr{config['lr']}_"
             f"mom{config['mom']}_"
             f"bs{config['batch_size']}_"
             f"epochs{config['epochs']}_"
-            # f"freq{config['frequencies_to_learn']}_"
             f"seed{config['seed']}_"
             f"run_start{config['run_start_time']}.pkl"
         )
