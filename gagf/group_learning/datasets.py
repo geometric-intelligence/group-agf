@@ -172,7 +172,7 @@ def generate_fixed_template_dihedral(N):
 
 
 
-def generate_fixed_group_template(group):
+def generate_fixed_group_template(group, seed):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 
@@ -190,6 +190,8 @@ def generate_fixed_group_template(group):
     template : np.ndarray, shape=[group.order()]
         The mean centered template.
     """
+    # Incorporate seed for reproducibility
+    rng = np.random.default_rng(seed)
     # Generate template array from Fourier spectrum
     spectrum = []
     for irrep in group.irreps():
@@ -197,7 +199,7 @@ def generate_fixed_group_template(group):
         
         # Create a random full rank matrix with unique diagonal entries
         mat = np.zeros((dim, dim))
-        diag_values = np.random.uniform(5.0, 20.0, size=dim)
+        diag_values = rng.uniform(5.0, 20.0, size=dim)
         np.fill_diagonal(mat, diag_values)
         
         spectrum.append(mat)
@@ -261,7 +263,6 @@ def mnist_template(image_length, digit=0, sample_idx=0, random_state=42):
     return template
 
 
-# TODO: Check if dataset is correctly centered (see paper on generating dataset)
 def group_dataset(group, template):
     """Generate a dataset of group elements acting on the template.
 
@@ -417,21 +418,6 @@ def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, rando
         return X, Y, translations
 
 
-# def choose_template(p, group="znz_znz", digit=4):
-#     """Choose template based on type."""
-#     if group == "dihedral":
-#         template = generate_fixed_template_dihedral(p)
-#     elif group == "znz_znz":
-#         template = mnist_template(p, digit=digit)
-#     else:
-#         raise ValueError(f"Unknown group: {group}")
-
-#     zeroth_freq = np.mean(template)
-#     template = template - zeroth_freq
-    
-#     return template
-
-
 def load_dataset(config):
     """Load dataset based on configuration."""
 
@@ -445,14 +431,9 @@ def load_dataset(config):
             template_type="mnist"
         )
         return X, Y, template
-    elif config['group_name'] == 'dihedral':
-        # Note: only D3 is implemented for now
-        # When we implement other dihedral groups, we can modify this part
-        # to accept different N values.
-        group = DihedralGroup(config['dihedral_order_n']) 
-        # template = generate_fixed_template_dihedral(config['dihedral_order_n'])
-        template = generate_fixed_group_template(group)
-        X, Y = group_dataset(group, template)
+    else:
+        template = generate_fixed_group_template(config['group'], config['seed'])
+        X, Y = group_dataset(config['group'], template)
 
         return X, Y, template
 

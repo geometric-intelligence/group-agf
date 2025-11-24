@@ -1,3 +1,4 @@
+from email.policy import default
 import numpy as np
 import random
 import torch
@@ -56,7 +57,7 @@ def main_run(config):
     try:
         logging.info(f"\n\n---> START run: {run_name}.")
 
-        model_save_path = get_model_save_path(config)
+        model_save_path = models.get_model_save_path(config)
 
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
@@ -89,13 +90,11 @@ def main_run(config):
         print("Training Complete. Generating plots...")
         if config['group_name'] == 'znz_znz':
             template_power = power.ZnZPower2D(template)
-        elif config['group_name'] == 'dihedral':
-            template_power = power.GroupPower(template, group=config['group'])
         else:
-            raise ValueError(f"Unknown group: {config['group_name']}")
+            template_power = power.GroupPower(template, group=config['group'])
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
-        top_frequency_plot = plot.plot_top_template_components(config['group_name'], template_power, config['group_size'], show=False)
+        irreps_plot = plot.plot_irreps(config['group'], config['group_name'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power, 
             model, 
@@ -106,11 +105,26 @@ def main_run(config):
             save_path=None, 
             show=False
         )
-        neuron_weights_plot = plot.plot_neuron_weights(config['group_name'], model, config['group_size'], neuron_indices=None)
-        model_predictions_plot = plot.plot_model_outputs(config['group_name'], config['group_size'], model, X, Y, idx=13)        
+        neuron_weights_plot = plot.plot_neuron_weights(
+            config['group_name'],
+            config['group'],
+            model,
+            config['group_size'],
+            neuron_indices=None
+        )
+
+        model_predictions_plot = plot.plot_model_outputs(
+            config['group_name'],
+            config['group_size'],
+            model,
+            X,
+            Y,
+            idx=13
+        )
+
         wandb.log({
             "loss_plot": wandb.Image(loss_plot),
-            "top_frequency_plot": wandb.Image(top_frequency_plot),
+            "irreps_plot": wandb.Image(irreps_plot),
             "power_over_training_plot": wandb.Image(power_over_training_plot),
             "neuron_weights_plot": wandb.Image(neuron_weights_plot),
             "model_predictions_plot": wandb.Image(model_predictions_plot),
@@ -128,42 +142,6 @@ def main_run(config):
         wandb.finish()
 
 
-def get_model_save_path(config):
-    """Generate a unique model save path based on the config parameters."""
-    if config['group_name'] == 'znz_znz':
-        model_save_path = (
-            f"{default_config.model_save_dir}model_"
-            f"group_name{config['group_name']}_"
-            f"group_size{config['group_size']}_"
-            f"digit{config['mnist_digit']}_"
-            f"frac{config['dataset_fraction']}_"
-            f"group_size{config['group_size']}_"
-            f"init{config['init_scale']}_"
-            f"lr{config['lr']}_"
-            f"mom{config['mom']}_"
-            f"bs{config['batch_size']}_"
-            f"epochs{config['epochs']}_"
-            f"freq{config['frequencies_to_learn']}_"
-            f"seed{config['seed']}.pkl"
-        )
-    elif config['group_name'] == 'dihedral':
-        model_save_path = (
-            f"{default_config.model_save_dir}model_"
-            f"group_name{config['group_name']}_"
-            f"group_size{config['group_size']}_"
-            f"frac{config['dataset_fraction']}_"
-            f"init{config['init_scale']}_"
-            f"lr{config['lr']}_"
-            f"mom{config['mom']}_"
-            f"bs{config['batch_size']}_"
-            f"epochs{config['epochs']}_"
-            f"freq{config['frequencies_to_learn']}_"
-            f"seed{config['seed']}.pkl"
-        )
-
-    return model_save_path
-
-
 def main():
     """Parse the default_config file and launch all experiments.
 
@@ -171,7 +149,6 @@ def main():
     """
     run_start_time = time.strftime("%m-%d_%H-%M-%S")
     for (
-        dataset_fraction,
         group_name,
         init_scale,
         seed,
@@ -180,10 +157,8 @@ def main():
         batch_size,
         epochs,
         verbose_interval,
-        frequencies_to_learn,
         
     ) in itertools.product(
-        default_config.dataset_fraction,
         default_config.group_name,
         default_config.init_scale,
         default_config.seed,
@@ -192,11 +167,9 @@ def main():
         default_config.batch_size,
         default_config.epochs,
         default_config.verbose_interval,
-        default_config.frequencies_to_learn,
     ):
 
         main_config = {
-            "dataset_fraction": dataset_fraction,
             "group_name": group_name,
             "init_scale": init_scale,
             "run_start_time": run_start_time,
@@ -206,7 +179,8 @@ def main():
             "batch_size": batch_size,
             "epochs": epochs,
             "verbose_interval": verbose_interval,
-            "frequencies_to_learn": frequencies_to_learn,
+            "run_start_time": run_start_time,
+            "model_save_dir": default_config.model_save_dir,
         }
 
         if group_name == "znz_znz":
@@ -214,36 +188,50 @@ def main():
                 frequencies_to_learn,
                 mnist_digit,
                 image_length,
+                dataset_fraction,
             ) in itertools.product(
                 default_config.frequencies_to_learn,
                 default_config.mnist_digit,
                 default_config.image_length,
+                default_config.dataset_fraction,
             ):
                 group_size = image_length * image_length
                 main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
+                main_config["frequencies_to_learn"] = frequencies_to_learn
+                main_config["dataset_fraction"] = dataset_fraction
                 main_run(main_config)
 
-        elif group_name == "dihedral":
+        elif group_name == "octahedral":
+            group = Octahedral()
+            group_size = group.order()
+            main_config['group'] = group
+            main_config["group_size"] = group_size
+            main_run(main_config)
+            
+        else:
             for (
-                frequencies_to_learn,
                 # signal_length_1d,
-                dihedral_order_n,
+                group_n,
             ) in itertools.product(
-                default_config.frequencies_to_learn,
                 # default_config.signal_length_1d,
-                default_config.dihedral_order_n
+                default_config.group_n
             ):
-                group = DihedralGroup(dihedral_order_n)
+                if group_name == "dihedral":
+                    group = DihedralGroup(group_n)
+                elif group_name == "cyclic":
+                    group = CyclicGroup(group_n)
+                else:
+                    raise ValueError(
+                        f"Unknown group_name: {group_name}. "
+                        f"Expected one of ['dihedral', 'cyclic', 'octahedral']."
+                    )
                 group_size = group.order()
                 main_config['group'] = group
                 main_config["group_size"] = group_size
-                main_config["dihedral_order_n"] = dihedral_order_n
+                main_config["group_n"] = group_n
             main_run(main_config)
-
-        else:
-            raise ValueError(f"Unknown group: {group}")
 
         
 
