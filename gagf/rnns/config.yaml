@@ -2,7 +2,7 @@
 data:
   p1: 10 #28
   p2: 10 #28
-  k: 5  # sequence length
+  k: 4 # GOAL: 5  # sequence length
   batch_size: 1000 #20000 #1000
   seed: 5
   mnist_label: 4 # only if template generated from mnist
@@ -13,7 +13,7 @@ data:
 # Model configuration
 model:
   hidden_dim: 36 #36
-  init_scale: 1.0e-1 # effective init scale related to k (larger k, larger init scale to prevent gradient squashing)
+  init_scale: 1.0e-2 # effective init scale related to k (larger k, larger init scale to prevent gradient squashing)
   return_all_outputs: false # true = guided (seq-to-seq), false = non-guided (seq-to-one)
   transform_type: 'quadratic' # 'quadratic' | `multiplicative' 
 
@@ -24,7 +24,7 @@ training:
   num_steps: 500000 #50000 #50000 # 20000 # used only when mode is 'online'
 
   optimizer: 'adam' # 'adam' | 'hybrid'
-  learning_rate: 0.001 #0.0001
+  learning_rate: 1.0e-3 #0.0001
   betas: [0.9, 0.999]
 
   scaling_factor: -3 # for 'hybrid' optimizer only

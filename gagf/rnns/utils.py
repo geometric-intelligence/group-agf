@@ -472,7 +472,7 @@ def plot_prediction_power_spectrum_over_time(
     
     Creates a two-panel plot:
     - Top: Training loss with colored bands for theory lines
-    - Bottom: Power in tracked frequencies over time
+    - Bottom: Power in tracked frequencies over time (computed at ALL saved checkpoints)
     
     Args:
         model: The trained model
@@ -481,9 +481,10 @@ def plot_prediction_power_spectrum_over_time(
         Y_data: Target tensor (N, p1*p2) - used to compute loss history
         template_2d: The 2D template array
         p1, p2: Dimensions
-        loss_history: List of loss values over epochs
+        loss_history: List of loss values over training steps/epochs
+        param_save_indices: List of step/epoch numbers where params were saved (for x-axis alignment)
         num_freqs_to_track: Number of top frequencies to track
-        num_analysis_steps: Number of checkpoints to analyze (log-spaced)
+        checkpoint_indices: (deprecated/unused) - now analyzes ALL checkpoints
         num_samples: Number of samples to average for power computation
         save_path: Path to save figure
         show: Whether to display the plot
@@ -499,16 +500,16 @@ def plot_prediction_power_spectrum_over_time(
     template_power_2d, _, _ = get_power_2d(template_2d)
     target_powers = {(kx, ky): template_power_2d[kx, ky] for (kx, ky) in tracked_freqs}
     
-    # Choose analysis steps (log-spaced to capture early and late dynamics)
+    # Analyze ALL saved parameter checkpoints for full temporal resolution
     T = len(param_history)
 
-    steps_analysis = checkpoint_indices  # Indices into param_history
+    steps_analysis = list(range(len(param_history)))  # Analyze ALL saved params
     
     # Get the actual step/epoch numbers for x-axis plotting
     if param_save_indices is not None:
-        actual_steps = [param_save_indices[i] for i in checkpoint_indices]
+        actual_steps = param_save_indices  # All the actual step numbers
     else:
-        actual_steps = checkpoint_indices  # If None, indices = actual steps
+        actual_steps = list(range(len(param_history)))  # If None, indices = steps
     
     # Track average output power at those frequencies over training
     powers_over_time = {freq: [] for freq in tracked_freqs}
@@ -607,7 +608,7 @@ def plot_prediction_power_spectrum_over_time(
             alpha=0.5,
         )
     
-    ax2.set_xlabel("Epochs", fontsize=20)
+    ax2.set_xlabel("Steps", fontsize=20)
     ax2.set_ylabel("Power in Prediction", fontsize=20)
     ax2.grid(True, alpha=0.3)
     style_axes(ax2)
