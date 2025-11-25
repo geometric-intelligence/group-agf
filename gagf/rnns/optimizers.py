@@ -2,50 +2,54 @@ import torch
 
 class PerNeuronScaledSGD(torch.optim.Optimizer):
     """
-    Per-neuron scaled SGD optimizer that adapts to different model architectures.
+    Per-neuron scaled SGD optimizer that exploits model homogeneity.
     
     Learning rate scaling per neuron i:
-        eta_i = lr * ||theta_i||^scaling_factor
+        eta_i = lr * ||theta_i||^(2-degree)
     
-    where theta_i comprises all parameters associated with neuron i.
+    where:
+        - theta_i comprises all parameters associated with neuron i
+        - degree is the degree of homogeneity of the model
     
-    For SequentialMLP:
-        theta_i = (W_in[i, :], W_out[:, i])
-        scaling_factor = k (degree of homogeneity = activation power)
-    
-    For TwoLayerNet (k=2):
-        theta_i = (U[i, :], V[i, :], W[:, i])
-        scaling_factor = 2 (quadratic activation)
+    For SequentialMLP with sequence length k:
+        - theta_i = (W_in[i, :], W_out[:, i])
+        - degree = k+1 (activation is x^k, one more layer for W_out = x^(k+1))
     
     The scaling exploits the homogeneity property: if we scale all parameters of
-    neuron i by α, the output scales by α^k where k is the degree of homogeneity.
+    neuron i by α, the output scales by α^(2-degree).
     """
 
     def __init__(self, 
         model, 
         lr=1.0, 
-        scaling_factor=None
+        degree=None
     ) -> None:
         """
         Args:
             model: SequentialMLP or compatible model
             lr: base learning rate
-            scaling_factor: exponent for norm-based scaling. If None, inferred from model.
-                           For SequentialMLP: defaults to model.k
+            degree: degree of homogeneity (exponent for norm-based scaling)
+                   If None, inferred from model:
+                   - SequentialMLP: uses k+1 where k is sequence length
+                     (k-th power activation + 1 output layer = k+1 total)
+                   - Default: 2 (quadratic models)
         """
-        # Infer scaling_factor from model if not provided
-        if scaling_factor is None:
+        # Infer degree of homogeneity from model if not provided
+        if degree is None:
             if hasattr(model, 'k'):
-                scaling_factor = model.k  # SequentialMLP
+                # For SequentialMLP: degree = k+1
+                # (k from activation power, +1 from output layer)
+                degree = model.k + 1
             else:
-                scaling_factor = 2  # Default for quadratic models
+                # Default for quadratic models
+                degree = 2
         
         # Get model parameters
         params = list(model.parameters())
         
         super().__init__(
             [{'params': params, 'model': model, 'model_type': type(model).__name__}], 
-            dict(lr=lr, scaling_factor=scaling_factor)
+            dict(lr=lr, degree=degree)
         )
 
     @torch.no_grad()
@@ -53,11 +57,12 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         group = self.param_groups[0]
         model = group['model']
         lr = group['lr']
-        scaling_factor = group['scaling_factor']
+        degree = group['degree']
         model_type = group['model_type']
         
         if model_type == 'SequentialMLP':
             # SequentialMLP: W_in (d, k*p), W_out (p, d)
+            # where k is the sequence length
             W_in = model.W_in
             W_out = model.W_out
             g_in = W_in.grad
@@ -71,8 +76,8 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
             w2 = (W_out**2).sum(dim=0)  # (d,)
             theta_norm = torch.sqrt(u2 + w2 + 1e-12)  # (d,)
             
-            # Scale = ||theta_i||^scaling_factor
-            scale = theta_norm.pow(scaling_factor)
+            # Scale = ||theta_i||^(2-degree)
+            scale = theta_norm.pow(2-degree)
             
             # Scale each neuron's gradients
             g_in.mul_(scale.view(-1, 1))
@@ -81,40 +86,9 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
             # SGD update
             W_in.add_(g_in, alpha=-lr)
             W_out.add_(g_out, alpha=-lr)
-            
         else:
-            # Generic fallback for other models (e.g., TwoLayerNet with U, V, W)
-            # Assume model has U, V, W or similar structure
-            params_list = list(model.parameters())
-            if len(params_list) == 3:
-                # Assume structure like (U, V, W) or (W_in, W_drive, W_out)
-                param1, param2, param3 = params_list
-                g1, g2, g3 = param1.grad, param2.grad, param3.grad
-                
-                if g1 is None or g2 is None or g3 is None:
-                    return
-                
-                # Per-neuron norms
-                u2 = (param1**2).sum(dim=1)
-                v2 = (param2**2).sum(dim=1)
-                w2 = (param3**2).sum(dim=0)
-                theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)
-                
-                # Scale = ||theta_i||^scaling_factor
-                scale = theta_norm.pow(scaling_factor)
-                
-                # Scale gradients
-                g1.mul_(scale.view(-1, 1))
-                g2.mul_(scale.view(-1, 1))
-                g3.mul_(scale.view(1, -1))
-                
-                # SGD update
-                param1.add_(g1, alpha=-lr)
-                param2.add_(g2, alpha=-lr)
-                param3.add_(g3, alpha=-lr)
-            else:
-                raise ValueError(f"PerNeuronScaledSGD: Unsupported model structure with {len(params_list)} parameters")
-
+            raise ValueError(f"PerNeuronScaledSGD: Unsupported model structure with {model_type}")
+        return None
 
 
 class HybridRNNOptimizer(torch.optim.Optimizer):
@@ -125,7 +99,12 @@ class HybridRNNOptimizer(torch.optim.Optimizer):
     
     The per-neuron scaling is:
         eta_i = lr * ||theta_i||^scaling_factor
-    where theta_i = (W_in[i,:], W_drive[i,:], W_out[:,i]).
+    where:
+        - theta_i = (W_in[i,:], W_drive[i,:], W_out[:,i])
+        - scaling_factor is typically negative (e.g., -1 to -3)
+    
+    Note: For QuadraticRNN, we use 'scaling_factor' (can be negative) rather than
+          'degree' (which is positive and related to homogeneity degree).
     """
 
     def __init__(

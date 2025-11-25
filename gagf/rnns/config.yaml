@@ -16,17 +16,17 @@
 # ------------------
 data:
   # Dimension: 1 for C_p (cyclic group), 2 for C_p1 x C_p2 (product group)
-  dimension: 2  # 1 | 2
+  dimension: 1  # 1 | 2
   
   # Group Parameters
   # For dimension=1: only 'p' is used
   # For dimension=2: 'p1' and 'p2' are used
-  p: 100        # Cyclic group dimension (1D only)
+  p: 10         # Cyclic group dimension (1D only)
   
   p1: 10        # Height/rows dimension (2D only)
   p2: 10        # Width/cols dimension (2D only)
   
-  k: 4          # Sequence length
+  k: 3          # Sequence length
   batch_size: 1000
   seed: 5
   
@@ -63,10 +63,10 @@ training:
   
   # Steps/Epochs
   epochs: 200                 # Used when mode='offline'
-  num_steps: 500000           # Used when mode='online'
+  num_steps: 20000 #500000           # Used when mode='online'
   
   # Optimizer
-  optimizer: 'auto'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
+  optimizer: 'adam'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
                               # 'auto' selects optimizer based on model:
                               #   - SequentialMLP → 'per_neuron' (recommended)
                               #   - QuadraticRNN → 'adam'
@@ -81,8 +81,12 @@ training:
   betas: [0.9, 0.999]         # Adam/hybrid beta parameters
   weight_decay: 0.0
   
-  scaling_factor: -3          # For 'hybrid' optimizer only
-                              # For 'per_neuron', auto-inferred from model.k if not specified
+  # Homogeneity-based scaling parameters
+  scaling_factor: -3          # For 'hybrid' optimizer only (QuadraticRNN)
+  degree: null                # For 'per_neuron' optimizer: degree of homogeneity
+                              # If null (default), auto-inferred from model:
+                              #   - SequentialMLP: uses k+1 (k = sequence length)
+                              #   - Other models: defaults to 2
   
   # Training Dynamics
   grad_clip: 0.1
@@ -91,7 +95,7 @@ training:
 
 # Device
 # ------
-device: cuda                  # 'cuda' | 'cpu'
+device: cuda:1                  # 'cuda' | 'cpu'
 
 # Analysis & Visualization
 # ------------------------

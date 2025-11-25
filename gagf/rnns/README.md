@@ -27,9 +27,9 @@ Standard Adam optimizer. Works with all models.
 ### Per-Neuron Scaled SGD (`'per_neuron'`)
 SGD with per-neuron learning rate scaling that exploits model homogeneity.
 - **Recommended for SequentialMLP**
-- Auto-infers scaling factor from model.k
+- Auto-infers degree of homogeneity from model (equals k+1 for SequentialMLP, where k is sequence length)
 - Learning rate: typically 1.0 for SequentialMLP
-- Exploits the property: scaling all parameters of neuron i by α scales output by α^k
+- Exploits the property: scaling all parameters of neuron i by α scales output by α^degree
 
 ### Hybrid (`'hybrid'`)  
 Combines per-neuron scaled SGD (for W_in, W_drive, W_out) with Adam (for W_mix).

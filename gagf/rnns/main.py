@@ -119,10 +119,15 @@ def produce_plots(
     Note: This function currently only supports 2D templates with p1 and p2 dimensions.
     For 1D templates, basic plots are generated separately in train_single_run.
     
+    Some plots are model-specific:
+    - W_mix frequency structure: QuadraticRNN only (skipped for SequentialMLP)
+    - W_out neuron specialization: All models
+    - Power spectrum, predictions, loss curves: All models
+    
     Args:
         run_dir: Directory to save plots
         config: Configuration dictionary (must have dimension=2)
-        model: Trained model
+        model: Trained model (QuadraticRNN or SequentialMLP)
         param_hist: List of parameter snapshots
         param_save_indices: Indices where params were saved
         train_loss_hist: Training loss history
@@ -288,20 +293,24 @@ def produce_plots(
         show=False
     )
     
-    ### ----- PLOT W_MIX FREQUENCY STRUCTURE ----- ###
-    print("Visualizing W_mix frequency structure...")
-    plot_wmix_frequency_structure(
-        param_hist,
-        tracked_freqs,
-        colors,
-        config['data']['p1'],
-        config['data']['p2'],
-        steps=checkpoint_indices,
-        within_group_order="phase",
-        dead_l2_thresh=0.1,
-        save_path=os.path.join(run_dir, "wmix_frequency_structure.pdf"),
-        show=False
-    )
+    ### ----- PLOT W_MIX FREQUENCY STRUCTURE (QuadraticRNN only) ----- ###
+    model_type = config['model'].get('model_type', 'QuadraticRNN')
+    if model_type == 'QuadraticRNN':
+        print("Visualizing W_mix frequency structure...")
+        plot_wmix_frequency_structure(
+            param_hist,
+            tracked_freqs,
+            colors,
+            config['data']['p1'],
+            config['data']['p2'],
+            steps=checkpoint_indices,
+            within_group_order="phase",
+            dead_l2_thresh=0.1,
+            save_path=os.path.join(run_dir, "wmix_frequency_structure.pdf"),
+            show=False
+        )
+    else:
+        print("Skipping W_mix frequency structure plot (not applicable for SequentialMLP)")
     
     print("\n✓ All plots generated successfully!")
 
@@ -459,7 +468,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         )
     elif optimizer_name == 'per_neuron':
         # Per-neuron scaled SGD (recommended for SequentialMLP)
-        scaling_factor = config['training'].get('scaling_factor', None)
+        degree = config['training'].get('degree', None)
         lr = config['training']['learning_rate']
         
         # For SequentialMLP, use lr=1.0 by default if not specified
@@ -470,9 +479,9 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         optimizer = PerNeuronScaledSGD(
             rnn_2d,
             lr=lr,
-            scaling_factor=scaling_factor  # Will auto-infer from model.k if None
+            degree=degree  # Will auto-infer as k+1 for SequentialMLP (k = sequence length)
         )
-        print(f"  Scaling factor: {optimizer.param_groups[0]['scaling_factor']}")
+        print(f"  Degree of homogeneity: {optimizer.param_groups[0]['degree']}")
     else:
         raise ValueError(f"Invalid optimizer: {optimizer_name}. Must be 'adam', 'hybrid', or 'per_neuron'")
     
