@@ -1,5 +1,5 @@
 # Dataset Parameters
-group_name = ["dihedral"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
+group_name = ["octahedral"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
 group_n = [6]  # n in Dn [3, 4, 5]
 # TODO: don't include this image_length here, since it should only be for the znz_znz group.
 image_length = [5]  # , 10, 15] # length of one side of the square image patch
@@ -23,11 +23,15 @@ batch_size = ["full"]  #    128, 256]
 mnist_digit = [4]
 frequencies_to_learn = [3, 6, 9]  # number of frequencies to learn in the template
 
-# TODO: Have the dataset fraction depends on the group.
-# We can use full groups for dihedral and octahedral, abut might need a smaller fraction for A5.
-dataset_fraction = [0.3]  # , 0.4] # fraction of the total dataset to train on
+dataset_fraction = {
+    "cyclic": [1.],
+    "znz_znz": [0.4],
+    "dihedral": [1.],
+    "octahedral": [1.],
+    "A5": [0.6],
+}
 
 # git_root_path = setcwd.get_root_dir()
-# model_save_dir = "/tmp/nmiolane/"
-model_save_dir = "/tmp/adele/"
+model_save_dir = "/tmp/nmiolane/"
+# model_save_dir = "/tmp/adele/"
 

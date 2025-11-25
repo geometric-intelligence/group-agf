@@ -1,3 +1,4 @@
+from typing_extensions import dataclass_transform
 import numpy as np
 import torch
 import time
@@ -211,7 +212,7 @@ def main():
                 default_config.frequencies_to_learn,
                 default_config.mnist_digit,
                 default_config.image_length,
-                default_config.dataset_fraction,
+                default_config.dataset_fraction["znz_znz"],
             ):
                 group_size = image_length * image_length
                 main_config["mnist_digit"] = mnist_digit
@@ -226,6 +227,7 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
+            main_config["dataset_fraction"] = default_config.dataset_fraction["octahedral"]
             main_run(main_config)
 
         elif group_name == "A5":
@@ -233,6 +235,7 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
+            main_config["dataset_fraction"] = default_config.dataset_fraction["A5"]
             main_run(main_config)
 
         else:
@@ -256,6 +259,7 @@ def main():
                 main_config["group"] = group
                 main_config["group_size"] = group_size
                 main_config["group_n"] = group_n
+                main_config["dataset_fraction"] = default_config.dataset_fraction[group_name]
             main_run(main_config)
 
 

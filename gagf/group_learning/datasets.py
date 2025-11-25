@@ -493,6 +493,18 @@ def load_dataset(config):
         template = generate_fixed_group_template(config["group"], config["seed"])
         X, Y = group_dataset(config["group"], template)
 
+        if config["dataset_fraction"] != 1.0:
+            assert 0 < config["dataset_fraction"] <= 1.0, "fraction must be in (0, 1]"
+            # Sample a subset of the dataset according to the specified fraction
+            N = X.shape[0]
+            n_sample = int(np.ceil(N * config["dataset_fraction"]))
+            rng = np.random.default_rng(config["seed"])
+            indices = rng.choice(
+                N, size=n_sample, replace=False
+            )  # indices of the sampled subset
+            X = X[indices]
+            Y = Y[indices]
+
         return X, Y, template
 
 
