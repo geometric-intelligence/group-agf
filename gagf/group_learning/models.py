@@ -78,36 +78,3 @@ class TwoLayerNet(nn.Module):
         return x_out
 
 
-def get_model_save_path(config):
-    """Generate a unique model save path based on the config parameters."""
-    if config["group_name"] == "znz_znz":
-        model_save_path = (
-            f"{config['model_save_dir']}model_"
-            f"group_name{config['group_name']}_"
-            f"group_size{config['group_size']}_"
-            f"digit{config['mnist_digit']}_"
-            f"frac{config['dataset_fraction']}_"
-            f"group_size{config['group_size']}_"
-            f"init{config['init_scale']}_"
-            f"lr{config['lr']}_"
-            f"mom{config['mom']}_"
-            f"bs{config['batch_size']}_"
-            f"epochs{config['epochs']}_"
-            f"freq{config['frequencies_to_learn']}_"
-            f"seed{config['seed']}.pkl"
-        )
-    else:
-        model_save_path = (
-            f"{config['model_save_dir']}model_"
-            f"group_name{config['group_name']}_"
-            f"group_size{config['group_size']}_"
-            f"init{config['init_scale']}_"
-            f"lr{config['lr']}_"
-            f"mom{config['mom']}_"
-            f"bs{config['batch_size']}_"
-            f"epochs{config['epochs']}_"
-            f"seed{config['seed']}_"
-            f"run_start{config['run_start_time']}.pkl"
-        )
-
-    return model_save_path

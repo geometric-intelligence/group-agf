@@ -43,7 +43,7 @@ def one_hot2D(p):
     return mat
 
 
-def generate_fixed_template_znz_znz(p):
+def generate_fixed_template_znz_znz(image_length):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
@@ -61,7 +61,7 @@ def generate_fixed_template_znz_znz(p):
         After flattening, it will have shape (p*p,).
     """
     # Generate template array from Fourier spectrum
-    spectrum = np.zeros((p, p), dtype=complex)
+    spectrum = np.zeros((image_length, image_length), dtype=complex)
 
     # Three low-frequency bins with Gaussian-ish weights
     v1 = 2.0  # 2.0
@@ -195,7 +195,7 @@ def generate_fixed_group_template(group, seed):
         The mean centered template.
     """
     # Incorporate seed for reproducibility
-    rng = np.random.default_rng(seed)
+    # rng = np.random.default_rng(seed)
     # Generate template array from Fourier spectrum
     spectrum = []
     num_1d_nonzero_irreps = 0
@@ -205,7 +205,7 @@ def generate_fixed_group_template(group, seed):
 
         # zero_diag = True 
         diag_values = np.zeros(dim, dtype=float)
-        if dim == 1 and num_1d_nonzero_irreps <=3:
+        if dim == 1 and num_1d_nonzero_irreps <3:
             diag_values[0] = (i+1)*dim ** 2
             # zero_diag = False
             num_1d_nonzero_irreps +=1
@@ -214,8 +214,8 @@ def generate_fixed_group_template(group, seed):
             print("dim ", dim)
             # zero_diag = False
             for i_dim in range(dim):
-                # diag_values[i_dim] = (i+1)* (i_dim+1) ** 2
-                diag_values[i_dim] = (i + 1)  ** 2 * (dim + 1) * 2
+                diag_values[i_dim] = (i+1)* (i_dim+1) ** 2
+                # diag_values[i_dim] = (i + 1)  ** 2 * (dim + 1) * 2
             num_multi_d_nonzero_irreps +=1
 
         # if zero_diag:
@@ -480,13 +480,15 @@ def load_dataset(config):
     """Load dataset based on configuration."""
 
     if config["group_name"] == "znz_znz":
-        template = mnist_template(config["image_length"], digit=config["mnist_digit"])
+        # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
+        template = generate_fixed_template_znz_znz(config["image_length"])
         X, Y, _ = load_modular_addition_dataset_2d(
             config["image_length"],
             template,
             fraction=config["dataset_fraction"],
             random_state=config["seed"],
-            template_type="mnist",
+            # template_type="mnist",
+            template_type="fixed",
         )
         return X, Y, template
     else:

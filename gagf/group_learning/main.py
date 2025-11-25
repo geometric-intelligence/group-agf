@@ -42,8 +42,6 @@ def main_run(config):
     try:
         logging.info(f"\n\n---> START run: {run_name}.")
 
-        model_save_path = models.get_model_save_path(config)
-
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
         assert (
@@ -54,6 +52,8 @@ def main_run(config):
         # Determine batch size: if 'full', set to all samples
         if config["batch_size"] == "full":
             config["batch_size"] = X.shape[0]
+        if default_config.resume_from_checkpoint:
+            config["checkpoint_path"] = train.get_model_save_path(config, default_config.checkpoint_epoch)
 
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
@@ -89,13 +89,11 @@ def main_run(config):
 
         print("Starting training...")
         loss_history, accuracy_history, param_history = train.train(
+            config,
             model,
             dataloader,
             loss,
             optimizer,
-            epochs=config["epochs"],
-            verbose_interval=config["verbose_interval"],
-            model_save_path=model_save_path,
         )
 
         print("Training Complete. Generating plots...")
@@ -172,6 +170,7 @@ def main():
         batch_size,
         epochs,
         verbose_interval,
+        checkpoint_interval,
     ) in itertools.product(
         default_config.group_name,
         default_config.init_scale,
@@ -183,6 +182,7 @@ def main():
         default_config.batch_size,
         default_config.epochs,
         default_config.verbose_interval,
+        default_config.checkpoint_interval,
     ):
 
         main_config = {
@@ -199,25 +199,28 @@ def main():
             "verbose_interval": verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
+            "resume_from_checkpoint": default_config.resume_from_checkpoint, 
+            "checkpoint_interval": checkpoint_interval,
+            "checkpoint_path": None
         }
 
         if group_name == "znz_znz":
             for (
-                frequencies_to_learn,
-                mnist_digit,
+                # frequencies_to_learn,
+                # mnist_digit,
                 image_length,
                 dataset_fraction,
             ) in itertools.product(
-                default_config.frequencies_to_learn,
-                default_config.mnist_digit,
+                # default_config.frequencies_to_learn,
+                # default_config.mnist_digit,
                 default_config.image_length,
                 default_config.dataset_fraction,
             ):
                 group_size = image_length * image_length
-                main_config["mnist_digit"] = mnist_digit
+                # main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
-                main_config["frequencies_to_learn"] = frequencies_to_learn
+                # main_config["frequencies_to_learn"] = frequencies_to_learn
                 main_config["dataset_fraction"] = dataset_fraction
                 main_run(main_config)
 
