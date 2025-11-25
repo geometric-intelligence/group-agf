@@ -17,17 +17,20 @@ import gagf.group_learning.group_fourier_transform as gft
 class ZnZPower2D:
     """Compute and store the power spectrum of the template, which can be used
     to compute theoretical alpha values for the ZnZ group and compare to learned power spectrum.
-    
+
     Parameters
     ----------
     template : ndarray (p*p)
         Flattened 2D template array.
     """
+
     def __init__(self, template):
         self.template = template
         self.p = int(np.sqrt(len(template)))
         self.template_2D = template.reshape((self.p, self.p))
-        self.x_freqs, self.y_freqs, self.power = self.get_power_2d(self.template_2D, no_freq=True)
+        self.x_freqs, self.y_freqs, self.power = self.get_power_2d(
+            self.template_2D, no_freq=True
+        )
         self.alpha_values = self.get_alpha_values(template)
 
     def get_power_2d(self, no_freq=False):
@@ -63,15 +66,15 @@ class ZnZPower2D:
         """
         M, N = self.template_2D.shape
         num_coefficients = N // 2 + 1
-        
+
         # Perform 2D rFFT
         ft = np.fft.rfft2(self.template_2D)
-        
+
         # Power spectrum normalized by total number of samples
-        power = np.abs(ft)**2 / (M * N)
+        power = np.abs(ft) ** 2 / (M * N)
 
         # For the first row (u=0), remove redundant frequencies and double the appropriate ones
-        power[(N//2 + 1):, 0] = 0 
+        power[(N // 2 + 1) :, 0] = 0
 
         # Since (almost) all frequencies contribute twice (positive and negative), double the power
         power *= 2
@@ -79,23 +82,24 @@ class ZnZPower2D:
         power[0, 0] /= 2
         # Except the Nyquist frequency if N is even
         if N % 2 == 0:
-            power[N//2, 0] /= 2
+            power[N // 2, 0] /= 2
 
         # Check Parseval’s theorem
         total_power = np.sum(power)
-        norm_squared = np.linalg.norm(self.template_2D)**2
+        norm_squared = np.linalg.norm(self.template_2D) ** 2
         if not np.isclose(total_power, norm_squared, rtol=1e-3):
-            print(f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}")
+            print(
+                f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}"
+            )
 
         if no_freq:
             return power
 
         # Frequency bins
-        row_freqs = np.fft.fftfreq(M)          # full symmetric frequencies (rows)
-        column_freqs = np.fft.rfftfreq(N)         # only non-negative frequencies (columns)
+        row_freqs = np.fft.fftfreq(M)  # full symmetric frequencies (rows)
+        column_freqs = np.fft.rfftfreq(N)  # only non-negative frequencies (columns)
 
         return row_freqs, column_freqs, power
-
 
     def get_alpha_values(self):
         """Compute theoretical alpha values from the template's power spectrum.
@@ -133,7 +137,9 @@ class ZnZPower2D:
 
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
-        i_power_descending_order = np.argsort(power)[::-1]  # np.argsort with [::-1] gives descending order
+        i_power_descending_order = np.argsort(power)[
+            ::-1
+        ]  # np.argsort with [::-1] gives descending order
         power = power[i_power_descending_order]
 
         alpha_values = [np.sum(power[k:]) for k in range(len(power))]
@@ -155,15 +161,15 @@ class GroupPower:
         Also specifies which fourier transform to apply, and thus
         which transform to compute the power spectrum for.
     """
+
     def __init__(self, template, group):
         self.template = template
         self.p = len(template)
         self.group = group
         self.power = self.compute_group_power_spectrum()
         self.freqs = list(range(len(self.power)))
-        
 
-    def compute_group_power_spectrum(self):  
+    def compute_group_power_spectrum(self):
         """Compute the (group) power spectrum of the template.
 
         For each irrep rho, the power is given by:
@@ -171,7 +177,7 @@ class GroupPower:
         where hat x(rho) is the (matrix) Fourier coefficient of template x at irrep rho.
 
         We multiply by the dimension of the irrep because for 2D irreps, the power
-        would otherwise be split across two dimensions, so we must double it to get the correct 
+        would otherwise be split across two dimensions, so we must double it to get the correct
         total power.
 
         Parameters
@@ -190,10 +196,14 @@ class GroupPower:
 
         power_spectrum = np.zeros(len(irreps))
         for i, irrep in enumerate(irreps):
-            fourier_coef = gft.compute_group_fourier_coef(self.group, self.template, irrep)
-            power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)  # TODO: check if this is correct
-        power_spectrum = power_spectrum/self.group.order()
-            
+            fourier_coef = gft.compute_group_fourier_coef(
+                self.group, self.template, irrep
+            )
+            power_spectrum[i] = irrep.size * np.trace(
+                fourier_coef.conj().T @ fourier_coef
+            )  # TODO: check if this is correct
+        power_spectrum = power_spectrum / self.group.order()
+
         return np.array(power_spectrum)
 
     def get_alpha_values(self):
@@ -253,20 +263,29 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
         test_output = model(model_inputs[:1])
     output_shape = test_output.shape[1:]
 
-    if group_name == 'znz_znz':  # 2D template
+    if group_name == "znz_znz":  # 2D template
         p1, p2 = output_shape
         template_power_length = p1 * (p2 // 2 + 1)
         reshape_dims = (-1, p1, p2)
-    else: # other groups are 1D signals
+    else:  # other groups are 1D signals
         template_power_length = len(group.irreps())
         p1 = output_shape[0]
         reshape_dims = (-1, p1)
-        
 
     # Compute output power over time (GD)
-    num_points = 1000
-    X_tensor = model_inputs
-    steps = np.unique(np.logspace(0, np.log10(len(param_history) - 1), num_points, dtype=int))
+    # TODO: the number of points and the number of inputs to compute the power over time should depend on the group.
+    # For example, for Octahedral and A5 groups, we should compute the power over time for a smaller number of points.
+    # Because the dataset is very large for these groups, so we don't need to compute the power over time for all steps.
+    num_points = 200
+    num_inputs_to_compute_power = len(model_inputs) // 10
+    X_tensor = model_inputs[
+        :num_inputs_to_compute_power
+    ]  # Added by Nina to speed up computation with octahedral.
+    steps = np.unique(
+        np.logspace(0, np.log10(len(param_history) - 1), num_points, dtype=int)
+    )
+    # FIXME: This computes the first 100s steps without skipping any. We might want to skip some steps to speed up computation.
+    print("Computing power over time for", len(steps), f"steps: {steps}")
     powers_over_time = np.zeros([len(steps), template_power_length])
 
     for i_step, step in enumerate(steps):
@@ -277,11 +296,13 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
             outputs = model(X_tensor)
             outputs_arr = outputs.detach().cpu().numpy().reshape(reshape_dims)
 
-            print('Computing power at step', step, 'with output shape', outputs_arr.shape)
+            print(
+                "Computing power at step", step, "with output shape", outputs_arr.shape
+            )
 
             powers = []
             for out in outputs_arr:
-                if group_name == 'znz_znz':
+                if group_name == "znz_znz":
                     output_power = ZnZPower2D(out.flatten())
                 else:
                     output_power = GroupPower(out.flatten(), group=group)
@@ -295,7 +316,6 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
             # shape: (num_samples, template_power_length)
             average_power = np.mean(powers, axis=0)
             powers_over_time[i_step, :] = average_power
-            
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)
     print("Powers over time shape:", powers_over_time.shape)

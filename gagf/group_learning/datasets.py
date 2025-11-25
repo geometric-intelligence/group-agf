@@ -19,33 +19,36 @@ from escnn.group import *
 
 import gagf.group_learning.power as power
 import setcwd
-from gagf.group_learning.group_fourier_transform import compute_group_inverse_fourier_transform
+from gagf.group_learning.group_fourier_transform import (
+    compute_group_inverse_fourier_transform,
+)
 
 
 def one_hot2D(p):
     """One-hot encode an integer value in R^pxp.
-    
+
     Parameters
     ----------
     p : int
         p in Z/pZ x Z/pZ. Number of elements in the 2D modular addition
-    
+
     Returns
     -------
     mat : np.ndarray
         A flattened one-hot encoded matrix of shape (p*p).
     """
-    mat = np.zeros((p,p))
-    mat[0,0] = 1
+    mat = np.zeros((p, p))
+    mat[0, 0] = 1
     mat = mat.flatten()
     return mat
+
 
 def generate_fixed_template_znz_znz(p):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
     the weights vectors to match the shape of the template when we visualize.
-    
+
     Parameters
     ----------
     p : int
@@ -58,27 +61,27 @@ def generate_fixed_template_znz_znz(p):
         After flattening, it will have shape (p*p,).
     """
     # Generate template array from Fourier spectrum
-    spectrum = np.zeros((p,p), dtype=complex)
+    spectrum = np.zeros((p, p), dtype=complex)
 
     # Three low-frequency bins with Gaussian-ish weights
-    v1 = 2.0 # 2.0
-    v2 = 1.0 #0.1 # make sure this is not too close to v1
-    v3 = 0.7 # 0.7 #0.01
+    v1 = 2.0  # 2.0
+    v2 = 1.0  # 0.1 # make sure this is not too close to v1
+    v3 = 0.7  # 0.7 #0.01
 
     # plot_set_template_components(v1, v2, v3, p)
 
     # Mode (1,0)
-    spectrum[1,0] = v1
-    spectrum[-1,0] = np.conj(v1) 
+    spectrum[1, 0] = v1
+    spectrum[-1, 0] = np.conj(v1)
 
     # Mode (2,1)
-    spectrum[0,1] = v2
-    spectrum[0,-1] = np.conj(v2)
+    spectrum[0, 1] = v2
+    spectrum[0, -1] = np.conj(v2)
 
     # Mode (1,1)
-    spectrum[1,1] = v3
-    spectrum[-1,-1] = np.conj(v3)
-    
+    spectrum[1, 1] = v3
+    spectrum[-1, -1] = np.conj(v3)
+
     # Generate signal from spectrum
     template = np.fft.ifft2(spectrum).real
 
@@ -91,9 +94,9 @@ def generate_fixed_template_znz_znz(p):
 
 
 def generate_fixed_template_dihedral3(group):
-    """Generate a fixed template for a group, that has non-zero Fourier coefficients 
+    """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
-    
+
     Parameters
     ----------
     group : Group (escnn object)
@@ -104,11 +107,15 @@ def generate_fixed_template_dihedral3(group):
     template : np.ndarray, shape=[group.order()]
         The template.
     """
-     # TODO: This only works for D3 for now.
+    # TODO: This only works for D3 for now.
     # Generate template array from Fourier spectrum
     # spectrum = [np.array([[10.]]), np.array([[30.]]), np.array([[10., 10.], [10., 10.]])]
     # spectrum = [np.array([[20.]]), np.array([[10.]]), np.array([[5., 5.], [5., 5.]])]
-    spectrum = [np.array([[50.]]), np.array([[40.]]), np.array([[5., 1.], [1., 5.]])]
+    spectrum = [
+        np.array([[50.0]]),
+        np.array([[40.0]]),
+        np.array([[5.0, 1.0], [1.0, 5.0]]),
+    ]
     # Generate signal from spectrum
     template = compute_group_inverse_fourier_transform(group, spectrum)
 
@@ -119,7 +126,7 @@ def generate_fixed_template_dihedral3(group):
 
 
 def generate_fixed_template_dihedral(N):
-    """Generate a fixed template for the dihedral group D_N, that has non-zero Fourier coefficients 
+    """Generate a fixed template for the dihedral group D_N, that has non-zero Fourier coefficients
     only for a few irreps.
 
     DRAFT. UNTESTED.
@@ -150,7 +157,7 @@ def generate_fixed_template_dihedral(N):
         n_2D_irreps = int((N - 1) // 2)
     if N % 2 == 0:
         n_1D_irreps = 4
-        n_2D_irreps = int(N/2 - 1)
+        n_2D_irreps = int(N / 2 - 1)
 
     spectrum = []
 
@@ -170,13 +177,10 @@ def generate_fixed_template_dihedral(N):
 
     return template
 
-
-
+# TODO: Design a template with a few irreps that more separation in power spectrum
 def generate_fixed_group_template(group, seed):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
-
-    DRAFT. UNTESTED.
 
     Parameters
     ----------
@@ -194,14 +198,45 @@ def generate_fixed_group_template(group, seed):
     rng = np.random.default_rng(seed)
     # Generate template array from Fourier spectrum
     spectrum = []
-    for irrep in group.irreps():
+    num_1d_nonzero_irreps = 0
+    num_multi_d_nonzero_irreps = 0
+    for i, irrep in enumerate(group.irreps()):
         dim = irrep.size
-        
+
+        # zero_diag = True 
+        diag_values = np.zeros(dim, dtype=float)
+        if dim == 1 and num_1d_nonzero_irreps <=3:
+            diag_values[0] = (i+1)*dim ** 2
+            # zero_diag = False
+            num_1d_nonzero_irreps +=1
+            print("num_1d_nonzero_irreps ", num_1d_nonzero_irreps)
+        elif dim > 1 and num_multi_d_nonzero_irreps <1:
+            print("dim ", dim)
+            # zero_diag = False
+            for i_dim in range(dim):
+                # diag_values[i_dim] = (i+1)* (i_dim+1) ** 2
+                diag_values[i_dim] = (i + 1)  ** 2 * (dim + 1) * 2
+            num_multi_d_nonzero_irreps +=1
+
+        # if zero_diag:
+        #     diag_values = np.zeros(dim, dtype=float)
+        # else: 
+        #     diag_values = []
+        #     for one_dim in range(dim):
+        #         # value = (one_dim +1) * (i+1) **2 
+        #         value = (i+1)* dim **2  
+        #         # value = (one_dim*2 +1) ** (i+1)
+        #         diag_values.append(value)
+
+        #     diag_values = np.array(diag_values, dtype=float)
+
         # Create a random full rank matrix with unique diagonal entries
-        mat = np.zeros((dim, dim))
-        diag_values = rng.uniform(5.0, 20.0, size=dim)
+        mat = np.zeros((dim, dim), dtype=float)
+        # diag_values = rng.uniform(5.0, 20.0, size=dim)**(i+1)
+        print("diag_values: ", diag_values)
         np.fill_diagonal(mat, diag_values)
-        
+        print(mat)
+
         spectrum.append(mat)
 
     # Generate signal from spectrum
@@ -233,7 +268,7 @@ def mnist_template(image_length, digit=0, sample_idx=0, random_state=42):
         A flattened 2D array of shape (image_length, image_length) representing the template.
     """
     # Load MNIST dataset
-    mnist = fetch_openml('mnist_784', version=1)
+    mnist = fetch_openml("mnist_784", version=1)
     X = mnist.data.values
     y = mnist.target.astype(int).values
 
@@ -246,14 +281,18 @@ def mnist_template(image_length, digit=0, sample_idx=0, random_state=42):
     # Shuffle and select the desired sample
     X_digit = shuffle(X_digit, random_state=random_state)
     if sample_idx >= X_digit.shape[0]:
-        raise IndexError(f"sample_idx {sample_idx} is out of bounds for digit {digit} (found {X_digit.shape[0]} samples).")
+        raise IndexError(
+            f"sample_idx {sample_idx} is out of bounds for digit {digit} (found {X_digit.shape[0]} samples)."
+        )
     sample = X_digit[sample_idx].reshape(28, 28)
 
     # Resize to p x p
     sample_resized = resize(sample, (image_length, image_length), anti_aliasing=True)
 
     # Normalize to [0, 1]
-    sample_resized = (sample_resized - np.min(sample_resized)) / (np.max(sample_resized) - np.min(sample_resized))
+    sample_resized = (sample_resized - np.min(sample_resized)) / (
+        np.max(sample_resized) - np.min(sample_resized)
+    )
 
     template = sample_resized.flatten()
 
@@ -267,7 +306,7 @@ def group_dataset(group, template):
     """Generate a dataset of group elements acting on the template.
 
     Using the regular representation.
-    
+
     Parameters
     ----------
     group : Group (escnn object)
@@ -278,19 +317,21 @@ def group_dataset(group, template):
     Returns
     -------
     X : np.ndarray, shape=[group.order()**2, 2, group.order()]
-        The dataset of group elements acting on the template.   
+        The dataset of group elements acting on the template.
     Y : np.ndarray, shape=[group.order()**2, group.order()]
         The dataset of group elements acting on the template.
     """
-        
+
     # Initialize data arrays
     group_order = group.order()
-    assert len(template) == group_order, "template must have the same length as the group order"
-    n_samples = group_order ** 2
+    assert (
+        len(template) == group_order
+    ), "template must have the same length as the group order"
+    n_samples = group_order**2
     X = np.zeros((n_samples, 2, group_order))
     Y = np.zeros((n_samples, group_order))
     regular_rep = group.representations["regular"]
-    
+
     idx = 0
     for g1 in group.elements:
         for g2 in group.elements:
@@ -302,24 +343,26 @@ def group_dataset(group, template):
             X[idx, 1, :] = g2_rep @ template
             Y[idx, :] = g12_rep @ template
             idx += 1
-            
+
     return X, Y
 
 
-def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save_path=None):
+def modular_addition_dataset_2d(
+    p, template, fraction=0.3, random_state=42, save_path=None
+):
     """Generate a dataset for the 2D modular addition operation.
 
-    General idea: We are generating a dataset where each sample consists of 
+    General idea: We are generating a dataset where each sample consists of
     two inputs (a*template and b*template) and an output (a*b)*template,
-    where a, b \in Z/pZ x Z/pZ. The template is a flattened 2D array
+    where $a, b \in Z/pZ x Z/pZ$. The template is a flattened 2D array
     representing the modular addition operation in a 2D space.
 
-    Each element X_i will contain the template with a different a_i, b_i, and
-    in fact X contains the template at all possible a, b shifts.
-    The output Y_i will contain the template shifted by a_i*b_i.
-    * refers to the composition of two group actions (but by an abuse of notation, 
-    also refers to group action on the template. oops.)
-    
+    Each element $X_i$ will contain the template with a different $a_i$, $b_i$, and
+    in fact $X$ contains the template at all possible $a$, $b$ shifts.
+    The output $Y_i$ will contain the template shifted by $a_i*b_i$.
+    * refers to the composition of two group actions (but by an abuse of notation,
+    also refers to group action on the template.)
+
     Parameters
     ----------
     p : int
@@ -327,20 +370,21 @@ def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save
     template : np.ndarray
         A flattened 2D array of shape (p*p,) representing the template.
         This should be generated using `generate_fixed_template(p)`.
-        
+
     Returns
     -------
     X : np.ndarray
-        Input data of shape (p^4, 2, p*p). 
+        Input data of shape (p^4, 2, p*p).
         2 inputs (a and b), each with shape (p*p,).
          is the total number of combinations of shifted a's and b's.
     Y : np.ndarray
-        Output data of shape (p^4, p*p), where each sample is the result of the modular addition."""
+        Output data of shape (p^4, p*p), where each sample is the result of the modular addition.
+    """
     # Initialize data arrays
-    X = np.zeros((p ** 4, 2, p * p))  # Shape: (p^4, 2, p*p)
-    Y = np.zeros((p ** 4, p * p))     # Shape: (p^4, p*p)
+    X = np.zeros((p**4, 2, p * p))  # Shape: (p^4, 2, p*p)
+    Y = np.zeros((p**4, p * p))  # Shape: (p^4, p*p)
     translations = np.zeros((p**4, 3, 2), dtype=int)
-    
+
     # Generate the dataset
     idx = 0
     template_2d = template.reshape((p, p))
@@ -350,9 +394,15 @@ def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save
                 for b_y in range(p):
                     q_x = (a_x + b_x) % p
                     q_y = (a_y + b_y) % p
-                    X[idx, 0, :] = np.roll(np.roll(template_2d, a_x, axis=0), a_y, axis=1).flatten()
-                    X[idx, 1, :] = np.roll(np.roll(template_2d, b_x, axis=0), b_y, axis=1).flatten()
-                    Y[idx, :] = np.roll(np.roll(template_2d, q_x, axis=0), q_y, axis=1).flatten()
+                    X[idx, 0, :] = np.roll(
+                        np.roll(template_2d, a_x, axis=0), a_y, axis=1
+                    ).flatten()
+                    X[idx, 1, :] = np.roll(
+                        np.roll(template_2d, b_x, axis=0), b_y, axis=1
+                    ).flatten()
+                    Y[idx, :] = np.roll(
+                        np.roll(template_2d, q_x, axis=0), q_y, axis=1
+                    ).flatten()
                     translations[idx, 0, :] = (a_x, a_y)
                     translations[idx, 1, :] = (b_x, b_y)
                     translations[idx, 2, :] = (q_x, q_y)
@@ -363,18 +413,24 @@ def modular_addition_dataset_2d(p, template, fraction=0.3, random_state=42, save
     N = X.shape[0]
     n_sample = int(np.ceil(N * fraction))
     rng = np.random.default_rng(random_state)
-    indices = rng.choice(N, size=n_sample, replace=False)  # indices of the sampled subset
+    indices = rng.choice(
+        N, size=n_sample, replace=False
+    )  # indices of the sampled subset
 
     if save_path is not None:
         # Save the dataset at the specified path using numpy
-        np.savez(save_path, X=X[indices], Y=Y[indices], translations=translations[indices])
+        np.savez(
+            save_path, X=X[indices], Y=Y[indices], translations=translations[indices]
+        )
 
     return X[indices], Y[indices], translations[indices]
 
 
-def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, random_state=42, template_type="mnist"):
+def load_modular_addition_dataset_2d(
+    image_length, template, fraction=0.3, random_state=42, template_type="mnist"
+):
     """
-    Load the modular addition 2D dataset from a file if present. 
+    Load the modular addition 2D dataset from a file if present.
     Otherwise, generate it and save to the given path.
 
     Parameters
@@ -396,16 +452,18 @@ def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, rando
     Y : np.ndarray (num_samples, p*p)
     translations : np.ndarray
     """
-    file_name = f'modular_addition_2d_dataset_type{template_type}_p{image_length}_fraction{fraction:.2f}.npz'
+    file_name = f"modular_addition_2d_dataset_type{template_type}_p{image_length}_fraction{fraction:.2f}.npz"
 
     root_dir = setcwd.get_root_dir()
-    load_path = os.path.join(root_dir, 'gagf', 'group_learning', 'saved_datasets', file_name)
+    load_path = os.path.join(
+        root_dir, "gagf", "group_learning", "saved_datasets", file_name
+    )
 
     if os.path.exists(load_path):
         data = np.load(load_path)
-        X = data['X']
-        Y = data['Y']
-        translations = data['translations']
+        X = data["X"]
+        Y = data["Y"]
+        translations = data["translations"]
         return X, Y, translations
     else:
         X, Y, translations = modular_addition_dataset_2d(
@@ -413,7 +471,7 @@ def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, rando
             template,
             fraction=fraction,
             random_state=random_state,
-            save_path=load_path
+            save_path=load_path,
         )
         return X, Y, translations
 
@@ -421,26 +479,26 @@ def load_modular_addition_dataset_2d(image_length, template, fraction=0.3, rando
 def load_dataset(config):
     """Load dataset based on configuration."""
 
-    if config['group_name'] == 'znz_znz':
-        template = mnist_template(config['image_length'], digit=config['mnist_digit'])
+    if config["group_name"] == "znz_znz":
+        template = mnist_template(config["image_length"], digit=config["mnist_digit"])
         X, Y, _ = load_modular_addition_dataset_2d(
-            config['image_length'],
+            config["image_length"],
             template,
-            fraction=config['dataset_fraction'],
-            random_state=config['seed'],
-            template_type="mnist"
+            fraction=config["dataset_fraction"],
+            random_state=config["seed"],
+            template_type="mnist",
         )
         return X, Y, template
     else:
-        template = generate_fixed_group_template(config['group'], config['seed'])
-        X, Y = group_dataset(config['group'], template)
+        template = generate_fixed_group_template(config["group"], config["seed"])
+        X, Y = group_dataset(config["group"], template)
 
         return X, Y, template
 
 
 def move_dataset_to_device_and_flatten(X, Y, device=None):
     """Move dataset tensors to available or specified device.
-    
+
     Parameters
     ----------
     X : np.ndarray
@@ -449,9 +507,9 @@ def move_dataset_to_device_and_flatten(X, Y, device=None):
         Target data of shape (num_samples, p*p)
     p : int
         Image length. Images are of shape (p, p)
-    device : torch.device, optional 
+    device : torch.device, optional
         Device to move tensors to. If None, automatically choose GPU if available.
-        
+
     Returns
     -------
     X : torch.Tensor
