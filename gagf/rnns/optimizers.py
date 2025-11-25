@@ -2,18 +2,51 @@ import torch
 
 class PerNeuronScaledSGD(torch.optim.Optimizer):
     """
-    Simple SGD with per-neuron learning rate scaling:
-        eta_i = ||theta_i||^(1 - scaling_factor)
-    where theta_i = (W_in[i,:], W_drive[i,:], W_out[:,i]).
+    Per-neuron scaled SGD optimizer that adapts to different model architectures.
+    
+    Learning rate scaling per neuron i:
+        eta_i = lr * ||theta_i||^scaling_factor
+    
+    where theta_i comprises all parameters associated with neuron i.
+    
+    For SequentialMLP:
+        theta_i = (W_in[i, :], W_out[:, i])
+        scaling_factor = k (degree of homogeneity = activation power)
+    
+    For TwoLayerNet (k=2):
+        theta_i = (U[i, :], V[i, :], W[:, i])
+        scaling_factor = 2 (quadratic activation)
+    
+    The scaling exploits the homogeneity property: if we scale all parameters of
+    neuron i by α, the output scales by α^k where k is the degree of homogeneity.
     """
 
     def __init__(self, 
-    model, 
-    lr=1e-2, 
-    scaling_factor=2
+        model, 
+        lr=1.0, 
+        scaling_factor=None
     ) -> None:
-        params = [model.W_in, model.W_drive, model.W_out] # would have W_mix for RNN
-        super().__init__([{'params': params, 'model': model}], dict(lr=lr, scaling_factor=scaling_factor))
+        """
+        Args:
+            model: SequentialMLP or compatible model
+            lr: base learning rate
+            scaling_factor: exponent for norm-based scaling. If None, inferred from model.
+                           For SequentialMLP: defaults to model.k
+        """
+        # Infer scaling_factor from model if not provided
+        if scaling_factor is None:
+            if hasattr(model, 'k'):
+                scaling_factor = model.k  # SequentialMLP
+            else:
+                scaling_factor = 2  # Default for quadratic models
+        
+        # Get model parameters
+        params = list(model.parameters())
+        
+        super().__init__(
+            [{'params': params, 'model': model, 'model_type': type(model).__name__}], 
+            dict(lr=lr, scaling_factor=scaling_factor)
+        )
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -21,31 +54,66 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         model = group['model']
         lr = group['lr']
         scaling_factor = group['scaling_factor']
-
-        W_in, W_drive, W_out = model.W_in, model.W_drive, model.W_out
-        g_in, g_drive, g_out = W_in.grad, W_drive.grad, W_out.grad
-        if g_in is None or g_drive is None or g_out is None:
-            return
-
-        # per-neuron norms
-        u2 = (W_in**2).sum(dim=1)
-        v2 = (W_drive**2).sum(dim=1)
-        w2 = (W_out**2).sum(dim=0)
-        theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)
-
-        # scale = ||theta_i||^(1 - scaling_factor)
-        scale = theta_norm.pow(1 - scaling_factor) #scaling_factor here is sequence length +1 ("degree of homogeneity")
-        # if we scale all parameters of the RNN by a factor \alpha, what happens to the output?
-
-        # scale each neuron's grads
-        g_in.mul_(scale.view(-1, 1))
-        g_drive.mul_(scale.view(-1, 1))
-        g_out.mul_(scale.view(1, -1))
-
-        # SGD update
-        W_in.add_(g_in, alpha=-lr)
-        W_drive.add_(g_drive, alpha=-lr)
-        W_out.add_(g_out, alpha=-lr)
+        model_type = group['model_type']
+        
+        if model_type == 'SequentialMLP':
+            # SequentialMLP: W_in (d, k*p), W_out (p, d)
+            W_in = model.W_in
+            W_out = model.W_out
+            g_in = W_in.grad
+            g_out = W_out.grad
+            
+            if g_in is None or g_out is None:
+                return
+            
+            # Per-neuron norms: theta_i = (W_in[i, :], W_out[:, i])
+            u2 = (W_in**2).sum(dim=1)  # (d,)
+            w2 = (W_out**2).sum(dim=0)  # (d,)
+            theta_norm = torch.sqrt(u2 + w2 + 1e-12)  # (d,)
+            
+            # Scale = ||theta_i||^scaling_factor
+            scale = theta_norm.pow(scaling_factor)
+            
+            # Scale each neuron's gradients
+            g_in.mul_(scale.view(-1, 1))
+            g_out.mul_(scale.view(1, -1))
+            
+            # SGD update
+            W_in.add_(g_in, alpha=-lr)
+            W_out.add_(g_out, alpha=-lr)
+            
+        else:
+            # Generic fallback for other models (e.g., TwoLayerNet with U, V, W)
+            # Assume model has U, V, W or similar structure
+            params_list = list(model.parameters())
+            if len(params_list) == 3:
+                # Assume structure like (U, V, W) or (W_in, W_drive, W_out)
+                param1, param2, param3 = params_list
+                g1, g2, g3 = param1.grad, param2.grad, param3.grad
+                
+                if g1 is None or g2 is None or g3 is None:
+                    return
+                
+                # Per-neuron norms
+                u2 = (param1**2).sum(dim=1)
+                v2 = (param2**2).sum(dim=1)
+                w2 = (param3**2).sum(dim=0)
+                theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)
+                
+                # Scale = ||theta_i||^scaling_factor
+                scale = theta_norm.pow(scaling_factor)
+                
+                # Scale gradients
+                g1.mul_(scale.view(-1, 1))
+                g2.mul_(scale.view(-1, 1))
+                g3.mul_(scale.view(1, -1))
+                
+                # SGD update
+                param1.add_(g1, alpha=-lr)
+                param2.add_(g2, alpha=-lr)
+                param3.add_(g3, alpha=-lr)
+            else:
+                raise ValueError(f"PerNeuronScaledSGD: Unsupported model structure with {len(params_list)} parameters")
 
 
 

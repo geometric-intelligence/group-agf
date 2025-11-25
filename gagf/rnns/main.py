@@ -1,14 +1,17 @@
 import numpy as np
 import torch
 from gagf.rnns.datamodule import (
+    mnist_template_1d,
     mnist_template_2d,
+    generate_fourier_template_1d,
+    generate_gaussian_template_1d,
     generate_template_unique_freqs,
 )
-from gagf.rnns.optimizers import HybridRNNOptimizer
+from gagf.rnns.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
 
 from torch.utils.data import DataLoader
 from torch import nn, optim
-from gagf.rnns.model import QuadraticRNN
+from gagf.rnns.model import QuadraticRNN, SequentialMLP
 import time
 import yaml
 import json
@@ -111,23 +114,31 @@ def produce_plots(
     device: str
 ):
     """
-    Generate all analysis plots after training.
+    Generate all analysis plots after training (2D only).
+    
+    Note: This function currently only supports 2D templates with p1 and p2 dimensions.
+    For 1D templates, basic plots are generated separately in train_single_run.
     
     Args:
         run_dir: Directory to save plots
-        config: Configuration dictionary
+        config: Configuration dictionary (must have dimension=2)
         model: Trained model
         param_hist: List of parameter snapshots
         param_save_indices: Indices where params were saved
         train_loss_hist: Training loss history
-        template_2d: 2D template array
+        template_2d: 2D template array (p1, p2)
         training_mode: 'online' or 'offline'
         device: Device string ('cpu' or 'cuda')
     """
     print("\n=== Generating Analysis Plots ===")
     
     ### ----- COMPUTE X-AXIS VALUES ----- ###
-    p_flat = config['data']['p1'] * config['data']['p2']
+    dimension = config['data'].get('dimension', 2)
+    if dimension == 1:
+        p_flat = config['data']['p']
+    else:
+        p_flat = config['data']['p1'] * config['data']['p2']
+    
     k = config['data']['k']
     batch_size = config['data']['batch_size']
     total_space_size = p_flat ** k
@@ -297,10 +308,11 @@ def produce_plots(
 
 def train_single_run(config: dict, run_dir: Path = None) -> dict:
     """
-    Train a QuadraticRNN on 2D modular addition for a single configuration.
+    Train a model (QuadraticRNN or SequentialMLP) on modular addition for a single configuration.
     
     Args:
-        config: Configuration dictionary.
+        config: Configuration dictionary. Must include 'model.model_type' to specify 
+                'QuadraticRNN' or 'SequentialMLP'.
         run_dir: Optional run directory. If None, will create a timestamped directory.
     
     Returns:
@@ -322,53 +334,121 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     ### ----- GENERATE DATA ----- ###
     print("Generating data...")
     
-    template_2d = mnist_template_2d(
-        config['data']['p1'],
-        config['data']['p2'],
-        config['data']['mnist_label'],
-        root="data"
-    )
-    template_2d = template_2d - np.mean(template_2d)
-
-    ### ----- VISUALIZE TEMPLATE ----- ###
-    print("Visualizing template...")
-    fig, ax = plot_2d_signal(
-        template_2d,
-        title="Template",
-        cmap="gray"
-    )
-    fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
-    print(f"  ✓ Saved template")
+    dimension = config['data'].get('dimension', 2)  # Default to 2D for backwards compatibility
+    template_type = config['data'].get('template_type', 'mnist')
     
-    p_flat = config['data']['p1'] * config['data']['p2']
+    if dimension == 1:
+        # 1D template generation
+        p = config['data']['p']
+        p_flat = p
+        
+        if template_type == 'mnist':
+            template_1d = mnist_template_1d(p, config['data']['mnist_label'], root="data")
+        elif template_type == 'fourier':
+            n_freqs = config['data'].get('n_freqs', min(10, p // 4))
+            template_1d = generate_fourier_template_1d(p, n_freqs=n_freqs, seed=config['data']['seed'])
+        elif template_type == 'gaussian':
+            template_1d = generate_gaussian_template_1d(p, n_gaussians=3, seed=config['data']['seed'])
+        else:
+            raise ValueError(f"Unknown template_type: {template_type}")
+        
+        template_1d = template_1d - np.mean(template_1d)
+        template = template_1d  # For consistency in code below
+        
+        # Visualize 1D template
+        print("Visualizing template...")
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(template_1d)
+        ax.set_xlabel('Position')
+        ax.set_ylabel('Value')
+        ax.set_title('1D Template')
+        ax.grid(True, alpha=0.3)
+        fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved template")
+        
+    elif dimension == 2:
+        # 2D template generation
+        p1 = config['data']['p1']
+        p2 = config['data']['p2']
+        p_flat = p1 * p2
+        
+        if template_type == 'mnist':
+            template_2d = mnist_template_2d(p1, p2, config['data']['mnist_label'], root="data")
+        elif template_type == 'fourier':
+            n_freqs = config['data'].get('n_freqs', min(10, (p1 * p2) // 10))
+            template_2d = generate_template_unique_freqs(p1, p2, n_freqs=n_freqs, seed=config['data']['seed'])
+        else:
+            raise ValueError(f"Unknown template_type for 2D: {template_type}")
+        
+        template_2d = template_2d - np.mean(template_2d)
+        template = template_2d  # For consistency in code below
+        
+        # Visualize 2D template
+        print("Visualizing template...")
+        fig, ax = plot_2d_signal(template_2d, title="Template", cmap="gray")
+        fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved template")
+    else:
+        raise ValueError(f"dimension must be 1 or 2, got {dimension}")
 
     
     ### ----- SETUP TRAINING ----- ###
     print("Setting up model and training...")
     
-    template_torch = torch.tensor(template_2d, device=device, dtype=torch.float32).flatten()
+    # Flatten template for model (works for both 1D and 2D)
+    template_torch = torch.tensor(template, device=device, dtype=torch.float32).flatten()
     
-    rnn_2d = QuadraticRNN(
-        p=p_flat,
-        d=config['model']['hidden_dim'],
-        template=template_torch,
-        init_scale=config['model']['init_scale'],
-        return_all_outputs=config['model']['return_all_outputs'],
-        transform_type=config['model']['transform_type'],
-    ).to(device)
+    # Determine which model to use
+    model_type = config['model'].get('model_type', 'QuadraticRNN')  # Default to QuadraticRNN for backwards compatibility
+    print(f"Using model type: {model_type}")
+    
+    if model_type == 'QuadraticRNN':
+        rnn_2d = QuadraticRNN(
+            p=p_flat,
+            d=config['model']['hidden_dim'],
+            template=template_torch,
+            init_scale=config['model']['init_scale'],
+            return_all_outputs=config['model']['return_all_outputs'],
+            transform_type=config['model']['transform_type'],
+        ).to(device)
+    elif model_type == 'SequentialMLP':
+        rnn_2d = SequentialMLP(
+            p=p_flat,
+            d=config['model']['hidden_dim'],
+            template=template_torch,
+            k=config['data']['k'],
+            init_scale=config['model']['init_scale'],
+            return_all_outputs=config['model']['return_all_outputs'],
+        ).to(device)
+    else:
+        raise ValueError(f"Invalid model_type: {model_type}. Must be 'QuadraticRNN' or 'SequentialMLP'")
     
     criterion = nn.MSELoss()
 
-    print(f"Using optimizer: {config['training']['optimizer']}")
+    # Optimizer selection with model-aware defaults
+    optimizer_name = config['training']['optimizer']
+    
+    # Auto-select optimizer if not specified or if 'auto'
+    if optimizer_name == 'auto' or (optimizer_name not in ['adam', 'hybrid', 'per_neuron']):
+        if model_type == 'SequentialMLP':
+            optimizer_name = 'per_neuron'
+            print(f"Auto-selected optimizer: {optimizer_name} (recommended for SequentialMLP)")
+        else:
+            optimizer_name = 'adam'
+            print(f"Auto-selected optimizer: {optimizer_name}")
+    else:
+        print(f"Using optimizer: {optimizer_name}")
 
-    if config['training']['optimizer'] == 'adam':
+    if optimizer_name == 'adam':
         optimizer = optim.Adam(
             rnn_2d.parameters(), 
             lr=config['training']['learning_rate'], 
             betas=tuple(config['training']['betas']), 
             weight_decay=config['training']['weight_decay']
         )
-    elif config['training']['optimizer'] == 'hybrid':
+    elif optimizer_name == 'hybrid':
+        if model_type != 'QuadraticRNN':
+            raise ValueError(f"'hybrid' optimizer is only supported for QuadraticRNN, got {model_type}")
         optimizer = HybridRNNOptimizer(
             rnn_2d,
             lr=1,
@@ -377,11 +457,24 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             adam_betas=tuple(config['training']['betas']),
             adam_eps=1e-8,
         )
+    elif optimizer_name == 'per_neuron':
+        # Per-neuron scaled SGD (recommended for SequentialMLP)
+        scaling_factor = config['training'].get('scaling_factor', None)
+        lr = config['training']['learning_rate']
+        
+        # For SequentialMLP, use lr=1.0 by default if not specified
+        if model_type == 'SequentialMLP' and lr == 1.0e-3:
+            print("  Note: Using lr=1.0 for per_neuron optimizer with SequentialMLP")
+            lr = 1.0
+        
+        optimizer = PerNeuronScaledSGD(
+            rnn_2d,
+            lr=lr,
+            scaling_factor=scaling_factor  # Will auto-infer from model.k if None
+        )
+        print(f"  Scaling factor: {optimizer.param_groups[0]['scaling_factor']}")
     else:
-        raise ValueError(f"Invalid optimizer: {config['training']['optimizer']}. Must be 'adam' or 'hybrid'")
-
-
-    p_flat = config['data']['p1'] * config['data']['p2']
+        raise ValueError(f"Invalid optimizer: {optimizer_name}. Must be 'adam', 'hybrid', or 'per_neuron'")
     
     
     ### ----- CREATE DATA LOADERS ----- ###
@@ -389,29 +482,53 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     
     if training_mode == 'online':
         print("Using ONLINE data generation...")
-        from gagf.rnns.datamodule import OnlineModularAdditionDataset2D
         
-        # Training dataset
-        train_dataset = OnlineModularAdditionDataset2D(
-            p1=config['data']['p1'],
-            p2=config['data']['p2'],
-            template=template_2d,
-            k=config['data']['k'],
-            batch_size=config['data']['batch_size'],
-            device=device,
-            return_all_outputs=config['model']['return_all_outputs'],
-        )
-        
-        # Validation dataset (same distribution, different samples)
-        val_dataset = OnlineModularAdditionDataset2D(
-            p1=config['data']['p1'],
-            p2=config['data']['p2'],
-            template=template_2d,
-            k=config['data']['k'],
-            batch_size=config['data']['batch_size'],
-            device=device,
-            return_all_outputs=config['model']['return_all_outputs'],
-        )
+        if dimension == 1:
+            from gagf.rnns.datamodule import OnlineModularAdditionDataset1D
+            
+            # Training dataset
+            train_dataset = OnlineModularAdditionDataset1D(
+                p=config['data']['p'],
+                template=template_1d,
+                k=config['data']['k'],
+                batch_size=config['data']['batch_size'],
+                device=device,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+            
+            # Validation dataset
+            val_dataset = OnlineModularAdditionDataset1D(
+                p=config['data']['p'],
+                template=template_1d,
+                k=config['data']['k'],
+                batch_size=config['data']['batch_size'],
+                device=device,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+        else:  # dimension == 2
+            from gagf.rnns.datamodule import OnlineModularAdditionDataset2D
+            
+            # Training dataset
+            train_dataset = OnlineModularAdditionDataset2D(
+                p1=config['data']['p1'],
+                p2=config['data']['p2'],
+                template=template_2d,
+                k=config['data']['k'],
+                batch_size=config['data']['batch_size'],
+                device=device,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+            
+            # Validation dataset
+            val_dataset = OnlineModularAdditionDataset2D(
+                p1=config['data']['p1'],
+                p2=config['data']['p2'],
+                template=template_2d,
+                k=config['data']['k'],
+                batch_size=config['data']['batch_size'],
+                device=device,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
         
         train_loader = DataLoader(train_dataset, batch_size=None, num_workers=0)
         val_loader = DataLoader(val_dataset, batch_size=None, num_workers=0)
@@ -421,33 +538,59 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         
     elif training_mode == 'offline':
         print("Using OFFLINE pre-generated dataset...")
-        from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_2d
         from torch.utils.data import TensorDataset
         
-        # Generate training dataset
-        X_train, Y_train, _ = build_modular_addition_sequence_dataset_2d(
-            config['data']['p1'], 
-            config['data']['p2'], 
-            template_2d, 
-            config['data']['k'], 
-            mode=config['data']['mode'], 
-            num_samples=config['data']['num_samples'],
-            return_all_outputs=config['model']['return_all_outputs'],
-        )
+        if dimension == 1:
+            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_1d
+            
+            # Generate training dataset
+            X_train, Y_train, _ = build_modular_addition_sequence_dataset_1d(
+                config['data']['p'], 
+                template_1d, 
+                config['data']['k'], 
+                mode=config['data']['mode'], 
+                num_samples=config['data']['num_samples'],
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+            
+            # Generate validation dataset
+            val_samples = max(1000, config['data']['num_samples'] // 10)
+            X_val, Y_val, _ = build_modular_addition_sequence_dataset_1d(
+                config['data']['p'], 
+                template_1d, 
+                config['data']['k'], 
+                mode='sampled',
+                num_samples=val_samples,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+        else:  # dimension == 2
+            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_2d
+            
+            # Generate training dataset
+            X_train, Y_train, _ = build_modular_addition_sequence_dataset_2d(
+                config['data']['p1'], 
+                config['data']['p2'], 
+                template_2d, 
+                config['data']['k'], 
+                mode=config['data']['mode'], 
+                num_samples=config['data']['num_samples'],
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+            
+            # Generate validation dataset
+            val_samples = max(1000, config['data']['num_samples'] // 10)
+            X_val, Y_val, _ = build_modular_addition_sequence_dataset_2d(
+                config['data']['p1'], 
+                config['data']['p2'], 
+                template_2d, 
+                config['data']['k'], 
+                mode='sampled',
+                num_samples=val_samples,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+        
         X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
         Y_train_t = torch.tensor(Y_train, dtype=torch.float32, device=device)
-        
-        # Generate validation dataset (10% of training size)
-        val_samples = max(1000, config['data']['num_samples'] // 10)
-        X_val, Y_val, _ = build_modular_addition_sequence_dataset_2d(
-            config['data']['p1'], 
-            config['data']['p2'], 
-            template_2d, 
-            config['data']['k'], 
-            mode='sampled',
-            num_samples=val_samples,
-            return_all_outputs=config['model']['return_all_outputs'],
-        )
         X_val_t = torch.tensor(X_val, dtype=torch.float32, device=device)
         Y_val_t = torch.tensor(Y_val, dtype=torch.float32, device=device)
         
@@ -514,21 +657,36 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         run_dir, config, rnn_2d, 
         train_loss_hist, val_loss_hist, 
         param_hist,
-        template_2d, training_time, device
+        template, training_time, device
     )
 
     ### ----- PRODUCE ALL PLOTS ----- ###
-    produce_plots(
-        run_dir=run_dir,
-        config=config,
-        model=rnn_2d,
-        param_hist=param_hist,
-        param_save_indices=param_save_indices,
-        train_loss_hist=train_loss_hist,
-        template_2d=template_2d,
-        training_mode=training_mode,
-        device=device
-    )
+    if dimension == 2:
+        # Only produce detailed plots for 2D (for now)
+        produce_plots(
+            run_dir=run_dir,
+            config=config,
+            model=rnn_2d,
+            param_hist=param_hist,
+            param_save_indices=param_save_indices,
+            train_loss_hist=train_loss_hist,
+            template_2d=template_2d,
+            training_mode=training_mode,
+            device=device
+        )
+    else:
+        # For 1D, just plot basic training loss
+        print("\n=== Generating Basic Plots for 1D ===")
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_loss_hist)
+        plt.xlabel('Step' if training_mode == 'online' else 'Epoch')
+        plt.ylabel('Training Loss')
+        plt.title('Training Loss (1D)')
+        plt.yscale('log')
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(run_dir, "training_loss.pdf"), bbox_inches='tight', dpi=150)
+        plt.close()
+        print("  ✓ Saved training loss plot")
     
     # Return results dictionary
     return {
@@ -551,7 +709,7 @@ def main(config: dict):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train QuadraticRNN on 2D modular addition")
+    parser = argparse.ArgumentParser(description="Train QuadraticRNN or SequentialMLP on 2D modular addition")
     parser.add_argument(
         "--config", 
         type=str, 

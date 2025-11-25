@@ -104,3 +104,79 @@ class QuadraticRNN(nn.Module):
             
             y = h @ self.W_out.T  # (B, p)
             return y
+
+class SequentialMLP(nn.Module):
+    """
+    MLP that processes k unordered input vectors by concatenating them.
+    
+    Architecture:
+        x_concat = concat(x1, x2, ..., xk)  # shape: (batch, k*p)
+        h = x_concat @ W_in.T               # shape: (batch, hidden_size)
+        h_activated = h^k                    # k-th power activation
+        y = h_activated @ W_out.T           # shape: (batch, p)
+    
+    Note: The inputs are unordered (not sequential), so the model is permutation-invariant
+    with respect to the ordering of the k inputs (ok for commutative groups!).
+    """
+
+    def __init__(
+        self,
+        p: int,
+        d: int,
+        template: torch.Tensor,
+        k: int,
+        init_scale: float = 1e-2,
+        return_all_outputs: bool = False,
+    ) -> None:
+        """
+        Args:
+            p: int, dimension of each input vector
+            d: int, hidden dimension (hidden_size)
+            template: torch.Tensor, the template (for compatibility with infrastructure)
+            k: int, number of input vectors (sequence length)
+            init_scale: float, scale of weights at initialization
+            return_all_outputs: bool, for compatibility (always False for MLP)
+        """
+        super().__init__()
+        self.p = p
+        self.d = d  # Hidden dimension
+        self.k = k  # Sequence length
+        self.init_scale = init_scale
+        self.template = template
+        self.return_all_outputs = return_all_outputs
+        
+        # Parameters
+        # W_in: maps concatenated input (k*p) to hidden (d)
+        # W_out: maps hidden (d) to output (p)
+        self.W_in = nn.Parameter(init_scale * torch.randn(d, k * p) / torch.sqrt(torch.tensor(k * p)))
+        self.W_out = nn.Parameter(init_scale * torch.randn(p, d) / torch.sqrt(torch.tensor(d)))
+
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        """
+        Process k unordered input vectors.
+        
+        Args:
+            x_seq: (batch, k, p) - k input vectors of dimension p each
+            
+        Returns:
+            (batch, p) - output vector
+            Note: return_all_outputs is ignored for MLP (no intermediate outputs)
+        """
+        batch_size = x_seq.shape[0]
+        k_actual = x_seq.shape[1]
+        
+        assert k_actual == self.k, f"Expected k={self.k} inputs, got {k_actual}"
+        
+        # Concatenate all k inputs
+        x_concat = x_seq.reshape(batch_size, self.k * self.p)  # (batch, k*p)
+        
+        # First layer: linear transformation
+        h = x_concat @ self.W_in.T  # (batch, d)
+        
+        # Activation: k-th power
+        h_activated = h ** self.k  # (batch, d)
+        
+        # Second layer: output
+        y = h_activated @ self.W_out.T  # (batch, p)
+        
+        return y

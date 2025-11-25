@@ -121,6 +121,142 @@ class OnlineModularAdditionDataset2D(IterableDataset):
             yield X, Y
 
 
+class OnlineModularAdditionDataset1D(IterableDataset):
+    """
+    Online dataset that generates 1D modular addition samples on-the-fly.
+    Fully GPU-accelerated for maximum throughput.
+    """
+    def __init__(
+        self, 
+        p: int,
+        template: np.ndarray,
+        k: int,
+        batch_size: int,
+        device: str,
+        return_all_outputs: bool = False,
+    ):
+        super().__init__()
+        self.p = p
+        self.k = k
+        self.batch_size = batch_size
+        self.device = device
+        self.return_all_outputs = return_all_outputs
+        
+        # Store template on GPU for fast rolling
+        self.template_gpu = torch.tensor(template, device=device, dtype=torch.float32)
+        
+    def _roll_1d_batch(self, shifts):
+        """
+        Roll the 1D template by different amounts for each sample in a batch.
+        Fully vectorized on GPU.
+        
+        Args:
+            shifts: (batch_size,) or (batch_size, k) tensor of shifts
+        
+        Returns:
+            Rolled templates: (batch_size, p) or (batch_size, k, p)
+        """
+        if shifts.dim() == 1:
+            # Single roll per sample: (batch_size,)
+            batch_size = shifts.shape[0]
+            # Use advanced indexing
+            indices = (torch.arange(self.p, device=self.device).unsqueeze(0) - shifts.unsqueeze(1)) % self.p
+            rolled = self.template_gpu[indices.long()]
+        else:
+            # Multiple rolls per sample: (batch_size, k)
+            batch_size, k = shifts.shape
+            indices = (torch.arange(self.p, device=self.device).unsqueeze(0).unsqueeze(0) - 
+                      shifts.unsqueeze(2)) % self.p
+            rolled = self.template_gpu[indices.long()]
+        
+        return rolled
+        
+    def __iter__(self):
+        """Generate batches indefinitely on GPU."""
+        while True:
+            # Generate random shifts on GPU: (batch_size, k)
+            shifts = torch.randint(0, self.p, (self.batch_size, self.k), 
+                                  device=self.device, dtype=torch.long)
+            
+            # Generate X: roll template for each time step
+            # Shape: (batch_size, k, p)
+            X = self._roll_1d_batch(shifts)
+            
+            if self.return_all_outputs:
+                # Generate Y for ALL cumulative sums (intermediate targets)
+                shifts_cumsum = torch.cumsum(shifts, dim=1) % self.p  # (batch_size, k)
+                
+                # Roll by all cumulative sums: (batch_size, k, p)
+                Y = self._roll_1d_batch(shifts_cumsum)
+                Y = Y[:, 1:, :]  # Remove first timestep
+            else:
+                # Generate Y: only final cumulative sum
+                shifts_cumsum = shifts.sum(dim=1) % self.p  # (batch_size,)
+                
+                # Shape: (batch_size, p)
+                Y = self._roll_1d_batch(shifts_cumsum)
+            
+            yield X, Y
+
+
+def build_modular_addition_sequence_dataset_1d(
+    p: int,
+    template: np.ndarray,
+    k: int,
+    mode: str = "sampled",
+    num_samples: int = 65536,
+    return_all_outputs: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build 1D modular addition dataset for cyclic group C_p.
+    
+    Args:
+        p: dimension of cyclic group
+        template: (p,) template array
+        k: sequence length
+        mode: "sampled" or "exhaustive"
+        num_samples: number of samples for "sampled" mode
+        return_all_outputs: if True, return intermediate outputs
+    
+    Returns:
+        X: (N, k, p) where token t is template rolled by shift_t
+        Y: (N, p) or (N, k-1, p) target rolled by cumulative sum
+        sequence: (N, k) integer group elements (shifts) per token
+    """
+    assert template.shape == (p,), f"template must be ({p},), got {template.shape}"
+    
+    if mode == "exhaustive":
+        total = p ** k
+        if total > 1_000_000:
+            raise ValueError(f"p^k = {total} is huge; use mode='sampled' instead.")
+        N = total
+        sequence = np.zeros((N, k), dtype=np.int64)
+        for idx in range(N):
+            for t in range(k):
+                sequence[idx, t] = (idx // (p ** t)) % p
+    else:
+        N = int(num_samples)
+        sequence = np.random.randint(0, p, size=(N, k), dtype=np.int64)
+    
+    X = np.zeros((N, k, p), dtype=np.float32)
+    Y = np.zeros((N, k, p), dtype=np.float32)
+    
+    for i in range(N):
+        cumsum = 0
+        for t in range(k):
+            shift = int(sequence[i, t])
+            X[i, t, :] = np.roll(template, shift)
+            cumsum = (cumsum + shift) % p
+            Y[i, t, :] = np.roll(template, cumsum)
+    
+    if not return_all_outputs:
+        Y = Y[:, -1, :]
+    else:
+        Y = Y[:, 1:, :]  # Remove first timestep for consistency with 2D
+    
+    return X, Y, sequence
+
+
 def build_modular_addition_sequence_dataset_2d(
     p1: int,
     p2: int,
@@ -212,6 +348,55 @@ def sequence_to_paths_xy(sequence_xy: np.ndarray, p1: int, p2: int) -> np.ndarra
     paths_xy[:, :, 1] = np.mod(np.cumsum(seq[:, :, 1], axis=1, dtype=np.int64), p2)
     return paths_xy
 
+def mnist_template_1d(p: int, label: int, root: str = "data", axis: int = 0):
+    """
+    Return a (p,) 1D template from a random MNIST image by taking a slice or projection.
+    Values are float32 in [0, 1].
+    
+    Args:
+        p: dimension of the cyclic group
+        label: MNIST digit class (0-9)
+        root: MNIST data directory
+        axis: 0 for row average, 1 for column average, 2 for diagonal
+    
+    Returns:
+        template: (p,) array
+    """
+    if not (0 <= int(label) <= 9):
+        raise ValueError("label must be an integer in [0, 9].")
+    
+    ds = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=transforms.ToTensor())
+    cls_idxs = (ds.targets == int(label)).nonzero(as_tuple=True)[0]
+    if cls_idxs.numel() == 0:
+        raise ValueError(f"No samples for label {label}.")
+    
+    idx = cls_idxs[torch.randint(len(cls_idxs), (1,)).item()].item()
+    img, _ = ds[idx]  # img: (1, 28, 28) in [0,1]
+    img = img[0].numpy()  # (28, 28)
+    
+    # Get 1D signal from 2D image
+    if axis == 0:
+        # Average over columns (vertical projection)
+        signal = img.mean(axis=1)  # (28,)
+    elif axis == 1:
+        # Average over rows (horizontal projection)
+        signal = img.mean(axis=0)  # (28,)
+    elif axis == 2:
+        # Diagonal
+        signal = np.diag(img)  # (28,)
+    else:
+        raise ValueError("axis must be 0, 1, or 2")
+    
+    # Interpolate to desired size p
+    from scipy.interpolate import interp1d
+    x_old = np.linspace(0, 1, len(signal))
+    x_new = np.linspace(0, 1, p)
+    f = interp1d(x_old, signal, kind='cubic')
+    template = f(x_new)
+    
+    return template.astype(np.float32)
+
+
 def mnist_template_2d(p1: int, p2: int, label: int, root: str = "data"):
     """
     Return a (p1, p2) template from a random MNIST image of the given class label (0–9).
@@ -232,6 +417,86 @@ def mnist_template_2d(p1: int, p2: int, label: int, root: str = "data"):
 
 
 ### ----- SYNTHETIC TEMPLATES ----- ###
+
+### 1D Templates ###
+
+def generate_fourier_template_1d(p: int, n_freqs: int, amp_max: float = 100, amp_min: float = 10, seed=None):
+    """
+    Generate 1D template from random Fourier modes.
+    
+    Args:
+        p: dimension of cyclic group
+        n_freqs: number of frequency components to include
+        amp_max: maximum amplitude
+        amp_min: minimum amplitude
+        seed: random seed
+    
+    Returns:
+        template: (p,) real-valued array
+    """
+    rng = np.random.default_rng(seed)
+    spectrum = np.zeros(p, dtype=np.complex128)
+    
+    # Select frequencies (skip DC)
+    available_freqs = list(range(1, p // 2 + 1))
+    if len(available_freqs) < n_freqs:
+        raise ValueError(f"Only {len(available_freqs)} non-DC frequencies available for p={p}, requested {n_freqs}")
+    
+    chosen_freqs = rng.choice(available_freqs, size=min(n_freqs, len(available_freqs)), replace=False)
+    
+    # Amplitudes decreasing with frequency index
+    amps = np.sqrt(np.linspace(amp_max, amp_min, len(chosen_freqs)))
+    phases = rng.uniform(0.0, 2 * np.pi, size=len(chosen_freqs))
+    
+    for freq, amp, phi in zip(chosen_freqs, amps, phases):
+        v = amp * np.exp(1j * phi)
+        spectrum[freq] = v
+        spectrum[-freq] = np.conj(v)  # Hermitian symmetry for real signal
+    
+    template = np.fft.ifft(spectrum).real
+    template -= template.mean()
+    s = template.std()
+    if s > 1e-12:
+        template /= s
+    
+    return template.astype(np.float32)
+
+
+def generate_gaussian_template_1d(p: int, n_gaussians: int = 3, sigma_range: tuple = (0.5, 2.0), seed=None):
+    """
+    Generate 1D template as sum of Gaussians.
+    
+    Args:
+        p: dimension of cyclic group
+        n_gaussians: number of Gaussian bumps
+        sigma_range: (min_sigma, max_sigma) for Gaussian widths
+        seed: random seed
+    
+    Returns:
+        template: (p,) real-valued array
+    """
+    rng = np.random.default_rng(seed)
+    x = np.arange(p)
+    template = np.zeros(p, dtype=np.float32)
+    
+    for _ in range(n_gaussians):
+        center = rng.uniform(0, p)
+        sigma = rng.uniform(*sigma_range)
+        amplitude = rng.uniform(0.5, 1.0)
+        
+        # Periodic distance
+        dist = np.minimum(np.abs(x - center), p - np.abs(x - center))
+        template += amplitude * np.exp(-(dist ** 2) / (2 * sigma ** 2))
+    
+    template -= template.mean()
+    s = template.std()
+    if s > 1e-12:
+        template /= s
+    
+    return template.astype(np.float32)
+
+
+### 2D Templates ###
 
 def gaussian_mixture_template(
     p1=20, 
