@@ -51,6 +51,10 @@ def main_run(config):
         ), "Template size does not match group size."
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
+        # Determine batch size: if 'full', set to all samples
+        if config["batch_size"] == "full":
+            config["batch_size"] = X.shape[0]
+
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
 

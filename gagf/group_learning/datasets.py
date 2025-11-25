@@ -198,13 +198,44 @@ def generate_fixed_group_template(group, seed):
     rng = np.random.default_rng(seed)
     # Generate template array from Fourier spectrum
     spectrum = []
-    for irrep in group.irreps():
+    num_1d_nonzero_irreps = 0
+    num_multi_d_nonzero_irreps = 0
+    for i, irrep in enumerate(group.irreps()):
         dim = irrep.size
 
+        # zero_diag = True 
+        diag_values = np.zeros(dim, dtype=float)
+        if dim == 1 and num_1d_nonzero_irreps <=3:
+            diag_values[0] = (i+1)*dim ** 2
+            # zero_diag = False
+            num_1d_nonzero_irreps +=1
+            print("num_1d_nonzero_irreps ", num_1d_nonzero_irreps)
+        elif dim > 1 and num_multi_d_nonzero_irreps <1:
+            print("dim ", dim)
+            # zero_diag = False
+            for i_dim in range(dim):
+                # diag_values[i_dim] = (i+1)* (i_dim+1) ** 2
+                diag_values[i_dim] = (i + 1)  ** 2 * (dim + 1) * 2
+            num_multi_d_nonzero_irreps +=1
+
+        # if zero_diag:
+        #     diag_values = np.zeros(dim, dtype=float)
+        # else: 
+        #     diag_values = []
+        #     for one_dim in range(dim):
+        #         # value = (one_dim +1) * (i+1) **2 
+        #         value = (i+1)* dim **2  
+        #         # value = (one_dim*2 +1) ** (i+1)
+        #         diag_values.append(value)
+
+        #     diag_values = np.array(diag_values, dtype=float)
+
         # Create a random full rank matrix with unique diagonal entries
-        mat = np.zeros((dim, dim))
-        diag_values = rng.uniform(5.0, 20.0, size=dim)
+        mat = np.zeros((dim, dim), dtype=float)
+        # diag_values = rng.uniform(5.0, 20.0, size=dim)**(i+1)
+        print("diag_values: ", diag_values)
         np.fill_diagonal(mat, diag_values)
+        print(mat)
 
         spectrum.append(mat)
 
