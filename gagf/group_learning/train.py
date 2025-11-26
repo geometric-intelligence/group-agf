@@ -185,7 +185,7 @@ def train(
                 f"Epoch {epoch+1}/{config["epochs"]}, Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%"
             )
 
-        # Save checkpoint if at checkpoint interval
+        # Save checkpoint if at checkpoint interval or at the end of the training
         if ((epoch + 1) % config["checkpoint_interval"] == 0 or (epoch + 1) == config["epochs"]):
             checkpoint_path = get_model_save_path(config, checkpoint_epoch=(epoch + 1))
             save_checkpoint(

@@ -199,10 +199,11 @@ class GroupPower:
             fourier_coef = gft.compute_group_fourier_coef(
                 self.group, self.template, irrep
             )
+            print(f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
             power_spectrum[i] = irrep.size * np.trace(
                 fourier_coef.conj().T @ fourier_coef
             )  # TODO: check if this is correct
-        power_spectrum = power_spectrum / self.group.order()
+        power_spectrum = power_spectrum / self.group.order() # why division by group order?
 
         return np.array(power_spectrum)
 

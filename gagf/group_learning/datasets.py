@@ -178,7 +178,7 @@ def generate_fixed_template_dihedral(N):
     return template
 
 # TODO: Design a template with a few irreps that more separation in power spectrum
-def generate_fixed_group_template(group, seed):
+def generate_fixed_group_template(group, seed, powers = [10., 100., 0., 0., 0.]):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 
@@ -194,34 +194,15 @@ def generate_fixed_group_template(group, seed):
     template : np.ndarray, shape=[group.order()]
         The mean centered template.
     """
-    # Incorporate seed for reproducibility
-    # rng = np.random.default_rng(seed)
-    # Generate template array from Fourier spectrum
     spectrum = []
-    num_1d_nonzero_irreps = 0
-    num_multi_d_nonzero_irreps = 0
-    max_num_1d_nonzero_irreps = 2
-    powers_1d = [0.1, 1.]
-    powers_2d = [100.]
-    max_num_multi_d_nonzero_irreps = 1
-
+    assert len(powers) == len(group.irreps()), "Number of powers must match number of irreps"
     for i, irrep in enumerate(group.irreps()):
-        dim = irrep.size
-        diag_values = np.zeros(dim, dtype=float)
-
-        if dim == 1 and num_1d_nonzero_irreps < max_num_1d_nonzero_irreps:
-            diag_values[0] = powers_1d[num_1d_nonzero_irreps]
-            num_1d_nonzero_irreps += 1
-
-        elif dim > 1 and num_multi_d_nonzero_irreps < max_num_multi_d_nonzero_irreps:
-            diag_values = np.full(dim, powers_2d[num_multi_d_nonzero_irreps], dtype=float)
-            num_multi_d_nonzero_irreps += 1
-
-        # Create a random full rank matrix with unique diagonal entries
-        mat = np.zeros((dim, dim), dtype=float)
-        print(f"diag_values for irrep {i} of dimension {dim} is: {diag_values}")
+        diag_values = np.full(irrep.size, powers[i], dtype=float)
+            # Create a random full rank matrix with unique diagonal entries
+        mat = np.zeros((irrep.size, irrep.size), dtype=float)
+        #print(f"diag_values for irrep {i} of dimension {dim} is: {diag_values}")
         np.fill_diagonal(mat, diag_values)
-        print(f"mat for irrep {i} of dimension {dim} is: {mat}\n\n")
+        print(f"mat for irrep {i} of dimension {irrep.size} is:\n {mat}\n")
 
         spectrum.append(mat)
 

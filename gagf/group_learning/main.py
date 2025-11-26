@@ -48,6 +48,18 @@ def main_run(config):
         assert (
             len(template) == config["group_size"]
         ), "Template size does not match group size."
+
+        if config["group_name"] == "znz_znz":
+            template_power = power.ZnZPower2D(template)
+        else:
+            template_power = power.GroupPower(template, group=config["group"])
+
+        # Format template power values to only 2 decimals
+        formatted_power_list = [f"{x:.2e}" for x in template_power.power]
+        print("Template power:\n", formatted_power_list)
+        print(f"Corresponding to irreps (and their size:):\n {[irrep.size for irrep in config['group'].irreps()]}")
+        raise Exception("Stop here to check the template power.")
+
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
         # Determine batch size: if 'full', set to all samples
@@ -98,10 +110,7 @@ def main_run(config):
         )
 
         print("Training Complete. Generating plots...")
-        if config["group_name"] == "znz_znz":
-            template_power = power.ZnZPower2D(template)
-        else:
-            template_power = power.GroupPower(template, group=config["group"])
+
 
         loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
@@ -112,7 +121,7 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=None,
+            save_path=None, # TODO: Save the plot here in svg once it works
             show=False,
             logscale=config["power_logscale"],
         )

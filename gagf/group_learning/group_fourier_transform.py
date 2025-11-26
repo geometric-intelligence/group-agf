@@ -75,21 +75,22 @@ def compute_group_inverse_fourier_element(group, fourier_transform, g):
         The inverse Fourier transform at element g.
     """
     irreps = group.irreps()
-    print("Computing inverse FT at element:", g)
-    for i, irrep in enumerate(irreps):
-        print("Irrep", irrep(g).shape)
-        print("FT", fourier_transform[i].shape)
+    #print("Computing inverse FT at element:", g)
+    # for i, irrep in enumerate(irreps):
+    #     print("Irrep", irrep(g).shape)
+    #     print("FT", fourier_transform[i].shape)
 
     inverse_fourier_element = (
         1
         / group.order()
         * sum(
             [
-                irrep.size * np.trace(irrep(g) @ fourier_transform[i])
+                irrep.size * np.trace(irrep(g) @ fourier_transform[i]) # TODO: Shoudn't it be th inverse of g.
                 for i, irrep in enumerate(irreps)
             ]
         )
     )
+    
     return inverse_fourier_element
 
 
