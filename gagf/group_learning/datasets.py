@@ -177,8 +177,9 @@ def generate_fixed_template_dihedral(N):
 
     return template
 
+
 # TODO: Design a template with a few irreps that more separation in power spectrum
-def generate_fixed_group_template(group, seed):
+def generate_fixed_group_template(group, seed, fourier_coef_diag_values):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 
@@ -194,48 +195,17 @@ def generate_fixed_group_template(group, seed):
     template : np.ndarray, shape=[group.order()]
         The mean centered template.
     """
-    # Incorporate seed for reproducibility
-    # rng = np.random.default_rng(seed)
-    # Generate template array from Fourier spectrum
     spectrum = []
-    num_1d_nonzero_irreps = 0
-    num_multi_d_nonzero_irreps = 0
+    assert len(fourier_coef_diag_values) == len(
+        group.irreps()
+    ), "Number of Fourier coef. magnitudes on the diagonal must match number of irreps"
     for i, irrep in enumerate(group.irreps()):
-        dim = irrep.size
-
-        # zero_diag = True 
-        diag_values = np.zeros(dim, dtype=float)
-        if dim == 1 and num_1d_nonzero_irreps <3:
-            diag_values[0] = (i+1)*dim ** 2
-            # zero_diag = False
-            num_1d_nonzero_irreps +=1
-            print("num_1d_nonzero_irreps ", num_1d_nonzero_irreps)
-        elif dim > 1 and num_multi_d_nonzero_irreps <1:
-            print("dim ", dim)
-            # zero_diag = False
-            for i_dim in range(dim):
-                diag_values[i_dim] = (i+1)* (i_dim+1) ** 2
-                # diag_values[i_dim] = (i + 1)  ** 2 * (dim + 1) * 2
-            num_multi_d_nonzero_irreps +=1
-
-        # if zero_diag:
-        #     diag_values = np.zeros(dim, dtype=float)
-        # else: 
-        #     diag_values = []
-        #     for one_dim in range(dim):
-        #         # value = (one_dim +1) * (i+1) **2 
-        #         value = (i+1)* dim **2  
-        #         # value = (one_dim*2 +1) ** (i+1)
-        #         diag_values.append(value)
-
-        #     diag_values = np.array(diag_values, dtype=float)
-
+        diag_values = np.full(irrep.size, fourier_coef_diag_values[i], dtype=float)
         # Create a random full rank matrix with unique diagonal entries
-        mat = np.zeros((dim, dim), dtype=float)
-        # diag_values = rng.uniform(5.0, 20.0, size=dim)**(i+1)
-        print("diag_values: ", diag_values)
+        mat = np.zeros((irrep.size, irrep.size), dtype=float)
+        # print(f"diag_values for irrep {i} of dimension {dim} is: {diag_values}")
         np.fill_diagonal(mat, diag_values)
-        print(mat)
+        print(f"mat for irrep {i} of dimension {irrep.size} is:\n {mat}\n")
 
         spectrum.append(mat)
 
@@ -492,8 +462,22 @@ def load_dataset(config):
         )
         return X, Y, template
     else:
-        template = generate_fixed_group_template(config["group"], config["seed"])
+        template = generate_fixed_group_template(
+            config["group"], config["seed"], config["fourier_coef_diag_values"]
+        )
         X, Y = group_dataset(config["group"], template)
+
+        if config["dataset_fraction"] != 1.0:
+            assert 0 < config["dataset_fraction"] <= 1.0, "fraction must be in (0, 1]"
+            # Sample a subset of the dataset according to the specified fraction
+            N = X.shape[0]
+            n_sample = int(np.ceil(N * config["dataset_fraction"]))
+            rng = np.random.default_rng(config["seed"])
+            indices = rng.choice(
+                N, size=n_sample, replace=False
+            )  # indices of the sampled subset
+            X = X[indices]
+            Y = Y[indices]
 
         return X, Y, template
 

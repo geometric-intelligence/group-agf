@@ -1,3 +1,4 @@
+from typing_extensions import dataclass_transform
 import numpy as np
 import torch
 import time
@@ -47,14 +48,33 @@ def main_run(config):
         assert (
             len(template) == config["group_size"]
         ), "Template size does not match group size."
+
+        if config["group_name"] == "znz_znz":
+            template_power = power.ZnZPower2D(template)
+        else:
+            template_power = power.GroupPower(template, group=config["group"])
+
+        # Format template power values to only 2 decimals
+        formatted_power_list = [f"{x:.2e}" for x in template_power.power]
+        print("Template power:\n", formatted_power_list)
+        print(
+            f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
+        )
+        print(f"Desired power values:\n {config['powers']}")
+        # raise Exception("Stop here to check the template power.")
+
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
         # Determine batch size: if 'full', set to all samples
         if config["batch_size"] == "full":
             config["batch_size"] = X.shape[0]
         if default_config.resume_from_checkpoint:
-            config["checkpoint_path"] = train.get_model_save_path(config, default_config.checkpoint_epoch)
-
+            config["checkpoint_path"] = train.get_model_save_path(
+                config,
+                default_config.checkpoint_epoch,
+                default_config.checkpoint_run_name_to_load,
+            )
+        config["run_name"] = run_name
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
 
@@ -97,12 +117,9 @@ def main_run(config):
         )
 
         print("Training Complete. Generating plots...")
-        if config["group_name"] == "znz_znz":
-            template_power = power.ZnZPower2D(template)
-        else:
-            template_power = power.GroupPower(template, group=config["group"])
 
-        loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
+        loss_plot = plot.plot_loss_curve(
+            loss_history, template_power, save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg", show=False)
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power,
@@ -111,8 +128,13 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=None,
+            save_path=config["model_save_dir"] + f"power_over_training_plot_{run_name}.svg",
             show=False,
+            logscale=config["power_logscale"],
+        )
+        print(
+            f"loss plot and power over training plot saved to {config['model_save_dir']}"
+            f" at loss_plot_{run_name}.svg and power_over_training_plot_{run_name}.svg"
         )
         neuron_weights_plot = plot.plot_neuron_weights(
             config[
@@ -142,6 +164,10 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
+        print("Template power:\n", formatted_power_list)
+        print(
+            f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
+        )
 
         wandb_config.update({"full_run": full_run})
         wandb.finish()
@@ -199,9 +225,12 @@ def main():
             "verbose_interval": verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
-            "resume_from_checkpoint": default_config.resume_from_checkpoint, 
+            "powers": default_config.powers[group_name],
+            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[group_name],
+            "power_logscale": default_config.power_logscale,
+            "resume_from_checkpoint": default_config.resume_from_checkpoint,
             "checkpoint_interval": checkpoint_interval,
-            "checkpoint_path": None
+            "checkpoint_path": None,
         }
 
         if group_name == "znz_znz":
@@ -214,7 +243,7 @@ def main():
                 # default_config.frequencies_to_learn,
                 # default_config.mnist_digit,
                 default_config.image_length,
-                default_config.dataset_fraction,
+                default_config.dataset_fraction["znz_znz"],
             ):
                 group_size = image_length * image_length
                 # main_config["mnist_digit"] = mnist_digit
@@ -229,6 +258,9 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
+            main_config["dataset_fraction"] = default_config.dataset_fraction[
+                "octahedral"
+            ]
             main_run(main_config)
 
         elif group_name == "A5":
@@ -236,6 +268,7 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
+            main_config["dataset_fraction"] = default_config.dataset_fraction["A5"]
             main_run(main_config)
 
         else:
@@ -259,6 +292,9 @@ def main():
                 main_config["group"] = group
                 main_config["group_size"] = group_size
                 main_config["group_n"] = group_n
+                main_config["dataset_fraction"] = default_config.dataset_fraction[
+                    group_name
+                ]
             main_run(main_config)
 
 

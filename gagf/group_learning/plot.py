@@ -113,6 +113,7 @@ def plot_training_power_over_time(
         Path to save the plot. If None, the plot is not saved.
     """
     template_power = template_power_object.power
+    template_power = np.where(template_power < 1e-20, 0, template_power)
     flattened_template_power = template_power.flatten()
     if group_name == "znz_znz":
         power_idx = np.argsort(flattened_template_power)[-5:][::-1]
@@ -147,7 +148,7 @@ def plot_training_power_over_time(
             label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
         else:
             freqs = template_power_object.freqs
-            label = rf"$\xi = {freqs[i]:.1f}$"
+            label = rf"$\xi = {freqs[i]}  (dim={group.irreps()[i].size})$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
         plt.axhline(
             flattened_template_power[i],
@@ -161,12 +162,19 @@ def plot_training_power_over_time(
     # Labeling and formatting
     if logscale:
         plt.yscale("log")
+        plt.ylim(1, 10000)
+        plt.yticks(
+            [1, 10, 100, 1000, 10000],
+            [r"$10^0$", r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$"],
+        )
     plt.xscale("log")
     plt.xlim(0, len(param_history) - 1)
+
     plt.xticks(
         [1000, 10000, 100000, len(param_history) - 1],
         [r"$10^3$", r"$10^4$", r"$10^5$", "Final"],
     )
+
     plt.ylabel("Power", fontsize=24)
     plt.xlabel("Epochs", fontsize=24)
     plt.legend(
