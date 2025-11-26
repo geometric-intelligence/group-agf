@@ -7,7 +7,7 @@ def test_power_custom_template():
     group = Octahedral()
     print("Irrep sizes:", [irrep.size for irrep in group.irreps()])
     seed = 42
-    powers = [100., 20., 0., 0., 0.] # on irreps [1, 3, 3, 2, 1]
+    powers = [100., 20., 20., 0., 0.] # on irreps [1, 3, 3, 2, 1]
     template = generate_fixed_group_template(group, seed=seed, powers=powers)
 
     gp = GroupPower(template, group)

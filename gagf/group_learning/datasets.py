@@ -459,7 +459,8 @@ def load_dataset(config):
         )
         return X, Y, template
     else:
-        template = generate_fixed_group_template(config["group"], config["seed"])
+        template = generate_fixed_group_template(
+            config["group"], config["seed"], config["powers"])
         X, Y = group_dataset(config["group"], template)
 
         if config["dataset_fraction"] != 1.0:

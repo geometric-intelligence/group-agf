@@ -57,8 +57,8 @@ def main_run(config):
         # Format template power values to only 2 decimals
         formatted_power_list = [f"{x:.2e}" for x in template_power.power]
         print("Template power:\n", formatted_power_list)
-        print(f"Corresponding to irreps (and their size:):\n {[irrep.size for irrep in config['group'].irreps()]}")
-        raise Exception("Stop here to check the template power.")
+        print(f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}")
+        #raise Exception("Stop here to check the template power.")
 
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
@@ -66,8 +66,9 @@ def main_run(config):
         if config["batch_size"] == "full":
             config["batch_size"] = X.shape[0]
         if default_config.resume_from_checkpoint:
-            config["checkpoint_path"] = train.get_model_save_path(config, default_config.checkpoint_epoch)
-
+            config["checkpoint_path"] = train.get_model_save_path(
+                config, default_config.checkpoint_epoch, default_config.checkpoint_run_name_to_load)
+        config["run_name"] = run_name
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
 
@@ -153,6 +154,8 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
+        print("Template power:\n", formatted_power_list)
+        print(f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}")
 
         wandb_config.update({"full_run": full_run})
         wandb.finish()
@@ -210,11 +213,12 @@ def main():
             "verbose_interval": verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
+            "powers": default_config.powers[group_name],
             "power_logscale": default_config.power_logscale,
             "resume_from_checkpoint": default_config.resume_from_checkpoint, 
             "checkpoint_interval": checkpoint_interval,
-            "checkpoint_path": None
-        }
+            "checkpoint_path": None,        
+            }
 
         if group_name == "znz_znz":
             for (

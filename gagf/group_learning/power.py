@@ -199,7 +199,7 @@ class GroupPower:
             fourier_coef = gft.compute_group_fourier_coef(
                 self.group, self.template, irrep
             )
-            print(f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
+            #(f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
             power_spectrum[i] = irrep.size * np.trace(
                 fourier_coef.conj().T @ fourier_coef
             )  # TODO: check if this is correct
@@ -209,6 +209,8 @@ class GroupPower:
 
     def get_alpha_values(self):
         """Compute theoretical alpha values from the template's power spectrum.
+
+        The alpha values give the levels of the loss plot.
 
         Parameters
         ----------
@@ -225,7 +227,7 @@ class GroupPower:
         p = len(self.template)
         print("Computing alpha values for template of shape:", (p,))
         power = self.power
-        print(power)
+        print(f'Power: {power}')
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
         print("Found ", len(power), "non-zero power coefficients.")
@@ -319,6 +321,7 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
             powers_over_time[i_step, :] = average_power
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)
+    powers_over_time[powers_over_time < 1e-20] = 0
     print("Powers over time shape:", powers_over_time.shape)
 
     return powers_over_time, steps

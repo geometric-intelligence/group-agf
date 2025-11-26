@@ -24,7 +24,7 @@ def test_accuracy(model, dataloader):
     return accuracy
 
 
-def get_model_save_path(config, checkpoint_epoch):
+def get_model_save_path(config, checkpoint_epoch, run_name):
     """Generate a unique model save path based on the config parameters."""
     if config["group_name"] == "znz_znz":
         model_save_path = (
@@ -52,6 +52,7 @@ def get_model_save_path(config, checkpoint_epoch):
             f"mom{config['mom']}_"
             f"bs{config['batch_size']}_"
             f"epochs{checkpoint_epoch}_"
+            f"run_name{run_name}_"
             f"seed{config['seed']}.pt"
             # f"run_start{config['run_start_time']}.pkl"
         )
@@ -187,7 +188,8 @@ def train(
 
         # Save checkpoint if at checkpoint interval or at the end of the training
         if ((epoch + 1) % config["checkpoint_interval"] == 0 or (epoch + 1) == config["epochs"]):
-            checkpoint_path = get_model_save_path(config, checkpoint_epoch=(epoch + 1))
+            checkpoint_path = get_model_save_path(
+                config, checkpoint_epoch=(epoch + 1), run_name=config["run_name"])
             save_checkpoint(
                 checkpoint_path,
                 model,
