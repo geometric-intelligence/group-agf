@@ -117,17 +117,23 @@ def plot_training_power_over_time(
     flattened_template_power = template_power.flatten()
     if group_name == "znz_znz":
         power_idx = np.argsort(flattened_template_power)[-5:][::-1]
+        model_powers_over_time, steps = power.model_power_over_time(
+            group_name=group_name,
+            group=None,
+            model=model.to(device),
+            param_history=param_history,
+            model_inputs=X_tensor,
+        )
     else:
         power_idx = np.argsort(flattened_template_power)[::-1]
-
-    group = template_power_object.group
-    model_powers_over_time, steps = power.model_power_over_time(
-        group_name=group_name,
-        group=group,
-        model=model.to(device),
-        param_history=param_history,
-        model_inputs=X_tensor,
-    )
+        group = template_power_object.group
+        model_powers_over_time, steps = power.model_power_over_time(
+            group_name=group_name,
+            group=group,
+            model=model.to(device),
+            param_history=param_history,
+            model_inputs=X_tensor,
+        )
 
     # Create a new figure for this plot
     fig = plt.figure(figsize=(10, 6))
@@ -203,10 +209,8 @@ def plot_training_power_over_time(
 
 
 def plot_neuron_weights(
-    group_name,
-    group,
+    config,
     model,
-    group_size,
     neuron_indices=None,
     save_path=None,
     show=False,
@@ -268,25 +272,25 @@ def plot_neuron_weights(
 
     for i, idx in enumerate(neuron_indices):
         w = weights[idx]
-        if any(getattr(irrep, "size", 1) == 2 for irrep in group.irreps()):
-            if w.shape[0] != group_size:
+        if config['group_name'] is "znz_znz" or any(getattr(irrep, "size", 1) == 2 for irrep in config['group'].irreps()): # 2D irreps
+            if w.shape[0] != config['group_size']:
                 raise ValueError(
-                    f"Expected weight size img_len*img_len={group_size}, got {w.shape[0]}"
+                    f"Expected weight size img_len*img_len={config['group_size']}, got {w.shape[0]}"
                 )
-            if group_name == "znz_znz":
-                img_len = int(np.sqrt(group_size))
+            if config['group_name'] == "znz_znz":
+                img_len = int(np.sqrt(config['group_size']))
                 w_img = w.reshape(img_len, img_len)
             else:
-                w_img = w.reshape(group_size, -1)
+                w_img = w.reshape(config['group_size'], -1)
             axs[i].imshow(w_img, cmap="viridis")
             axs[i].set_title(f"Neuron {idx}")
             axs[i].axis("off")
-        else:
-            if w.shape[0] != group_size:
+        else: # 1D irreps
+            if w.shape[0] != config['group_size']:
                 raise ValueError(
-                    f"Expected weight size group_size={group_size}, got {w.shape[0]}"
+                    f"Expected weight size group_size={config['group_size']}, got {w.shape[0]}"
                 )
-            axs[i].plot(np.arange(group_size), w, lw=2)
+            axs[i].plot(np.arange(config['group_size']), w, lw=2)
             axs[i].set_title(f"Neuron {idx}")
             axs[i].set_xlabel("Input Index")
             axs[i].set_ylabel("Weight Value")

@@ -43,7 +43,7 @@ def one_hot2D(p):
     return mat
 
 
-def generate_fixed_template_znz_znz(image_length):
+def generate_fixed_template_znz_znz(image_length, nonzero_powers=None):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
@@ -53,6 +53,8 @@ def generate_fixed_template_znz_znz(image_length):
     ----------
     p : int
         p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
+    nonzero_powers : list
+        desired magnitude of nonzero fourier coefs
 
     Returns
     -------
@@ -63,10 +65,15 @@ def generate_fixed_template_znz_znz(image_length):
     # Generate template array from Fourier spectrum
     spectrum = np.zeros((image_length, image_length), dtype=complex)
 
-    # Three low-frequency bins with Gaussian-ish weights
-    v1 = 2.0  # 2.0
-    v2 = 1.0  # 0.1 # make sure this is not too close to v1
-    v3 = 0.7  # 0.7 #0.01
+    if nonzero_powers == None:
+        # Three low-frequency bins with Gaussian-ish weights
+        v1 = 10.0  # 2.0
+        v2 = 3.0  # 0.1 # make sure this is not too close to v1
+        v3 = 7.0  # 0.7 #0.01
+    else:
+        v1 = nonzero_powers[0]
+        v2 = nonzero_powers[1]
+        v3 = nonzero_powers[2]
 
     # plot_set_template_components(v1, v2, v3, p)
 
@@ -198,7 +205,7 @@ def generate_fixed_group_template(group, seed, fourier_coef_diag_values):
     spectrum = []
     assert len(fourier_coef_diag_values) == len(
         group.irreps()
-    ), "Number of Fourier coef. magnitudes on the diagonal must match number of irreps"
+    ), f"Number of Fourier coef. magnitudes on the diagonal {len(fourier_coef_diag_values)} must match number of irreps {len(group.irreps())}"
     for i, irrep in enumerate(group.irreps()):
         diag_values = np.full(irrep.size, fourier_coef_diag_values[i], dtype=float)
         # Create a random full rank matrix with unique diagonal entries
@@ -422,28 +429,28 @@ def load_modular_addition_dataset_2d(
     Y : np.ndarray (num_samples, p*p)
     translations : np.ndarray
     """
-    file_name = f"modular_addition_2d_dataset_type{template_type}_p{image_length}_fraction{fraction:.2f}.npz"
+    # file_name = f"modular_addition_2d_dataset_type{template_type}_p{image_length}_fraction{fraction:.2f}.npz"
 
-    root_dir = setcwd.get_root_dir()
-    load_path = os.path.join(
-        root_dir, "gagf", "group_learning", "saved_datasets", file_name
+    # root_dir = setcwd.get_root_dir()
+    # load_path = os.path.join(
+    #     root_dir, "gagf", "group_learning", "saved_datasets", file_name
+    # )
+
+    # if os.path.exists(load_path):
+    #     data = np.load(load_path)
+    #     X = data["X"]
+    #     Y = data["Y"]
+    #     translations = data["translations"]
+    #     return X, Y, translations
+    # else:
+    X, Y, translations = modular_addition_dataset_2d(
+        image_length,
+        template,
+        fraction=fraction,
+        random_state=random_state,
+        # save_path=load_path,
     )
-
-    if os.path.exists(load_path):
-        data = np.load(load_path)
-        X = data["X"]
-        Y = data["Y"]
-        translations = data["translations"]
-        return X, Y, translations
-    else:
-        X, Y, translations = modular_addition_dataset_2d(
-            image_length,
-            template,
-            fraction=fraction,
-            random_state=random_state,
-            save_path=load_path,
-        )
-        return X, Y, translations
+    return X, Y, translations
 
 
 def load_dataset(config):
@@ -451,7 +458,7 @@ def load_dataset(config):
 
     if config["group_name"] == "znz_znz":
         # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
-        template = generate_fixed_template_znz_znz(config["image_length"])
+        template = generate_fixed_template_znz_znz(config["image_length"], config["fourier_coef_diag_values"])
         X, Y, _ = load_modular_addition_dataset_2d(
             config["image_length"],
             template,

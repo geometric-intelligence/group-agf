@@ -52,7 +52,7 @@ def get_model_save_path(config, checkpoint_epoch, run_name):
             f"mom{config['mom']}_"
             f"bs{config['batch_size']}_"
             f"epochs{checkpoint_epoch}_"
-            f"{run_name}_"
+            # f"{run_name}_"
             f"seed{config['seed']}.pt"
             # f"run_start{config['run_start_time']}.pkl"
         )
@@ -67,7 +67,8 @@ def save_checkpoint(
     epoch,
     loss_history,
     accuracy_history,
-    param_history,
+    param_history=None,
+    save_param_history=True,
 ):
     # Get optimizer state dict and remove model reference from param_groups if present
     # (model reference can't be pickled and will be restored from the model parameter during load)
@@ -85,20 +86,30 @@ def save_checkpoint(
     else:
         optimizer_state_clean = optimizer_state
 
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer_state_clean,
-            "epoch": epoch,
-            "loss_history": loss_history,
-            "accuracy_history": accuracy_history,
-            "param_history": param_history,
-        },
-        checkpoint_path,
-    )
-    print(
-        f"Training history saved to {checkpoint_path}. You can reload it later with torch.load({checkpoint_path}, map_location='cpu')."
-    )
+    # Build checkpoint dict - only include param_history if requested (saves disk space)
+    checkpoint_dict = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer_state_clean,
+        "epoch": epoch,
+        "loss_history": loss_history,
+        "accuracy_history": accuracy_history,
+    }
+    if save_param_history and param_history is not None:
+        checkpoint_dict["param_history"] = param_history
+
+    try:
+        torch.save(checkpoint_dict, checkpoint_path)
+        print(
+            f"Training history saved to {checkpoint_path}. You can reload it later with torch.load({checkpoint_path}, map_location='cpu')."
+        )
+    except RuntimeError as e:
+        if "No space left on device" in str(e) or "unexpected pos" in str(e):
+            print(f"ERROR: Failed to save checkpoint due to disk space issues: {e}")
+            print(f"Checkpoint path: {checkpoint_path}")
+            print("Consider cleaning up old checkpoints or using a different save location.")
+            raise
+        else:
+            raise
 
 
 def load_checkpoint(checkpoint_path, model, optimizer=None, map_location="cpu"):
@@ -214,6 +225,9 @@ def train(
             checkpoint_path = get_model_save_path(
                 config, checkpoint_epoch=(epoch + 1), run_name=config["run_name"]
             )
+            # Only save param_history in the final checkpoint to save disk space
+            # (param_history can be very large as it stores all parameters for every epoch)
+            is_final_checkpoint = (epoch + 1) == config["epochs"]
             save_checkpoint(
                 checkpoint_path,
                 model,
@@ -222,6 +236,7 @@ def train(
                 loss_history,
                 accuracy_history,
                 param_history,
+                save_param_history=is_final_checkpoint,
             )
 
     return (
