@@ -31,7 +31,7 @@ optimizer_name = [
 ]  # , 'SGD' Adam', "Custom'" "PerNeuronScaledSGD"]
 
 # Training parameters
-epochs = [20000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000]
+epochs = [30000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000]
 verbose_interval = [100]  # 100
 checkpoint_interval = [5000]
 batch_size = [128]  #    128, 256]
@@ -40,9 +40,9 @@ batch_size = [128]  #    128, 256]
 power_logscale = False
 
 # Change these if you want to resume training from a checkpoint
-resume_from_checkpoint = True
+resume_from_checkpoint = False
 checkpoint_epoch = 10000
-checkpoint_run_name_to_load = "y8iuevxm"
+checkpoint_run_name_to_load = "run_y8iuevxm"
 
 # znz_znz specific parameters
 # mnist_digit = [4]

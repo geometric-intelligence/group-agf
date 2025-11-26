@@ -169,7 +169,7 @@ def train(
         param_history = checkpoint.get("param_history", [])
         print(f"Resuming training from epoch {start_epoch}")
     else:
-        print("Starting training from scratch (no checkpoint to resume).")
+        print(f"Starting training from scratch (no checkpoint to resume). Checkpoint path was: {config['checkpoint_path']}")
 
     for epoch in range(start_epoch, config["epochs"]):
         running_loss = 0.0
