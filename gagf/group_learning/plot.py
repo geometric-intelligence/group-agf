@@ -148,7 +148,7 @@ def plot_training_power_over_time(
             label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
         else:
             freqs = template_power_object.freqs
-            label = rf"$\xi = {freqs[i]:.1f}$"
+            label = rf"$\xi = {freqs[i]}  (dim={group.irreps()[i].size})$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
         plt.axhline(
             flattened_template_power[i],

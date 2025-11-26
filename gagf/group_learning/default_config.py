@@ -8,13 +8,13 @@ image_length = [5]  # , 10, 15] # length of one side of the square image patch
 
 powers = {
     "dihedral": [0.0, 0.0, 0.0, 0.0, 0.0],
-    "octahedral": [0.0, 20.0, 0.0, 0.0, 100.0],  # [1, 3, 3, 2, 1]
+    "octahedral": [0.0, 400.0, 50., 900.0, 1000.0],  # [1, 3, 3, 2, 1] #[0.0, 200.0, 10., 850.0, 1000.0] at 10000 for 18gbbmou
 }
 
-diag_values = {
+fourier_coef_diag_values = {
     "dihedral": [0.0, 0.0, 0.0, 0.0, 0.0],
     "octahedral": [
-        np.sqrt(p / dim) for p, dim in zip(powers["octahedral"], [1, 3, 3, 2, 1])
+        np.sqrt(24*p / dim**2) for p, dim in zip(powers["octahedral"], [1, 3, 3, 2, 1])
     ],
 }
 
@@ -31,7 +31,7 @@ optimizer_name = [
 ]  # , 'SGD' Adam', "Custom'" "PerNeuronScaledSGD"]
 
 # Training parameters
-epochs = [10000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000]
+epochs = [20000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000]
 verbose_interval = [100]  # 100
 checkpoint_interval = [5000]
 batch_size = [128]  #    128, 256]
@@ -40,9 +40,9 @@ batch_size = [128]  #    128, 256]
 power_logscale = False
 
 # Change these if you want to resume training from a checkpoint
-resume_from_checkpoint = False
-checkpoint_epoch = 40000
-checkpoint_run_name_to_load = "NONE"
+resume_from_checkpoint = True
+checkpoint_epoch = 10000
+checkpoint_run_name_to_load = "y8iuevxm"
 
 # znz_znz specific parameters
 # mnist_digit = [4]

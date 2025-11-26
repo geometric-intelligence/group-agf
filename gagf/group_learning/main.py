@@ -60,6 +60,7 @@ def main_run(config):
         print(
             f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
         )
+        print(f"Desired power values:\n {config['powers']}")
         # raise Exception("Stop here to check the template power.")
 
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
@@ -117,7 +118,8 @@ def main_run(config):
 
         print("Training Complete. Generating plots...")
 
-        loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
+        loss_plot = plot.plot_loss_curve(
+            loss_history, template_power, save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg", show=False)
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power,
@@ -126,9 +128,13 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=None,  # TODO: Save the plot here in svg once it works
+            save_path=config["model_save_dir"] + f"power_over_training_plot_{run_name}.svg",
             show=False,
             logscale=config["power_logscale"],
+        )
+        print(
+            f"loss plot and power over training plot saved to {config['model_save_dir']}"
+            f" at loss_plot_{run_name}.svg and power_over_training_plot_{run_name}.svg"
         )
         neuron_weights_plot = plot.plot_neuron_weights(
             config[
@@ -220,6 +226,7 @@ def main():
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
             "powers": default_config.powers[group_name],
+            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[group_name],
             "power_logscale": default_config.power_logscale,
             "resume_from_checkpoint": default_config.resume_from_checkpoint,
             "checkpoint_interval": checkpoint_interval,

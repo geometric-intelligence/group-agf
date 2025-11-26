@@ -52,7 +52,7 @@ def get_model_save_path(config, checkpoint_epoch, run_name):
             f"mom{config['mom']}_"
             f"bs{config['batch_size']}_"
             f"epochs{checkpoint_epoch}_"
-            f"run_name{run_name}_"
+            f"{run_name}_"
             f"seed{config['seed']}.pt"
             # f"run_start{config['run_start_time']}.pkl"
         )
