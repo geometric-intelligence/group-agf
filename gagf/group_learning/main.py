@@ -116,6 +116,7 @@ def main_run(config):
             config["group_name"],
             save_path=None,
             show=False,
+            logscale=config["power_logscale"],
         )
         neuron_weights_plot = plot.plot_neuron_weights(
             config[
@@ -200,6 +201,7 @@ def main():
             "verbose_interval": verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
+            "power_logscale": default_config.power_logscale,
         }
 
         if group_name == "znz_znz":

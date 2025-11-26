@@ -22,7 +22,8 @@ def test_accuracy(model, dataloader):
     accuracy = 100 * correct / total
     return accuracy
 
-
+# TODO: Make loss plot every loss_log_epoch to be able to monitor.
+# TODO: Add checkpointing every checkpoint_interval to be able to resume training.
 def train(
     model,
     dataloader,
