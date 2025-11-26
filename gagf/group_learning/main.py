@@ -68,6 +68,8 @@ def main_run(config):
         # Determine batch size: if 'full', set to all samples
         if config["batch_size"] == "full":
             config["batch_size"] = X.shape[0]
+        print(f"default_config.resume_from_checkpoint: {default_config.resume_from_checkpoint}")
+        print(f"config[resume_from_checkpoint]: {config['resume_from_checkpoint']}")
         if default_config.resume_from_checkpoint:
             config["checkpoint_path"] = train.get_model_save_path(
                 config,
