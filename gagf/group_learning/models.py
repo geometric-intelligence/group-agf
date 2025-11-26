@@ -76,5 +76,3 @@ class TwoLayerNet(nn.Module):
         x_out *= self.output_scale
 
         return x_out
-
-

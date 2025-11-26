@@ -177,8 +177,9 @@ def generate_fixed_template_dihedral(N):
 
     return template
 
+
 # TODO: Design a template with a few irreps that more separation in power spectrum
-def generate_fixed_group_template(group, seed, powers = [10., 100., 0., 0., 0.]):
+def generate_fixed_group_template(group, seed, powers=[10.0, 100.0, 0.0, 0.0, 0.0]):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 
@@ -195,12 +196,14 @@ def generate_fixed_group_template(group, seed, powers = [10., 100., 0., 0., 0.])
         The mean centered template.
     """
     spectrum = []
-    assert len(powers) == len(group.irreps()), "Number of powers must match number of irreps"
+    assert len(powers) == len(
+        group.irreps()
+    ), "Number of powers must match number of irreps"
     for i, irrep in enumerate(group.irreps()):
         diag_values = np.full(irrep.size, powers[i], dtype=float)
-            # Create a random full rank matrix with unique diagonal entries
+        # Create a random full rank matrix with unique diagonal entries
         mat = np.zeros((irrep.size, irrep.size), dtype=float)
-        #print(f"diag_values for irrep {i} of dimension {dim} is: {diag_values}")
+        # print(f"diag_values for irrep {i} of dimension {dim} is: {diag_values}")
         np.fill_diagonal(mat, diag_values)
         print(f"mat for irrep {i} of dimension {irrep.size} is:\n {mat}\n")
 
@@ -460,7 +463,8 @@ def load_dataset(config):
         return X, Y, template
     else:
         template = generate_fixed_group_template(
-            config["group"], config["seed"], config["powers"])
+            config["group"], config["seed"], config["powers"]
+        )
         X, Y = group_dataset(config["group"], template)
 
         if config["dataset_fraction"] != 1.0:

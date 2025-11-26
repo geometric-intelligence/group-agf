@@ -161,12 +161,12 @@ def plot_training_power_over_time(
 
     # Labeling and formatting
     if logscale:
-        plt.yscale("log")    
+        plt.yscale("log")
         plt.ylim(1, 10000)
         plt.yticks(
-        [1, 10, 100, 1000, 10000],
-        [r"$10^0$", r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$"]
-    )
+            [1, 10, 100, 1000, 10000],
+            [r"$10^0$", r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$"],
+        )
     plt.xscale("log")
     plt.xlim(0, len(param_history) - 1)
 

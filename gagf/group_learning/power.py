@@ -199,11 +199,13 @@ class GroupPower:
             fourier_coef = gft.compute_group_fourier_coef(
                 self.group, self.template, irrep
             )
-            #(f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
+            # (f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
             power_spectrum[i] = irrep.size * np.trace(
                 fourier_coef.conj().T @ fourier_coef
             )  # TODO: check if this is correct
-        power_spectrum = power_spectrum / self.group.order() # why division by group order?
+        power_spectrum = (
+            power_spectrum / self.group.order()
+        )  # why division by group order?
 
         return np.array(power_spectrum)
 
@@ -227,7 +229,7 @@ class GroupPower:
         p = len(self.template)
         print("Computing alpha values for template of shape:", (p,))
         power = self.power
-        print(f'Power: {power}')
+        print(f"Power: {power}")
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
         print("Found ", len(power), "non-zero power coefficients.")

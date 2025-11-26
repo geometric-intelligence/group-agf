@@ -9,12 +9,15 @@ from gagf.group_learning.group_fourier_transform import (
     compute_group_inverse_fourier_transform,
 )
 
+
 def test_fourier_transform_of_fixed_template():
     group = Octahedral()
     seed = 42
 
     # Generate template with nontrivial spectrum
-    template = generate_fixed_group_template(group, seed=seed, powers=[100., 20., 0., 0., 0.])
+    template = generate_fixed_group_template(
+        group, seed=seed, powers=[100.0, 20.0, 0.0, 0.0, 0.0]
+    )
 
     # Forward Fourier transform
     fourier_transform = compute_group_fourier_transform(group, template)
@@ -61,4 +64,3 @@ def test_fourier_transform_of_fixed_template():
 
 if __name__ == "__main__":
     test_fourier_transform_of_fixed_template()
-
