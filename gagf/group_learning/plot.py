@@ -21,7 +21,7 @@ def plot_loss_curve(
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    fig = plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(6, 7))
 
     alpha_values = template_power.get_alpha_values()
     print(f"Plotting {len(alpha_values)} theoretical plateau lines.")
@@ -136,7 +136,7 @@ def plot_training_power_over_time(
         )
 
     # Create a new figure for this plot
-    fig = plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(6, 7))
 
     for i in power_idx:
         if group_name == "znz_znz":

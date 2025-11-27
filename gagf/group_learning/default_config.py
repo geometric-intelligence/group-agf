@@ -1,14 +1,14 @@
 import numpy as np
 
 # Dataset Parameters
-group_name = ["znz_znz"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
-group_n = [6]  # n in Dn [3, 4, 5] we are doingn D6
+group_name = ["cyclic"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
+group_n = [10]  # n in Dn [3, 4, 5] we are doingn D6
 # TODO: don't include this image_length here, since it should only be for the znz_znz group.
 image_length = [5]  # , 10, 15] # length of one side of the square image patch
 
 powers = {
     "znz_znz": None,
-    "cyclic": [0.0, 100.0, 200.0, 300.0, 0.0, 0.0], # only uses 6 bc real and imag irreps are merged in escnn
+    "cyclic": [0.0, 1000.0, 200.0, 300.0, 0.0, 0.0], # only uses 6 bc real and imag irreps are merged in escnn
     "dihedral": [0.0, 400.0,  0.0, 50.0, 100.0, 0.0],
     "octahedral": [0.0, 400.0, 50., 900.0, 1000.0],  # [1, 3, 3, 2, 1] #[0.0, 200.0, 10., 850.0, 1000.0] at 10000 for 18gbbmou
 }
@@ -31,15 +31,15 @@ hidden_factor = [50]  # hidden size = hidden_factor * group_size
 
 # Learning Parameters
 seed = [10]  # [10, 20, 30, 40]  # , 30, 40, 50] #, 60, 70, 80, 90, 100]
-init_scale = [1e-4]  # [1e-5, 1e-6, 1e-4]  # originally 1e-2.. 1e-6 for dihedral, 1e-4 for cn x cn
-lr = [0.01]  # , 0.0001]  # originaly 0.01. 0.00001 for dihedral, 0.01 for cn x cn
+init_scale = [1e-2]  # [1e-5, 1e-6, 1e-4]  # originally 1e-2.. 1e-6 for dihedral, 1e-4 for cn x cn
+lr = [0.000001]  # , 0.0001]  # originaly 0.01. 0.00001 for dihedral, 0.01 for cn x cn
 mom = [0.9]  # originaly 0.9
 optimizer_name = [
     "PerNeuronScaledSGD"
 ]  # , 'SGD' Adam', "Custom'" "PerNeuronScaledSGD"]
 
 # Training parameters
-epochs = [50000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000], 50000 for cn x cn
+epochs = [1000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000], 50000 for cn x cn
 verbose_interval = [100]  # 100
 checkpoint_interval = [5000]
 batch_size = [128]  #    128, 256]
