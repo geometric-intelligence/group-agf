@@ -7,6 +7,14 @@ from matplotlib.ticker import MaxNLocator
 import gagf.group_learning.power as power
 
 
+FONT_SIZES = {
+    "title": 30,
+    "axes_label": 30,
+    "tick_label": 30,
+    "legend": 15
+}
+
+
 def plot_loss_curve(
     loss_history, template_power, save_path=None, show=False, freq_colors=None
 ):
@@ -21,7 +29,7 @@ def plot_loss_curve(
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    fig = plt.figure(figsize=(6, 7))
+    fig = plt.figure(figsize=(6, 6))
 
     alpha_values = template_power.get_alpha_values()
     print(f"Plotting {len(alpha_values)} theoretical plateau lines.")
@@ -75,10 +83,43 @@ def plot_loss_curve(
     plt.xscale("log")
     plt.yscale("log")
 
-    plt.xlabel("Epochs", fontsize=24)
-    plt.ylabel("Train Loss", fontsize=24)
+    # Create nice yticks for linear loss scale (not log)
+    ymin, ymax = plt.ylim()
+    # Compute some reasonable ticks between the min and max, at most 6 ticks
+    yticks = np.linspace(ymin, ymax, num=6)
+    # Format the tick labels nicely, decide if they should be int or float
+    def format_tick(val):
+        if abs(val) >= 1000 or abs(val) < 1e-2:
+            return f"{val:.1e}"
+        elif abs(val - int(val)) < 1e-6:
+            return f"{int(val)}"
+        else:
+            return f"{val:.2f}"
+    yticklabels = [format_tick(t) for t in yticks]
+    plt.yticks(yticks, yticklabels, fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18)
 
-    style_axes(plt.gca())
+
+    plt.xlabel("Epochs", fontsize=FONT_SIZES["axes_label"])
+    plt.ylabel("Train Loss", fontsize=FONT_SIZES["axes_label"])
+
+    # Dynamically adjust xticks so none exceed available epochs
+    tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(loss_history) - 1]
+    tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
+    # Always include "Final" at the last epoch
+    tick_locs.append(len(loss_history) - 1)
+    tick_labels.append("Final")
+    plt.xticks(
+        tick_locs,
+        tick_labels,
+        fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
+    )
+
+    # Cut off y-axis slightly below the lowest alpha value for higher resolution
+    y_min = alpha_values[-1] * 0.7 if alpha_values[-1] > 0 else 1e-8
+    plt.ylim(bottom=y_min)
+    plt.xlim(0, len(loss_history) + 100)
+
+    # style_axes(plt.gca())
     plt.grid(False)
     plt.tight_layout()
 
@@ -172,27 +213,51 @@ def plot_training_power_over_time(
         plt.yticks(
             [1, 10, 100, 1000, 10000],
             [r"$10^0$", r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$"],
+            fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
         )
+    else:
+        # Create nice yticks for linear loss scale (not log)
+        ymin, ymax = plt.ylim()
+        # Compute some reasonable ticks between the min and max, at most 6 ticks
+        yticks = np.linspace(ymin, ymax, num=6)
+        # Format the tick labels nicely, decide if they should be int or float
+        def format_tick(val):
+            if abs(val) >= 1000 or abs(val) < 1e-2:
+                return f"{val:.1e}"
+            elif abs(val - int(val)) < 1e-6:
+                return f"{int(val)}"
+            else:
+                return f"{val:.2f}"
+        yticklabels = [format_tick(t) for t in yticks]
+        plt.yticks(yticks, yticklabels, fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18)
+    
     plt.xscale("log")
     plt.xlim(0, len(param_history) - 1)
-
+    
+    # Dynamically adjust xticks so none exceed available epochs
+    tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(param_history) - 1]
+    tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
+    # Always include "Final" at the last epoch
+    tick_locs.append(len(param_history) - 1)
+    tick_labels.append("Final")
     plt.xticks(
-        [1000, 10000, 100000, len(param_history) - 1],
-        [r"$10^3$", r"$10^4$", r"$10^5$", "Final"],
+        tick_locs,
+        tick_labels,
+        fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
     )
 
-    plt.ylabel("Power", fontsize=24)
-    plt.xlabel("Epochs", fontsize=24)
+    plt.ylabel("Power", fontsize=FONT_SIZES["axes_label"])
+    plt.xlabel("Epochs", fontsize=FONT_SIZES["axes_label"])
     plt.legend(
-        fontsize=14,
+        fontsize=FONT_SIZES["legend"],
         title="Frequency",
-        title_fontsize=16,
-        loc="upper right",
-        bbox_to_anchor=(1, 0.9),
+        title_fontsize=FONT_SIZES["legend"],
+        loc="upper left",
+        # bbox_to_anchor=(1, 0.9),
         labelspacing=0.25,
     )
     ax = plt.gca()
-    style_axes(ax)
+    # style_axes(ax)
     plt.grid(False)
     plt.tight_layout()
 
@@ -440,7 +505,7 @@ def plot_model_outputs(
             suptitle_str = f"Model Inputs, Outputs, and Targets at index {idx}"
             if param_history is not None and step is not None and isinstance(step, int):
                 suptitle_str += f" (step {s_idx})"
-            fig.suptitle(suptitle_str, fontsize=20)
+            fig.suptitle(suptitle_str, fontsize=FONT_SIZES["title"])
             plt.tight_layout()
 
         # --- 1D plotting for other groups ---
@@ -466,7 +531,7 @@ def plot_model_outputs(
             suptitle_str = f"Model Outputs and Targets at index {idx}"
             if param_history is not None and step is not None and isinstance(step, int):
                 suptitle_str += f" (step {s_idx})"
-            fig.suptitle(suptitle_str, fontsize=20)
+            fig.suptitle(suptitle_str, fontsize=FONT_SIZES["title"])
             plt.tight_layout()
 
         if save_path is not None:
@@ -640,7 +705,7 @@ def plot_irreps(group, show=False):
             plt.colorbar(im, ax=axs[i])
     fig.suptitle(
         "Irreducible Representations (matrix values for all group elements)",
-        fontsize=16,
+        fontsize=FONT_SIZES["title"],
     )
     plt.tight_layout()
     if show:
