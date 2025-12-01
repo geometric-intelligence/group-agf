@@ -60,6 +60,20 @@ def get_model_save_path(config, checkpoint_epoch, run_name):
     return model_save_path
 
 
+def save_param_history(param_history_path, param_history):
+    """Save param_history separately for analysis (can be very large)."""
+    torch.save({"param_history": param_history}, param_history_path)
+    print(
+        f"Parameter history saved to {param_history_path} "
+        f"(size: {os.path.getsize(param_history_path) / (1024**3):.2f} GB)"
+    )
+
+def load_param_history(param_history_path):
+    """Load param_history separately for analysis (can be very large)."""
+    param_history = torch.load(param_history_path)["param_history"]
+    return param_history
+
+
 def save_checkpoint(
     checkpoint_path,
     model,
@@ -92,12 +106,14 @@ def save_checkpoint(
             "epoch": epoch,
             "loss_history": loss_history,
             "accuracy_history": accuracy_history,
-            "param_history": param_history,
+            # param_history is NOT saved in checkpoints to keep file size manageable
+            # It will be computed/saved separately for final analysis
         },
         checkpoint_path,
     )
     print(
-        f"Training history saved to {checkpoint_path}. You can reload it later with torch.load({checkpoint_path}, map_location='cpu')."
+        f"Checkpoint saved to {checkpoint_path} (epoch {epoch}, size: "
+        f"{os.path.getsize(checkpoint_path) / (1024**2):.1f} MB)"
     )
 
 
@@ -105,7 +121,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, map_location="cpu"):
     # Try loading with torch.load first (for .pt files or new .pkl files saved with torch.save)
     # If that fails, try pickle.load for backward compatibility with old .pkl files
     try:
-        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+        checkpoint = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
     except Exception as e:
         # Fallback to pickle for old checkpoints
         print(
@@ -163,10 +179,10 @@ def train(
     ):
         print(f"Resuming from checkpoint at {config['checkpoint_path']}.")
         checkpoint = load_checkpoint(config["checkpoint_path"], model, optimizer)
+        param_history = load_param_history(config["checkpoint_path"].replace(".pt", "_param_history.pt"))
         start_epoch = checkpoint.get("epoch", 0) + 1
         loss_history = checkpoint.get("loss_history", [])
         accuracy_history = checkpoint.get("accuracy_history", [])
-        param_history = checkpoint.get("param_history", [])
         print(f"Resuming training from epoch {start_epoch}")
     else:
         print(f"Starting training from scratch (no checkpoint to resume). Checkpoint path was: {config['checkpoint_path']}")
@@ -185,6 +201,12 @@ def train(
 
         # Append the average loss for the epoch to loss_history
         avg_loss = running_loss / len(dataloader)
+        # Detect NaN loss early in training and raise an error
+        if torch.isnan(torch.tensor(avg_loss)):
+            if epoch < 0.75 * config["epochs"]:
+                raise RuntimeError(
+                    f"NaN loss encountered at epoch {epoch+1} (avg_loss={avg_loss})."
+                )
         loss_history.append(avg_loss)
 
         # Append accuracy
@@ -223,6 +245,11 @@ def train(
                 accuracy_history,
                 param_history,
             )
+            
+            # Save param_history separately only at the end of training (it can be very large)
+            if (epoch + 1) == config["epochs"]:
+                param_history_path = checkpoint_path.replace(".pt", "_param_history.pt")
+                save_param_history(param_history_path, param_history)
 
     return (
         loss_history,

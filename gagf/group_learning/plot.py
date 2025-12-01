@@ -171,8 +171,8 @@ def plot_training_power_over_time(
     plt.xlim(0, len(param_history) - 1)
 
     plt.xticks(
-        [1000, 10000, 100000, len(param_history) - 1],
-        [r"$10^3$", r"$10^4$", r"$10^5$", "Final"],
+        [10, 100, 1000, 10000, 100000, len(param_history) - 1],
+        [r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", "Final"],
     )
 
     plt.ylabel("Power", fontsize=24)

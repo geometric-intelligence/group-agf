@@ -467,6 +467,8 @@ def load_dataset(config):
         )
         X, Y = group_dataset(config["group"], template)
 
+        print(f"dataset_fraction: {config['dataset_fraction']}")
+        
         if config["dataset_fraction"] != 1.0:
             assert 0 < config["dataset_fraction"] <= 1.0, "fraction must be in (0, 1]"
             # Sample a subset of the dataset according to the specified fraction
