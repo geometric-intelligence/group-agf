@@ -28,10 +28,8 @@ class ZnZPower2D:
         self.template = template
         self.p = int(np.sqrt(len(template)))
         self.template_2D = template.reshape((self.p, self.p))
-        self.x_freqs, self.y_freqs, self.power = self.get_power_2d(
-            self.template_2D, no_freq=True
-        )
-        self.alpha_values = self.get_alpha_values(template)
+        self.x_freqs, self.y_freqs, self.power = self.get_power_2d()
+        self.alpha_values = self.get_alpha_values()
 
     def get_power_2d(self, no_freq=False):
         """
@@ -131,7 +129,7 @@ class ZnZPower2D:
         """
         p = int(np.sqrt(len(self.template)))
         print("Computing alpha values for template of shape:", (p, p))
-        x_freqs, y_freqs, power = self.get_power_2d(self.template_2D)
+        x_freqs, y_freqs, power = self.get_power_2d()
         print(power)
         power = power.flatten()
 
@@ -199,15 +197,20 @@ class GroupPower:
             fourier_coef = gft.compute_group_fourier_coef(
                 self.group, self.template, irrep
             )
+            # (f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
             power_spectrum[i] = irrep.size * np.trace(
                 fourier_coef.conj().T @ fourier_coef
             )  # TODO: check if this is correct
-        power_spectrum = power_spectrum / self.group.order()
+        power_spectrum = (
+            power_spectrum / self.group.order()
+        )  # why division by group order?
 
         return np.array(power_spectrum)
 
     def get_alpha_values(self):
         """Compute theoretical alpha values from the template's power spectrum.
+
+        The alpha values give the levels of the loss plot.
 
         Parameters
         ----------
@@ -224,7 +227,7 @@ class GroupPower:
         p = len(self.template)
         print("Computing alpha values for template of shape:", (p,))
         power = self.power
-        print(power)
+        print(f"Power: {power}")
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
         print("Found ", len(power), "non-zero power coefficients.")
@@ -236,21 +239,21 @@ class GroupPower:
         return alpha_values
 
 
-def model_power_over_time(group_name, group, model, param_history, model_inputs):
+def model_power_over_time(group_name, model, param_history, model_inputs, group=None):
     """Compute the power spectrum of the model's learned weights over time.
 
     Parameters
     ----------
     group_name : str
         Group type (e.g., 'znz_znz').
-    group : Group (escnn object)
-        The escnn group object.
     model : TwoLayerNet
         The trained model.
     param_history : list of dict
         List of model parameters at each training step.
     model_inputs : torch.Tensor
         Input data tensor.
+    group : Group (escnn object)
+        The escnn group object. Optional, since we don't use escnn for znz_znz.
 
     Returns
     -------
@@ -261,10 +264,13 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
     model.eval()
     with torch.no_grad():
         test_output = model(model_inputs[:1])
+    print("test_output.shape: ", test_output.shape)
     output_shape = test_output.shape[1:]
+    print("output_shape: ", output_shape)
 
     if group_name == "znz_znz":  # 2D template
-        p1, p2 = output_shape
+        p1 = int(np.sqrt(output_shape[0]))
+        p2 = p1
         template_power_length = p1 * (p2 // 2 + 1)
         reshape_dims = (-1, p1, p2)
     else:  # other groups are 1D signals
@@ -294,6 +300,7 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
         model.eval()
         with torch.no_grad():
             outputs = model(X_tensor)
+            print("outputs dtype", outputs.dtype)
             outputs_arr = outputs.detach().cpu().numpy().reshape(reshape_dims)
 
             print(
@@ -318,6 +325,7 @@ def model_power_over_time(group_name, group, model, param_history, model_inputs)
             powers_over_time[i_step, :] = average_power
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)
+    powers_over_time[powers_over_time < 1e-20] = 0
     print("Powers over time shape:", powers_over_time.shape)
 
     return powers_over_time, steps

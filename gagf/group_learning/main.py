@@ -1,3 +1,4 @@
+from typing_extensions import dataclass_transform
 import numpy as np
 import torch
 import time
@@ -42,19 +43,38 @@ def main_run(config):
     try:
         logging.info(f"\n\n---> START run: {run_name}.")
 
-        model_save_path = models.get_model_save_path(config)
-
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
         assert (
             len(template) == config["group_size"]
         ), "Template size does not match group size."
+
+        if config["group_name"] == "znz_znz":
+            template_power = power.ZnZPower2D(template)
+        else:
+            template_power = power.GroupPower(template, group=config["group"])
+            # Format template power values to only 2 decimals
+            formatted_power_list = [f"{x:.2e}" for x in template_power.power]
+            print("Template power:\n", formatted_power_list)
+            print(
+                f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
+            )
+            
+        print(f"Desired power values:\n {config['powers']}")
+        # raise Exception("Stop here to check the template power.")
+
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
         # Determine batch size: if 'full', set to all samples
         if config["batch_size"] == "full":
             config["batch_size"] = X.shape[0]
-
+        if default_config.resume_from_checkpoint:
+            config["checkpoint_path"] = train.get_model_save_path(
+                config,
+                default_config.checkpoint_epoch,
+                default_config.checkpoint_run_name_to_load,
+            )
+        config["run_name"] = run_name
         dataset = TensorDataset(X, Y)
         dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
 
@@ -89,22 +109,17 @@ def main_run(config):
 
         print("Starting training...")
         loss_history, accuracy_history, param_history = train.train(
+            config,
             model,
             dataloader,
             loss,
             optimizer,
-            epochs=config["epochs"],
-            verbose_interval=config["verbose_interval"],
-            model_save_path=model_save_path,
         )
 
         print("Training Complete. Generating plots...")
-        if config["group_name"] == "znz_znz":
-            template_power = power.ZnZPower2D(template)
-        else:
-            template_power = power.GroupPower(template, group=config["group"])
 
-        loss_plot = plot.plot_loss_curve(loss_history, template_power, show=False)
+        loss_plot = plot.plot_loss_curve(
+            loss_history, template_power, save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg", show=False)
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power,
@@ -113,19 +128,17 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=None,
+            save_path=config["model_save_dir"] + f"power_over_training_plot_{run_name}.svg",
             show=False,
+            logscale=config["power_logscale"],
+        )
+        print(
+            f"loss plot and power over training plot saved to {config['model_save_dir']}"
+            f" at loss_plot_{run_name}.svg and power_over_training_plot_{run_name}.svg"
         )
         neuron_weights_plot = plot.plot_neuron_weights(
-            config[
-                "group_name"
-            ],  # TODO: remove this, since the group_name can be accessed from the group object:
-            # group.name (will give "D3") or group.__class__.__name__ (will give "DihedralGroup")
-            config["group"],
+            config,
             model,
-            config[
-                "group_size"
-            ],  # TODO: remove this, since the group_size can be accessed from the group object: group.order()
             neuron_indices=None,
         )
 
@@ -144,6 +157,10 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
+        if config['group_name'] != "znz_znz":
+            print(
+                f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
+            )
 
         wandb_config.update({"full_run": full_run})
         wandb.finish()
@@ -172,6 +189,7 @@ def main():
         batch_size,
         epochs,
         verbose_interval,
+        checkpoint_interval,
     ) in itertools.product(
         default_config.group_name,
         default_config.init_scale,
@@ -183,6 +201,7 @@ def main():
         default_config.batch_size,
         default_config.epochs,
         default_config.verbose_interval,
+        default_config.checkpoint_interval,
     ):
 
         main_config = {
@@ -199,26 +218,30 @@ def main():
             "verbose_interval": verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
+            "powers": default_config.powers[group_name],
+            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[group_name],
+            "power_logscale": default_config.power_logscale,
+            "resume_from_checkpoint": default_config.resume_from_checkpoint,
+            "checkpoint_interval": checkpoint_interval,
+            "checkpoint_path": None,
         }
 
         if group_name == "znz_znz":
             for (
-                frequencies_to_learn,
-                mnist_digit,
+                # frequencies_to_learn,
+                # mnist_digit,
                 image_length,
-                dataset_fraction,
             ) in itertools.product(
-                default_config.frequencies_to_learn,
-                default_config.mnist_digit,
+                # default_config.frequencies_to_learn,
+                # default_config.mnist_digit,
                 default_config.image_length,
-                default_config.dataset_fraction,
             ):
                 group_size = image_length * image_length
-                main_config["mnist_digit"] = mnist_digit
+                # main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
-                main_config["frequencies_to_learn"] = frequencies_to_learn
-                main_config["dataset_fraction"] = dataset_fraction
+                # main_config["frequencies_to_learn"] = frequencies_to_learn
+                main_config["dataset_fraction"] = default_config.dataset_fraction["znz_znz"]
                 main_run(main_config)
 
         elif group_name == "octahedral":
@@ -226,6 +249,9 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
+            main_config["dataset_fraction"] = default_config.dataset_fraction[
+                "octahedral"
+            ]
             main_run(main_config)
 
         elif group_name == "A5":
@@ -233,6 +259,7 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
+            main_config["dataset_fraction"] = default_config.dataset_fraction["A5"]
             main_run(main_config)
 
         else:
@@ -246,7 +273,9 @@ def main():
                 if group_name == "dihedral":
                     group = DihedralGroup(group_n)
                 elif group_name == "cyclic":
+                    print("group_n: ", group_n)
                     group = CyclicGroup(group_n)
+                    print("n cyclic irreps: ", len(group.irreps()))
                 else:
                     raise ValueError(
                         f"Unknown group_name: {group_name}. "
@@ -256,6 +285,9 @@ def main():
                 main_config["group"] = group
                 main_config["group_size"] = group_size
                 main_config["group_n"] = group_n
+                main_config["dataset_fraction"] = default_config.dataset_fraction[
+                    group_name
+                ]
             main_run(main_config)
 
 
