@@ -105,9 +105,6 @@ def plot_loss_curve(
     # Dynamically adjust xticks so none exceed available epochs
     tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(loss_history) - 1]
     tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
-    # Always include "Final" at the last epoch
-    tick_locs.append(len(loss_history) - 1)
-    tick_labels.append("Final")
     plt.xticks(
         tick_locs,
         tick_labels,
@@ -237,9 +234,6 @@ def plot_training_power_over_time(
     # Dynamically adjust xticks so none exceed available epochs
     tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(param_history) - 1]
     tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
-    # Always include "Final" at the last epoch
-    tick_locs.append(len(param_history) - 1)
-    tick_labels.append("Final")
     plt.xticks(
         tick_locs,
         tick_labels,
