@@ -41,15 +41,15 @@ hidden_factor = [50]  # hidden size = hidden_factor * group_size
 
 # Learning Parameters
 seed = [10]  # [10, 20, 30, 40]  # , 30, 40, 50] #, 60, 70, 80, 90, 100]
-init_scale = [1e-6]  # [1e-5, 1e-6, 1e-4]  # originally 1e-2 for cnxcn .. 1e-6 for dihedral, 1e-4 for cn x cn
-lr = [0.00001]  # , 0.0001]  # originaly 0.01. 0.00001 for dihedral6, 0.01 for cn x cn 0.00001 for D5
+init_scale = [1e-2]  # [1e-5, 1e-6, 1e-4]  # originally 1e-2 for cnxcn .. 1e-6 for dihedral, 1e-4 for cn x cn
+lr = [0.01]  # , 0.0001]  # originaly 0.01. 0.00001 for dihedral6, 0.01 for cn x cn 0.00001 for D5
 mom = [0.9]  # originaly 0.9
 optimizer_name = [
     "PerNeuronScaledSGD"
 ]  # , 'SGD' Adam', "Custom'" "PerNeuronScaledSGD"]
 
 # Training parameters
-epochs = [10000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000], 50000 for cn x cn 10000 for D5
+epochs = [15000]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000], 50000 for cn x cn 10000 for D5
 verbose_interval = [100]  # 100
 checkpoint_interval = [5000]
 batch_size = [128]  #    128, 256]

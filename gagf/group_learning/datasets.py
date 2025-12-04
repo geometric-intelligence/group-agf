@@ -67,9 +67,11 @@ def generate_fixed_template_znz_znz(image_length, nonzero_powers=None):
 
     if nonzero_powers == None:
         # Three low-frequency bins with Gaussian-ish weights
-        v1 = 10.0  # 2.0
-        v2 = 3.0  # 0.1 # make sure this is not too close to v1
-        v3 = 7.0  # 0.7 #0.01
+        v1 = 12.0  # 2.0 10.0
+        v2 = 10.0  # 0.1 # make sure this is not too close to v1 3.0
+        v3 = 8.0  # 0.7 #0.01 . 7.0
+        v4 = 6.0
+        v5 = 4.0
     else:
         v1 = nonzero_powers[0]
         v2 = nonzero_powers[1]
@@ -88,6 +90,15 @@ def generate_fixed_template_znz_znz(image_length, nonzero_powers=None):
     # Mode (1,1)
     spectrum[1, 1] = v3
     spectrum[-1, -1] = np.conj(v3)
+
+    # Mode (2,0)
+    spectrum[2, 0] = v4
+    spectrum[-2, 0] = np.conj(v4)
+
+    # Mode (0,2)
+    spectrum[0, 2] = v5
+    spectrum[0, -2] = np.conj(v5)
+
 
     # Generate signal from spectrum
     template = np.fft.ifft2(spectrum).real
