@@ -6,17 +6,16 @@ from gagf.group_learning.power import GroupPower
 
 def test_power_custom_template():
     group = Octahedral()
-    print("Irrep sizes:", [irrep.size for irrep in group.irreps()])
+    irrep_sizes = [irrep.size for irrep in group.irreps()]
+    print("Irrep sizes:", irrep_sizes)
     seed = 42
-    powers = [100.0, 20.0, 20.0, 0.0, 0.0]  # on irreps [1, 3, 3, 2, 1]
-    template = generate_fixed_group_template(group, seed=seed, powers=powers)
+    powers = [0., 20.0, 20.0, 100.0, 0.0]  # on irreps [1, 3, 3, 2, 1]
+    fourier_coef_diag_values = [np.sqrt(group.order()*p / dim**2) for p, dim in zip(powers, irrep_sizes)]
+    template = generate_fixed_group_template(group, seed=seed, fourier_coef_diag_values=fourier_coef_diag_values)
 
     gp = GroupPower(template, group)
     power = gp.power
-    expected_powers = [
-        irrep.size**2 * power**2 / group.order()
-        for irrep, power in zip(group.irreps(), powers)
-    ]
+    expected_powers = powers
 
     print("Computed power spectrum:", power)
     print("Expected powers:", expected_powers)
