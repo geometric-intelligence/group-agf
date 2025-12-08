@@ -71,7 +71,6 @@ def main_run(config):
             config["checkpoint_path"] = train.get_model_save_path(
                 config,
                 checkpoint_epoch=default_config.checkpoint_epoch,
-                run_name=default_config.checkpoint_run_name_to_load,
             )
         config["run_name"] = run_name
         dataset = TensorDataset(X, Y)

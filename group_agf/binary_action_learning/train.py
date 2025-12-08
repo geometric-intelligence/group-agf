@@ -24,7 +24,7 @@ def test_accuracy(model, dataloader):
     return accuracy
 
 
-def get_model_save_path(config, checkpoint_epoch, run_name):
+def get_model_save_path(config, checkpoint_epoch):
     """Generate a unique model save path based on the config parameters."""
     if config["group_name"] == "znz_znz":
         model_save_path = (
@@ -39,7 +39,6 @@ def get_model_save_path(config, checkpoint_epoch, run_name):
             f"mom{config['mom']}_"
             f"bs{config['batch_size']}_"
             f"checkpoint_epoch{checkpoint_epoch}_"
-            # f"freq{config['frequencies_to_learn']}_"
             f"seed{config['seed']}.pt"
         )
     else:
@@ -52,9 +51,7 @@ def get_model_save_path(config, checkpoint_epoch, run_name):
             f"mom{config['mom']}_"
             f"bs{config['batch_size']}_"
             f"epochs{checkpoint_epoch}_"
-            # f"{run_name}_"
             f"seed{config['seed']}.pt"
-            # f"run_start{config['run_start_time']}.pkl"
         )
 
     return model_save_path

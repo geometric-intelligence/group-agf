@@ -37,19 +37,16 @@ fourier_coef_diag_values = {
         np.sqrt(10 * p / dim**2)
         for p, dim in zip(powers["dihedral"], [1, 1, 2, 2, 1, 1])
     ],
-    # "dihedral": [
-    #     np.sqrt(12*p / dim**2) for p, dim in zip(powers["dihedral"], [1, 1, 2, 2, 1, 1])
-    # ],
     "octahedral": [
         [
             np.sqrt(24*p / dim**2) for p, dim in zip(powers["octahedral"][i], [1, 3, 3, 2, 1])
         ] for i in i_powers
     ],
-    # "A5":[
-    #     [
-    #         np.sqrt(60*p / dim**2) for p, dim in zip(powers["A5"][i], [1, 3, 5, 3, 4])
-    #     ] for i in i_powers
-    # ]
+    "A5":[
+        [
+            np.sqrt(60*p / dim**2) for p, dim in zip(powers["A5"][i], [1, 3, 5, 3, 4])
+        ] for i in i_powers
+    ]
 }
 
 # Model Parameters
@@ -72,7 +69,6 @@ power_logscale = False
 # Change these if you want to resume training from a checkpoint
 resume_from_checkpoint = False
 checkpoint_epoch = 50000
-checkpoint_run_name_to_load = "run_0nnx3ive"
 
 # znz_znz specific parameters
 image_length = [5]
@@ -86,5 +82,5 @@ dataset_fraction = {
     "A5": [1.0], # [0.2, 0.3, 0.4, 0.5, 0.6]
 }
 
-model_save_dir = "/tmp/nmiolane/"
-# model_save_dir = "/tmp/adele/"
+# model_save_dir = "/tmp/nmiolane/"
+model_save_dir = "/tmp/adele/"
