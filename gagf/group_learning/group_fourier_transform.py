@@ -1,5 +1,5 @@
-from escnn.group import *
 import numpy as np
+from escnn.group import *
 
 
 def compute_group_fourier_coef(group, template, irrep):

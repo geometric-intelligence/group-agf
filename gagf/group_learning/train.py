@@ -1,6 +1,7 @@
-import torch
-import pickle
 import os
+import pickle
+
+import torch
 
 
 def test_accuracy(model, dataloader):
@@ -106,7 +107,9 @@ def save_checkpoint(
         if "No space left on device" in str(e) or "unexpected pos" in str(e):
             print(f"ERROR: Failed to save checkpoint due to disk space issues: {e}")
             print(f"Checkpoint path: {checkpoint_path}")
-            print("Consider cleaning up old checkpoints or using a different save location.")
+            print(
+                "Consider cleaning up old checkpoints or using a different save location."
+            )
             raise
         else:
             raise
