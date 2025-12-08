@@ -120,7 +120,7 @@ def compute_group_inverse_fourier_transform(group, fourier_coefs):
     )
 
 
-def compute_group_power_spectrum(group, template):
+def group_power_spectrum(group, template):
     """Compute the (group) power spectrum of the template.
 
     For each irrep rho, the power is given by:

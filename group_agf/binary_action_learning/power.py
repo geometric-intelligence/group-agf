@@ -5,7 +5,7 @@ import gagf.group_learning.group_fourier_transform as gft
 
 class ZnZPower2D:
     """Compute and store the power spectrum of the template, which can be used
-    to compute theoretical alpha values for the ZnZ group and compare to learned power spectrum.
+    to compute theoretical loss plateau predictions for the ZnZ group and compare to learned power spectrum.
 
     Parameters
     ----------
@@ -17,14 +17,13 @@ class ZnZPower2D:
         self.template = template
         self.p = int(np.sqrt(len(template)))
         self.template_2D = template.reshape((self.p, self.p))
-        self.x_freqs, self.y_freqs, self.power = self.get_power_2d()
-        self.alpha_values = self.get_alpha_values()
+        self.x_freqs, self.y_freqs, self.power = self.cnxcn_power_spectrum()
 
-    def get_power_2d(self, no_freq=False):
+    def cnxcn_power_spectrum(self, no_freq=False):
         """
-        Compute the 2D power spectrum of a real-valued array.
+        Compute the 2D power spectrum of 2D FT.
 
-        Note on redundant frequencies:
+        Why are some powers doubled?
         rfft2 removes redundant frequencies along first axis automatically
         but does not truncate the second axis
         Therefore, the output shape is (M, N//2 + 1).
@@ -52,7 +51,6 @@ class ZnZPower2D:
             Power spectrum of the input.
         """
         M, N = self.template_2D.shape
-        num_coefficients = N // 2 + 1
 
         # Perform 2D rFFT
         ft = np.fft.rfft2(self.template_2D)
@@ -63,11 +61,8 @@ class ZnZPower2D:
         # For the first row (u=0), remove redundant frequencies and double the appropriate ones
         power[(N // 2 + 1) :, 0] = 0
 
-        # Since (almost) all frequencies contribute twice (positive and negative), double the power
         power *= 2
-        # Except the DC component
         power[0, 0] /= 2
-        # Except the Nyquist frequency if N is even
         if N % 2 == 0:
             power[N // 2, 0] /= 2
 
@@ -88,52 +83,32 @@ class ZnZPower2D:
 
         return row_freqs, column_freqs, power
 
-    def get_alpha_values(self):
-        """Compute theoretical alpha values from the template's power spectrum.
-
-        If desired:
-        original_indices_nonzero_power = np.where(nonzero_power_mask)
-        freq_tuples = np.array([(x_freq, y_freq) for x_freq in x_freqs for y_freq in y_freqs])
-        nonzero_power_frequencies = freq_tuples[original_indices_nonzero_power]
-
-        Parameters
-        ----------
-        template : ndarray (p*p,)
-            Flattened 2D template array.
-        return_nonzero_power_indices : bool, optional
-            If True, also return the indices of nonzero power values.
-        return_nonzero_power_frequency_tuples : bool, optional
-            If True, also return the frequency tuples corresponding to nonzero power values.
+    def loss_plateau_predictions(self):
+        """Compute theoretical loss plateau predictions from the template's power spectrum.
+        (as predicted by AGF)
 
         Returns
         -------
-        alpha_values : list of float
-            Theoretical alpha values for each nonzero power, in descending order.
-        power : ndarray
-            Power spectrum that has been filtered to non-zero values and sorted in descending order.
-        original_indices_nonzero_power : tuple of ndarray, optional
-            Indices of nonzero power values in the original power array.
-        nonzero_power_frequencies : ndarray, optional
-            Frequency tuples corresponding to nonzero power values.
+        plateau_predictions : list of float
+            Theoretical loss plateau predictions for each nonzero power, in descending order.
         """
         p = int(np.sqrt(len(self.template)))
-        print("Computing alpha values for template of shape:", (p, p))
-        x_freqs, y_freqs, power = self.get_power_2d()
-        print(power)
+        print("Computing loss plateau predictions for template of shape:", (p, p))
+        _, _, power = self.cnxcn_power_spectrum()
         power = power.flatten()
 
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
         i_power_descending_order = np.argsort(power)[
             ::-1
-        ]  # np.argsort with [::-1] gives descending order
+        ] 
         power = power[i_power_descending_order]
 
-        alpha_values = [np.sum(power[k:]) for k in range(len(power))]
+        plateau_predictions = [np.sum(power[k:]) for k in range(len(power))]
         coef = 1 / (p * p)
-        alpha_values = [alpha * coef for alpha in alpha_values]
+        plateau_predictions = [alpha * coef for alpha in plateau_predictions]
 
-        return alpha_values
+        return plateau_predictions
 
 
 class GroupPower:
@@ -153,10 +128,10 @@ class GroupPower:
         self.template = template
         self.p = len(template)
         self.group = group
-        self.power = self.compute_group_power_spectrum()
+        self.power = self.group_power_spectrum()
         self.freqs = list(range(len(self.power)))
 
-    def compute_group_power_spectrum(self):
+    def group_power_spectrum(self):
         """Compute the (group) power spectrum of the template.
 
         For each irrep rho, the power is given by:
@@ -167,16 +142,9 @@ class GroupPower:
         would otherwise be split across two dimensions, so we must double it to get the correct
         total power.
 
-        Parameters
-        ----------
-        group : Group (escnn object)
-            The group.
-        template : np.ndarray, shape=[group.order()]
-            The template to compute the power spectrum of.
-
         Returns
         -------
-        _ : np.ndarray, shape=[len(group.irreps())]
+        power_spectrum : np.ndarray, shape=[len(group.irreps())]
             The power spectrum of the template.
         """
         irreps = self.group.irreps()
@@ -186,46 +154,37 @@ class GroupPower:
             fourier_coef = gft.compute_group_fourier_coef(
                 self.group, self.template, irrep
             )
-            # (f"fourier_coef for irrep {i} of dimension {irrep.size} is:\n {fourier_coef}\n")
             power_spectrum[i] = irrep.size * np.trace(
                 fourier_coef.conj().T @ fourier_coef
-            )  # TODO: check if this is correct
+            )  
         power_spectrum = (
             power_spectrum / self.group.order()
-        )  # why division by group order?
+        ) 
 
         return np.array(power_spectrum)
 
-    def get_alpha_values(self):
-        """Compute theoretical alpha values from the template's power spectrum.
+    def loss_plateau_predictions(self):
+        """Compute theoretical loss plateau predictions from the template's power spectrum.
 
-        The alpha values give the levels of the loss plot.
-
-        Parameters
-        ----------
-        template : ndarray (p,)
-            1D template array.
+        The loss plateau predictions give the levels of the loss plot.
 
         Returns
         -------
-        alpha_values : list of float
-            Theoretical alpha values for each nonzero power, in descending order.
-        power : ndarray
-            Power spectrum that has been filtered to non-zero values and sorted in descending order.
+        plateau_predictions : list of float
+            Theoretical loss plateau predictions for each nonzero power, in descending order.
         """
         p = len(self.template)
-        print("Computing alpha values for template of shape:", (p,))
+        print("Computing loss plateau predictions for template of shape:", (p,))
         power = self.power
-        print(f"Power: {power}")
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
         print("Found ", len(power), "non-zero power coefficients.")
         i_power_descending_order = np.argsort(power)[::-1]
         power = power[i_power_descending_order]
-        alpha_values = [np.sum(power[k:]) for k in range(len(power))]
+        plateau_predictions = [np.sum(power[k:]) for k in range(len(power))]
         coef = 1 / p
-        alpha_values = [alpha * coef for alpha in alpha_values]
-        return alpha_values
+        plateau_predictions = [alpha * coef for alpha in plateau_predictions]
+        return plateau_predictions
 
 
 def model_power_over_time(group_name, model, param_history, model_inputs, group=None):
@@ -253,9 +212,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     model.eval()
     with torch.no_grad():
         test_output = model(model_inputs[:1])
-    print("test_output.shape: ", test_output.shape)
     output_shape = test_output.shape[1:]
-    print("output_shape: ", output_shape)
 
     if group_name == "znz_znz":  # 2D template
         p1 = int(np.sqrt(output_shape[0]))
@@ -276,7 +233,6 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     X_tensor = model_inputs[
         :num_inputs_to_compute_power
     ]  # Added by Nina to speed up computation with octahedral.
-    print(f"len(param_history): {len(param_history)}")
     steps = np.unique(
         np.logspace(1, np.log10(len(param_history) - 1), num_points, dtype=int)
     )
@@ -311,12 +267,10 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
                 powers.append(this_power_flat)
             powers = np.array(powers)
 
-            # shape: (num_samples, template_power_length)
-            average_power = np.mean(powers, axis=0)
+            average_power = np.mean(powers, axis=0) # shape: (num_samples, template_power_length)
             powers_over_time[i_step, :] = average_power
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)
     powers_over_time[powers_over_time < 1e-20] = 0
-    print("Powers over time shape:", powers_over_time.shape)
 
     return powers_over_time, steps

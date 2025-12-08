@@ -78,7 +78,7 @@ dataset_fraction = {
     "cyclic": 1.0,
     "znz_znz": 1.0,
     "dihedral": 1.0,
-    "octahedral": [1.],
+    "octahedral": [1.0],
     "A5": [1.0], # [0.2, 0.3, 0.4, 0.5, 0.6]
 }
 

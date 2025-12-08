@@ -25,7 +25,7 @@ def plot_loss_curve(
     """
     fig = plt.figure(figsize=(6, 6))
 
-    alpha_values = template_power.get_alpha_values()
+    alpha_values = template_power.loss_plateau_predictions()
     print(f"Plotting {len(alpha_values)} theoretical plateau lines.")
 
     for k, alpha in enumerate(alpha_values):
