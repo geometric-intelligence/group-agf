@@ -11,7 +11,6 @@ import torch.optim as optim
 import wandb
 from escnn.group import *
 from torch.utils.data import DataLoader, TensorDataset
-from typing_extensions import dataclass_transform
 
 import gagf.group_learning.datasets as datasets
 import gagf.group_learning.models as models

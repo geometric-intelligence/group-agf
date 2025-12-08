@@ -1,8 +1,8 @@
-import random
-
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import MaxNLocator
+import collections
+import copy
+import torch
 
 import gagf.group_learning.power as power
 
@@ -115,7 +115,6 @@ def plot_loss_curve(
     plt.ylim(bottom=y_min)
     plt.xlim(0, len(loss_history) + 100)
 
-    # style_axes(plt.gca())
     plt.grid(False)
     plt.tight_layout()
 
@@ -256,7 +255,6 @@ def plot_training_power_over_time(
         labelspacing=0.25,
     )
     ax = plt.gca()
-    # style_axes(ax)
     plt.grid(False)
     plt.tight_layout()
 
@@ -415,13 +413,6 @@ def plot_model_outputs(
     fig : matplotlib.figure.Figure
         The resulting matplotlib figure handle.
     """
-    import collections.abc
-    import copy
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import torch
-
     with torch.no_grad():
         # Accept single int or list/array of ints for idx
         if isinstance(idx, collections.abc.Sequence) and not isinstance(idx, str):
@@ -544,59 +535,6 @@ def plot_model_outputs(
         plt.close(fig)
 
     return fig
-
-
-def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
-    # Y-axis ticks
-    ax.tick_params(
-        axis="y",
-        which="both",
-        bottom=True,
-        top=False,
-        labelbottom=True,
-        left=True,
-        right=False,
-        labelleft=True,
-        direction="out",
-        length=7,
-        width=1.5,
-        pad=8,
-        labelsize=labelsize,
-    )
-    ax.yaxis.set_major_locator(MaxNLocator(nbins=numyticks))
-
-    # X-axis ticks
-    ax.tick_params(
-        axis="x",
-        which="both",
-        bottom=True,
-        top=False,
-        labelbottom=True,
-        left=True,
-        right=False,
-        labelleft=True,
-        direction="out",
-        length=7,
-        width=1.5,
-        pad=8,
-        labelsize=labelsize,
-    )
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=numxticks))
-
-    # Scientific notation formatting
-    if ax.get_yscale() == "linear":
-        ax.ticklabel_format(style="sci", axis="y", scilimits=(-2, 2))
-    if ax.get_xscale() == "linear":
-        ax.ticklabel_format(style="sci", axis="x", scilimits=(-2, 2))
-
-    ax.xaxis.offsetText.set_fontsize(20)
-    ax.grid()
-
-    # Customize spines
-    for spine in ["top", "right"]:
-        ax.spines[spine].set_visible(False)
-    for spine in ["left", "bottom"]:
-        ax.spines[spine].set_linewidth(3)
 
 
 def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):

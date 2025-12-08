@@ -1,6 +1,5 @@
 import os
 import pickle
-
 import torch
 
 
@@ -125,7 +124,6 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, map_location="cpu"):
         print(
             f"Warning: torch.load failed, trying pickle.load for backward compatibility: {e}"
         )
-        import pickle
 
         with open(checkpoint_path, "rb") as f:
             checkpoint = pickle.load(f)

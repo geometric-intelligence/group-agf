@@ -1,22 +1,8 @@
-import os
-import random
-
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from escnn.group import *
-from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FormatStrFormatter, FuncFormatter, MaxNLocator
 from skimage.transform import resize
 from sklearn.datasets import fetch_openml
 from sklearn.utils import shuffle
-from torch.utils.data import DataLoader, TensorDataset
 
-import gagf.group_learning.power as power
-import setcwd
 from gagf.group_learning.group_fourier_transform import \
     compute_group_inverse_fourier_transform
 
