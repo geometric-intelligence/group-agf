@@ -1,27 +1,24 @@
-import numpy as np
 import os
 import random
+
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+from escnn.group import *
 from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FormatStrFormatter
-from matplotlib.ticker import FuncFormatter
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FormatStrFormatter, FuncFormatter, MaxNLocator
+from skimage.transform import resize
 from sklearn.datasets import fetch_openml
 from sklearn.utils import shuffle
-from skimage.transform import resize
-
-from escnn.group import *
+from torch.utils.data import DataLoader, TensorDataset
 
 import gagf.group_learning.power as power
 import setcwd
-from gagf.group_learning.group_fourier_transform import (
-    compute_group_inverse_fourier_transform,
-)
+from gagf.group_learning.group_fourier_transform import \
+    compute_group_inverse_fourier_transform
 
 
 def one_hot2D(p):
@@ -67,9 +64,11 @@ def generate_fixed_template_znz_znz(image_length, nonzero_powers=None):
 
     if nonzero_powers == None:
         # Three low-frequency bins with Gaussian-ish weights
-        v1 = 10.0  # 2.0
-        v2 = 3.0  # 0.1 # make sure this is not too close to v1
-        v3 = 7.0  # 0.7 #0.01
+        v1 = 12.0  # 2.0 10.0
+        v2 = 10.0  # 0.1 # make sure this is not too close to v1 3.0
+        v3 = 8.0  # 0.7 #0.01 . 7.0
+        v4 = 6.0
+        v5 = 4.0
     else:
         v1 = nonzero_powers[0]
         v2 = nonzero_powers[1]
@@ -88,6 +87,14 @@ def generate_fixed_template_znz_znz(image_length, nonzero_powers=None):
     # Mode (1,1)
     spectrum[1, 1] = v3
     spectrum[-1, -1] = np.conj(v3)
+
+    # Mode (2,0)
+    spectrum[2, 0] = v4
+    spectrum[-2, 0] = np.conj(v4)
+
+    # Mode (0,2)
+    spectrum[0, 2] = v5
+    spectrum[0, -2] = np.conj(v5)
 
     # Generate signal from spectrum
     template = np.fft.ifft2(spectrum).real
@@ -458,7 +465,9 @@ def load_dataset(config):
 
     if config["group_name"] == "znz_znz":
         # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
-        template = generate_fixed_template_znz_znz(config["image_length"], config["fourier_coef_diag_values"])
+        template = generate_fixed_template_znz_znz(
+            config["image_length"], config["fourier_coef_diag_values"]
+        )
         X, Y, _ = load_modular_addition_dataset_2d(
             config["image_length"],
             template,

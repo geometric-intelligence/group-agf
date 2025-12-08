@@ -1,13 +1,10 @@
 import numpy as np
 import pytest
-
 from escnn.group import Octahedral
 
 from gagf.group_learning.datasets import generate_fixed_group_template
 from gagf.group_learning.group_fourier_transform import (
-    compute_group_fourier_transform,
-    compute_group_inverse_fourier_transform,
-)
+    compute_group_fourier_transform, compute_group_inverse_fourier_transform)
 
 
 def test_fourier_transform_of_fixed_template():

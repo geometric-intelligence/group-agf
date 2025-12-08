@@ -1,18 +1,12 @@
 import random
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.ticker import MaxNLocator
 
 import gagf.group_learning.power as power
 
-
-FONT_SIZES = {
-    "title": 30,
-    "axes_label": 30,
-    "tick_label": 30,
-    "legend": 15
-}
+FONT_SIZES = {"title": 30, "axes_label": 30, "tick_label": 30, "legend": 15}
 
 
 def plot_loss_curve(
@@ -87,6 +81,7 @@ def plot_loss_curve(
     ymin, ymax = plt.ylim()
     # Compute some reasonable ticks between the min and max, at most 6 ticks
     yticks = np.linspace(ymin, ymax, num=6)
+
     # Format the tick labels nicely, decide if they should be int or float
     def format_tick(val):
         if abs(val) >= 1000 or abs(val) < 1e-2:
@@ -95,9 +90,13 @@ def plot_loss_curve(
             return f"{int(val)}"
         else:
             return f"{val:.2f}"
-    yticklabels = [format_tick(t) for t in yticks]
-    plt.yticks(yticks, yticklabels, fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18)
 
+    yticklabels = [format_tick(t) for t in yticks]
+    plt.yticks(
+        yticks,
+        yticklabels,
+        fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
+    )
 
     plt.xlabel("Epochs", fontsize=FONT_SIZES["axes_label"])
     plt.ylabel("Train Loss", fontsize=FONT_SIZES["axes_label"])
@@ -217,6 +216,7 @@ def plot_training_power_over_time(
         ymin, ymax = plt.ylim()
         # Compute some reasonable ticks between the min and max, at most 6 ticks
         yticks = np.linspace(ymin, ymax, num=6)
+
         # Format the tick labels nicely, decide if they should be int or float
         def format_tick(val):
             if abs(val) >= 1000 or abs(val) < 1e-2:
@@ -225,12 +225,17 @@ def plot_training_power_over_time(
                 return f"{int(val)}"
             else:
                 return f"{val:.2f}"
+
         yticklabels = [format_tick(t) for t in yticks]
-        plt.yticks(yticks, yticklabels, fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18)
-    
+        plt.yticks(
+            yticks,
+            yticklabels,
+            fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
+        )
+
     plt.xscale("log")
     plt.xlim(0, len(param_history) - 1)
-    
+
     # Dynamically adjust xticks so none exceed available epochs
     tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(param_history) - 1]
     tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
@@ -331,25 +336,27 @@ def plot_neuron_weights(
 
     for i, idx in enumerate(neuron_indices):
         w = weights[idx]
-        if config['group_name'] is "znz_znz" or any(getattr(irrep, "size", 1) == 2 for irrep in config['group'].irreps()): # 2D irreps
-            if w.shape[0] != config['group_size']:
+        if config["group_name"] is "znz_znz" or any(
+            getattr(irrep, "size", 1) == 2 for irrep in config["group"].irreps()
+        ):  # 2D irreps
+            if w.shape[0] != config["group_size"]:
                 raise ValueError(
                     f"Expected weight size img_len*img_len={config['group_size']}, got {w.shape[0]}"
                 )
-            if config['group_name'] == "znz_znz":
-                img_len = int(np.sqrt(config['group_size']))
+            if config["group_name"] == "znz_znz":
+                img_len = int(np.sqrt(config["group_size"]))
                 w_img = w.reshape(img_len, img_len)
             else:
-                w_img = w.reshape(config['group_size'], -1)
+                w_img = w.reshape(config["group_size"], -1)
             axs[i].imshow(w_img, cmap="viridis")
             axs[i].set_title(f"Neuron {idx}")
             axs[i].axis("off")
-        else: # 1D irreps
-            if w.shape[0] != config['group_size']:
+        else:  # 1D irreps
+            if w.shape[0] != config["group_size"]:
                 raise ValueError(
                     f"Expected weight size group_size={config['group_size']}, got {w.shape[0]}"
                 )
-            axs[i].plot(np.arange(config['group_size']), w, lw=2)
+            axs[i].plot(np.arange(config["group_size"]), w, lw=2)
             axs[i].set_title(f"Neuron {idx}")
             axs[i].set_xlabel("Input Index")
             axs[i].set_ylabel("Weight Value")
@@ -409,10 +416,11 @@ def plot_model_outputs(
         The resulting matplotlib figure handle.
     """
     import collections.abc
+    import copy
+
+    import matplotlib.pyplot as plt
     import numpy as np
     import torch
-    import copy
-    import matplotlib.pyplot as plt
 
     with torch.no_grad():
         # Accept single int or list/array of ints for idx

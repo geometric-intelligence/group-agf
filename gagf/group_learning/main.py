@@ -1,24 +1,23 @@
-from typing_extensions import dataclass_transform
-import numpy as np
-import torch
-import time
 import datetime
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-
-import gagf.group_learning.models as models
-import gagf.group_learning.datasets as datasets
-import gagf.group_learning.power as power
-import gagf.group_learning.train as train
-import gagf.group_learning.plot as plot
-
-import wandb
 import itertools
 import logging
-import default_config
+import time
 
+import default_config
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import wandb
 from escnn.group import *
+from torch.utils.data import DataLoader, TensorDataset
+from typing_extensions import dataclass_transform
+
+import gagf.group_learning.datasets as datasets
+import gagf.group_learning.models as models
+import gagf.group_learning.plot as plot
+import gagf.group_learning.power as power
+import gagf.group_learning.train as train
 from gagf.group_learning.optimizer import PerNeuronScaledSGD
 
 today = datetime.date.today()
@@ -59,7 +58,7 @@ def main_run(config):
             print(
                 f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
             )
-            
+
         print(f"Desired power values:\n {config['powers']}")
         # raise Exception("Stop here to check the template power.")
 
@@ -119,7 +118,11 @@ def main_run(config):
         print("Training Complete. Generating plots...")
 
         loss_plot = plot.plot_loss_curve(
-            loss_history, template_power, save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg", show=False)
+            loss_history,
+            template_power,
+            save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg",
+            show=False,
+        )
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power,
@@ -128,7 +131,8 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=config["model_save_dir"] + f"power_over_training_plot_{run_name}.svg",
+            save_path=config["model_save_dir"]
+            + f"power_over_training_plot_{run_name}.svg",
             show=False,
             logscale=config["power_logscale"],
         )
@@ -157,7 +161,7 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
-        if config['group_name'] != "znz_znz":
+        if config["group_name"] != "znz_znz":
             print(
                 f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
             )
@@ -219,7 +223,9 @@ def main():
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
             "powers": default_config.powers[group_name],
-            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[group_name],
+            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[
+                group_name
+            ],
             "power_logscale": default_config.power_logscale,
             "resume_from_checkpoint": default_config.resume_from_checkpoint,
             "checkpoint_interval": checkpoint_interval,
@@ -241,7 +247,9 @@ def main():
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
                 # main_config["frequencies_to_learn"] = frequencies_to_learn
-                main_config["dataset_fraction"] = default_config.dataset_fraction["znz_znz"]
+                main_config["dataset_fraction"] = default_config.dataset_fraction[
+                    "znz_znz"
+                ]
                 main_run(main_config)
 
         elif group_name == "octahedral":
