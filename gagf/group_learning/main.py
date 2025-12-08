@@ -1,24 +1,22 @@
-from typing_extensions import dataclass_transform
-import numpy as np
-import torch
-import time
 import datetime
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-
-import gagf.group_learning.models as models
-import gagf.group_learning.datasets as datasets
-import gagf.group_learning.power as power
-import gagf.group_learning.train as train
-import gagf.group_learning.plot as plot
-
-import wandb
 import itertools
 import logging
-import default_config
+import time
 
+import default_config
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import wandb
 from escnn.group import *
+from torch.utils.data import DataLoader, TensorDataset
+
+import gagf.group_learning.datasets as datasets
+import gagf.group_learning.models as models
+import gagf.group_learning.plot as plot
+import gagf.group_learning.power as power
+import gagf.group_learning.train as train
 from gagf.group_learning.optimizer import PerNeuronScaledSGD
 
 today = datetime.date.today()
@@ -53,13 +51,13 @@ def main_run(config):
             template_power = power.ZnZPower2D(template)
         else:
             template_power = power.GroupPower(template, group=config["group"])
+            # Format template power values to only 2 decimals
+            formatted_power_list = [f"{x:.2e}" for x in template_power.power]
+            print("Template power:\n", formatted_power_list)
+            print(
+                f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
+            )
 
-        # Format template power values to only 2 decimals
-        formatted_power_list = [f"{x:.2e}" for x in template_power.power]
-        print("Template power:\n", formatted_power_list)
-        print(
-            f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
-        )
         print(f"Desired power values:\n {config['powers']}")
         # raise Exception("Stop here to check the template power.")
 
@@ -120,7 +118,11 @@ def main_run(config):
         print("Training Complete. Generating plots...")
 
         loss_plot = plot.plot_loss_curve(
-            loss_history, template_power, save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg", show=False)
+            loss_history,
+            template_power,
+            save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg",
+            show=False,
+        )
         # irreps_plot = plot.plot_irreps(config['group'], show=False)
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power,
@@ -129,7 +131,8 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=config["model_save_dir"] + f"power_over_training_plot_{run_name}.svg",
+            save_path=config["model_save_dir"]
+            + f"power_over_training_plot_{run_name}.svg",
             show=False,
             logscale=config["power_logscale"],
         )
@@ -138,15 +141,8 @@ def main_run(config):
             f" at loss_plot_{run_name}.svg and power_over_training_plot_{run_name}.svg"
         )
         neuron_weights_plot = plot.plot_neuron_weights(
-            config[
-                "group_name"
-            ],  # TODO: remove this, since the group_name can be accessed from the group object:
-            # group.name (will give "D3") or group.__class__.__name__ (will give "DihedralGroup")
-            config["group"],
+            config,
             model,
-            config[
-                "group_size"
-            ],  # TODO: remove this, since the group_size can be accessed from the group object: group.order()
             neuron_indices=None,
         )
 
@@ -165,10 +161,10 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
-        print("Template power:\n", formatted_power_list)
-        print(
-            f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
-        )
+        if config["group_name"] != "znz_znz":
+            print(
+                f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
+            )
 
         wandb_config.update({"full_run": full_run})
         wandb.finish()
@@ -244,19 +240,19 @@ def main():
                 # frequencies_to_learn,
                 # mnist_digit,
                 image_length,
-                dataset_fraction,
             ) in itertools.product(
                 # default_config.frequencies_to_learn,
                 # default_config.mnist_digit,
                 default_config.image_length,
-                default_config.dataset_fraction["znz_znz"],
             ):
                 group_size = image_length * image_length
                 # main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
                 # main_config["frequencies_to_learn"] = frequencies_to_learn
-                main_config["dataset_fraction"] = dataset_fraction
+                main_config["dataset_fraction"] = default_config.dataset_fraction[
+                    "znz_znz"
+                ]
                 main_run(main_config)
 
         elif group_name == "octahedral":
@@ -284,7 +280,9 @@ def main():
                 if group_name == "dihedral":
                     group = DihedralGroup(group_n)
                 elif group_name == "cyclic":
+                    print("group_n: ", group_n)
                     group = CyclicGroup(group_n)
+                    print("n cyclic irreps: ", len(group.irreps()))
                 else:
                     raise ValueError(
                         f"Unknown group_name: {group_name}. "

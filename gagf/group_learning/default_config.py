@@ -29,7 +29,17 @@ powers = {
 }
 
 fourier_coef_diag_values = {
-    "dihedral": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "znz_znz": None,
+    "cyclic": [
+        np.sqrt(24 * p / dim**2) for p, dim in zip(powers["cyclic"], [1, 2, 2, 2, 2, 1])
+    ],
+    "dihedral": [
+        np.sqrt(10 * p / dim**2)
+        for p, dim in zip(powers["dihedral"], [1, 1, 2, 2, 1, 1])
+    ],
+    # "dihedral": [
+    #     np.sqrt(12*p / dim**2) for p, dim in zip(powers["dihedral"], [1, 1, 2, 2, 1, 1])
+    # ],
     "octahedral": [
         [
             np.sqrt(24*p / dim**2) for p, dim in zip(powers["octahedral"][i], [1, 3, 3, 2, 1])
@@ -70,7 +80,7 @@ image_length = [5]
 i_dataset_fractions = [0]
 dataset_fraction = {
     "cyclic": 1.0,
-    "znz_znz": 0.4,
+    "znz_znz": 1.0,
     "dihedral": 1.0,
     "octahedral": [1.],
     "A5": [1.0], # [0.2, 0.3, 0.4, 0.5, 0.6]

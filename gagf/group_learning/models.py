@@ -1,15 +1,6 @@
 import numpy as np
-import random
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FormatStrFormatter
-from matplotlib.ticker import FuncFormatter
-from matplotlib.ticker import MaxNLocator
 
 
 class TwoLayerNet(nn.Module):

@@ -1,10 +1,12 @@
-import random
-
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+import numpy as np
+import collections
+import copy
+import torch
 
 import gagf.group_learning.power as power
+
+FONT_SIZES = {"title": 30, "axes_label": 30, "tick_label": 30, "legend": 15}
 
 
 def plot_loss_curve(
@@ -21,7 +23,7 @@ def plot_loss_curve(
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     """
-    fig = plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(6, 6))
 
     alpha_values = template_power.get_alpha_values()
     print(f"Plotting {len(alpha_values)} theoretical plateau lines.")
@@ -75,10 +77,44 @@ def plot_loss_curve(
     plt.xscale("log")
     plt.yscale("log")
 
-    plt.xlabel("Epochs", fontsize=24)
-    plt.ylabel("Train Loss", fontsize=24)
+    # Create nice yticks for linear loss scale (not log)
+    ymin, ymax = plt.ylim()
+    # Compute some reasonable ticks between the min and max, at most 6 ticks
+    yticks = np.linspace(ymin, ymax, num=6)
 
-    style_axes(plt.gca())
+    # Format the tick labels nicely, decide if they should be int or float
+    def format_tick(val):
+        if abs(val) >= 1000 or abs(val) < 1e-2:
+            return f"{val:.1e}"
+        elif abs(val - int(val)) < 1e-6:
+            return f"{int(val)}"
+        else:
+            return f"{val:.2f}"
+
+    yticklabels = [format_tick(t) for t in yticks]
+    plt.yticks(
+        yticks,
+        yticklabels,
+        fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
+    )
+
+    plt.xlabel("Epochs", fontsize=FONT_SIZES["axes_label"])
+    plt.ylabel("Train Loss", fontsize=FONT_SIZES["axes_label"])
+
+    # Dynamically adjust xticks so none exceed available epochs
+    tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(loss_history) - 1]
+    tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
+    plt.xticks(
+        tick_locs,
+        tick_labels,
+        fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
+    )
+
+    # Cut off y-axis slightly below the lowest alpha value for higher resolution
+    y_min = alpha_values[-1] * 0.7 if alpha_values[-1] > 0 else 1e-8
+    plt.ylim(bottom=y_min)
+    plt.xlim(0, len(loss_history) + 100)
+
     plt.grid(False)
     plt.tight_layout()
 
@@ -117,20 +153,26 @@ def plot_training_power_over_time(
     flattened_template_power = template_power.flatten()
     if group_name == "znz_znz":
         power_idx = np.argsort(flattened_template_power)[-5:][::-1]
+        model_powers_over_time, steps = power.model_power_over_time(
+            group_name=group_name,
+            group=None,
+            model=model.to(device),
+            param_history=param_history,
+            model_inputs=X_tensor,
+        )
     else:
         power_idx = np.argsort(flattened_template_power)[::-1]
-
-    group = template_power_object.group
-    model_powers_over_time, steps = power.model_power_over_time(
-        group_name=group_name,
-        group=group,
-        model=model.to(device),
-        param_history=param_history,
-        model_inputs=X_tensor,
-    )
+        group = template_power_object.group
+        model_powers_over_time, steps = power.model_power_over_time(
+            group_name=group_name,
+            group=group,
+            model=model.to(device),
+            param_history=param_history,
+            model_inputs=X_tensor,
+        )
 
     # Create a new figure for this plot
-    fig = plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(6, 7))
 
     for i in power_idx:
         if group_name == "znz_znz":
@@ -166,27 +208,53 @@ def plot_training_power_over_time(
         plt.yticks(
             [1, 10, 100, 1000, 10000],
             [r"$10^0$", r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$"],
+            fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
         )
+    else:
+        # Create nice yticks for linear loss scale (not log)
+        ymin, ymax = plt.ylim()
+        # Compute some reasonable ticks between the min and max, at most 6 ticks
+        yticks = np.linspace(ymin, ymax, num=6)
+
+        # Format the tick labels nicely, decide if they should be int or float
+        def format_tick(val):
+            if abs(val) >= 1000 or abs(val) < 1e-2:
+                return f"{val:.1e}"
+            elif abs(val - int(val)) < 1e-6:
+                return f"{int(val)}"
+            else:
+                return f"{val:.2f}"
+
+        yticklabels = [format_tick(t) for t in yticks]
+        plt.yticks(
+            yticks,
+            yticklabels,
+            fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
+        )
+
     plt.xscale("log")
     plt.xlim(0, len(param_history) - 1)
 
+    # Dynamically adjust xticks so none exceed available epochs
+    tick_locs = [v for v in [100, 1000, 10000, 100000] if v < len(param_history) - 1]
+    tick_labels = [rf"$10^{{{int(np.log10(loc))}}}$" for loc in tick_locs]
     plt.xticks(
-        [10, 100, 1000, 10000, 100000, len(param_history) - 1],
-        [r"$10^1$", r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", "Final"],
+        tick_locs,
+        tick_labels,
+        fontsize=FONT_SIZES["ticks"] if "ticks" in FONT_SIZES else 18,
     )
 
-    plt.ylabel("Power", fontsize=24)
-    plt.xlabel("Epochs", fontsize=24)
+    plt.ylabel("Power", fontsize=FONT_SIZES["axes_label"])
+    plt.xlabel("Epochs", fontsize=FONT_SIZES["axes_label"])
     plt.legend(
-        fontsize=14,
+        fontsize=FONT_SIZES["legend"],
         title="Frequency",
-        title_fontsize=16,
-        loc="upper right",
-        bbox_to_anchor=(1, 0.9),
+        title_fontsize=FONT_SIZES["legend"],
+        loc="upper left",
+        # bbox_to_anchor=(1, 0.9),
         labelspacing=0.25,
     )
     ax = plt.gca()
-    style_axes(ax)
     plt.grid(False)
     plt.tight_layout()
 
@@ -203,10 +271,8 @@ def plot_training_power_over_time(
 
 
 def plot_neuron_weights(
-    group_name,
-    group,
+    config,
     model,
-    group_size,
     neuron_indices=None,
     save_path=None,
     show=False,
@@ -268,25 +334,27 @@ def plot_neuron_weights(
 
     for i, idx in enumerate(neuron_indices):
         w = weights[idx]
-        if any(getattr(irrep, "size", 1) == 2 for irrep in group.irreps()):
-            if w.shape[0] != group_size:
+        if config["group_name"] is "znz_znz" or any(
+            getattr(irrep, "size", 1) == 2 for irrep in config["group"].irreps()
+        ):  # 2D irreps
+            if w.shape[0] != config["group_size"]:
                 raise ValueError(
-                    f"Expected weight size img_len*img_len={group_size}, got {w.shape[0]}"
+                    f"Expected weight size img_len*img_len={config['group_size']}, got {w.shape[0]}"
                 )
-            if group_name == "znz_znz":
-                img_len = int(np.sqrt(group_size))
+            if config["group_name"] == "znz_znz":
+                img_len = int(np.sqrt(config["group_size"]))
                 w_img = w.reshape(img_len, img_len)
             else:
-                w_img = w.reshape(group_size, -1)
+                w_img = w.reshape(config["group_size"], -1)
             axs[i].imshow(w_img, cmap="viridis")
             axs[i].set_title(f"Neuron {idx}")
             axs[i].axis("off")
-        else:
-            if w.shape[0] != group_size:
+        else:  # 1D irreps
+            if w.shape[0] != config["group_size"]:
                 raise ValueError(
-                    f"Expected weight size group_size={group_size}, got {w.shape[0]}"
+                    f"Expected weight size group_size={config['group_size']}, got {w.shape[0]}"
                 )
-            axs[i].plot(np.arange(group_size), w, lw=2)
+            axs[i].plot(np.arange(config["group_size"]), w, lw=2)
             axs[i].set_title(f"Neuron {idx}")
             axs[i].set_xlabel("Input Index")
             axs[i].set_ylabel("Weight Value")
@@ -345,12 +413,6 @@ def plot_model_outputs(
     fig : matplotlib.figure.Figure
         The resulting matplotlib figure handle.
     """
-    import collections.abc
-    import numpy as np
-    import torch
-    import copy
-    import matplotlib.pyplot as plt
-
     with torch.no_grad():
         # Accept single int or list/array of ints for idx
         if isinstance(idx, collections.abc.Sequence) and not isinstance(idx, str):
@@ -436,7 +498,7 @@ def plot_model_outputs(
             suptitle_str = f"Model Inputs, Outputs, and Targets at index {idx}"
             if param_history is not None and step is not None and isinstance(step, int):
                 suptitle_str += f" (step {s_idx})"
-            fig.suptitle(suptitle_str, fontsize=20)
+            fig.suptitle(suptitle_str, fontsize=FONT_SIZES["title"])
             plt.tight_layout()
 
         # --- 1D plotting for other groups ---
@@ -462,7 +524,7 @@ def plot_model_outputs(
             suptitle_str = f"Model Outputs and Targets at index {idx}"
             if param_history is not None and step is not None and isinstance(step, int):
                 suptitle_str += f" (step {s_idx})"
-            fig.suptitle(suptitle_str, fontsize=20)
+            fig.suptitle(suptitle_str, fontsize=FONT_SIZES["title"])
             plt.tight_layout()
 
         if save_path is not None:
@@ -473,59 +535,6 @@ def plot_model_outputs(
         plt.close(fig)
 
     return fig
-
-
-def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
-    # Y-axis ticks
-    ax.tick_params(
-        axis="y",
-        which="both",
-        bottom=True,
-        top=False,
-        labelbottom=True,
-        left=True,
-        right=False,
-        labelleft=True,
-        direction="out",
-        length=7,
-        width=1.5,
-        pad=8,
-        labelsize=labelsize,
-    )
-    ax.yaxis.set_major_locator(MaxNLocator(nbins=numyticks))
-
-    # X-axis ticks
-    ax.tick_params(
-        axis="x",
-        which="both",
-        bottom=True,
-        top=False,
-        labelbottom=True,
-        left=True,
-        right=False,
-        labelleft=True,
-        direction="out",
-        length=7,
-        width=1.5,
-        pad=8,
-        labelsize=labelsize,
-    )
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=numxticks))
-
-    # Scientific notation formatting
-    if ax.get_yscale() == "linear":
-        ax.ticklabel_format(style="sci", axis="y", scilimits=(-2, 2))
-    if ax.get_xscale() == "linear":
-        ax.ticklabel_format(style="sci", axis="x", scilimits=(-2, 2))
-
-    ax.xaxis.offsetText.set_fontsize(20)
-    ax.grid()
-
-    # Customize spines
-    for spine in ["top", "right"]:
-        ax.spines[spine].set_visible(False)
-    for spine in ["left", "bottom"]:
-        ax.spines[spine].set_linewidth(3)
 
 
 def plot_template(X, Y, template, template_minus_mean, indices, p, i=4):
@@ -636,7 +645,7 @@ def plot_irreps(group, show=False):
             plt.colorbar(im, ax=axs[i])
     fig.suptitle(
         "Irreducible Representations (matrix values for all group elements)",
-        fontsize=16,
+        fontsize=FONT_SIZES["title"],
     )
     plt.tight_layout()
     if show:

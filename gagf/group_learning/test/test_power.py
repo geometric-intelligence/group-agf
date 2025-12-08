@@ -1,5 +1,6 @@
 import numpy as np
 from escnn.group import Octahedral
+
 from gagf.group_learning.datasets import generate_fixed_group_template
 from gagf.group_learning.power import GroupPower
 
