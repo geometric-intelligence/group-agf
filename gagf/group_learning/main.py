@@ -66,11 +66,12 @@ def main_run(config):
         # Determine batch size: if 'full', set to all samples
         if config["batch_size"] == "full":
             config["batch_size"] = X.shape[0]
+
         if default_config.resume_from_checkpoint:
             config["checkpoint_path"] = train.get_model_save_path(
                 config,
-                default_config.checkpoint_epoch,
-                default_config.checkpoint_run_name_to_load,
+                checkpoint_epoch=default_config.checkpoint_epoch,
+                run_name=default_config.checkpoint_run_name_to_load,
             )
         config["run_name"] = run_name
         dataset = TensorDataset(X, Y)
@@ -191,8 +192,8 @@ def main():
         optimizer_name,
         batch_size,
         epochs,
-        verbose_interval,
-        checkpoint_interval,
+        i_power,
+        i_dataset_fraction
     ) in itertools.product(
         default_config.group_name,
         default_config.init_scale,
@@ -203,8 +204,8 @@ def main():
         default_config.optimizer_name,
         default_config.batch_size,
         default_config.epochs,
-        default_config.verbose_interval,
-        default_config.checkpoint_interval,
+        default_config.i_powers,
+        default_config.i_dataset_fractions
     ):
 
         main_config = {
@@ -218,18 +219,21 @@ def main():
             "optimizer_name": optimizer_name,
             "batch_size": batch_size,
             "epochs": epochs,
-            "verbose_interval": verbose_interval,
+            "verbose_interval": default_config.verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
-            "powers": default_config.powers[group_name],
-            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[
-                group_name
-            ],
+            "powers": default_config.powers[group_name][i_power],
+            "fourier_coef_diag_values": default_config.fourier_coef_diag_values[group_name][i_power],
+            "dataset_fraction": default_config.dataset_fraction[group_name][i_dataset_fraction],
             "power_logscale": default_config.power_logscale,
             "resume_from_checkpoint": default_config.resume_from_checkpoint,
-            "checkpoint_interval": checkpoint_interval,
+            "checkpoint_interval": default_config.checkpoint_interval,
             "checkpoint_path": None,
         }
+        print(f"dataset_fraction: {main_config['dataset_fraction']}")
+        print(f"powers: {main_config['powers']}")
+        print(f"fourier_coef_diag_values: {main_config['fourier_coef_diag_values']}")
+        #raise Exception("Stop here to check the config.")
 
         if group_name == "znz_znz":
             for (
@@ -256,9 +260,6 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
-            main_config["dataset_fraction"] = default_config.dataset_fraction[
-                "octahedral"
-            ]
             main_run(main_config)
 
         elif group_name == "A5":
@@ -266,7 +267,6 @@ def main():
             group_size = group.order()
             main_config["group"] = group
             main_config["group_size"] = group_size
-            main_config["dataset_fraction"] = default_config.dataset_fraction["A5"]
             main_run(main_config)
 
         else:

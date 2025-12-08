@@ -1,38 +1,31 @@
 import numpy as np
 
 # Dataset Parameters
-group_name = ["dihedral"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
-group_n = [6]  # n in Dn [3, 4, 5] we are doingn D6
-# TODO: don't include this image_length here, since it should only be for the znz_znz group.
-image_length = [5]  # , 10, 15] # length of one side of the square image patch
+group_name = ["octahedral"] #, "A5"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
+group_n = [6]  # n in Dn [3, 4, 5]
+
+i_powers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] #, 1] #, 2, 3, 4]
 
 powers = {
-    "znz_znz": None,
-    "cyclic": [
-        0.0,
-        1000.0,
-        200.0,
-        300.0,
-        0.0,
-        0.0,
-    ],  # only uses 6 bc real and imag irreps are merged in escnn
-    "dihedral": [
-        0.0,
-        600.0,
-        50.0,
-        5.0,
-        100.0,
-        400.0,
-    ],  # [0.0, 3200.0,  50.0, 400.0, 1600.0, 500.0], learned 1D, [0.0, 24.0,  0.25, 1.0, 2.0, 8.0] learned 1d not 2D
-    # "dihedral": [0.0, 3600.0,  400.0, 1200.0, 2000.0, 900.0],  # [0.0, 3200.0,  50.0, 400.0, 1600.0, 500.0],
-    "octahedral": [
-        0.0,
-        400.0,
-        100.0,
-        900.0,
-        1000.0,
-    ],  # [1, 3, 3, 2, 1]   # [1, 3, 3, 2, 1] #[0.0, 200.0, 10., 850.0, 1000.0] at 10000 for 18gbbmou
-    "A5": [0.0, 1300.0, 100.0, 2000.0, 600.0],  # [1, 3, 5, 3, 4]
+    "dihedral": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "octahedral": [# [1, 3, 3, 2, 1] 
+        [0.0, 2000.0, 0., 0.0, 0.0] , # 1:100, 3: 900
+         [0.0, 1600.0, 0.0, 0.0, 0.0] ,  # 2:400, 3: 900
+         [0.0, 1200.0, 0.0, 0.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 800.0, 0.0, 0.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 400.0, 0.0, 0.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 0.0, 0.0, 2000.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 0.0, 0.0, 1600.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 0.0, 0.0, 1200.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 0.0, 0.0, 800.0, 0.0] ,  # 3:900, 3:900
+         [0.0, 0.0, 0.0, 400.0, 0.0] ,  # 3:900, 3:900
+        ],  
+    "A5": [# [1, 3, 5, 3, 4]
+       [0.0, 1800.0, 0., 1800.0, 0.],  # 3:900, 3:900
+       [0.0, 900.0, 0.0, 0.0, 1600.],  #3:900, 4:1600
+       [0.0, 0.0, 2500.0, 900.0, 0.0] ,  # 5:2500, 3:900
+       [0.0, 0.0, 2500.0, 0.0, 1600.0] ,  # 5:2500, 4:1600
+    ],
 }
 
 fourier_coef_diag_values = {
@@ -48,37 +41,29 @@ fourier_coef_diag_values = {
     #     np.sqrt(12*p / dim**2) for p, dim in zip(powers["dihedral"], [1, 1, 2, 2, 1, 1])
     # ],
     "octahedral": [
-        np.sqrt(24 * p / dim**2)
-        for p, dim in zip(powers["octahedral"], [1, 3, 3, 2, 1])
+        [
+            np.sqrt(24*p / dim**2) for p, dim in zip(powers["octahedral"][i], [1, 3, 3, 2, 1])
+        ] for i in i_powers
     ],
-    "A5": [
-        [np.sqrt(60 * p / dim**2) for p, dim in zip(powers["A5"], [1, 3, 5, 3, 4])]
-        for i in powers["A5"]
-    ],
+    # "A5":[
+    #     [
+    #         np.sqrt(60*p / dim**2) for p, dim in zip(powers["A5"][i], [1, 3, 5, 3, 4])
+    #     ] for i in i_powers
+    # ]
 }
 
 # Model Parameters
-hidden_factor = [50]  # hidden size = hidden_factor * group_size
+hidden_factor = [20] #, 30, 40, 50]  # hidden size = hidden_factor * group_size
 
 # Learning Parameters
-seed = [10]  # [10, 20, 30, 40]  # , 30, 40, 50] #, 60, 70, 80, 90, 100]
-init_scale = [
-    1e-4
-]  # [1e-5, 1e-6, 1e-4]  # originally 1e-2 for cnxcn .. 1e-6 for dihedral, 1e-4 for cn x cn
-lr = [
-    0.0001
-]  # , 0.0001]  # originaly 0.01. 0.00001 for dihedral6, 0.01 for cn x cn 0.00001 for D5
-mom = [0.9]  # originaly 0.9
-optimizer_name = [
-    "PerNeuronScaledSGD"
-]  # , 'SGD' Adam', "Custom'" "PerNeuronScaledSGD"]
-
-# Training parameters
-epochs = [
-    5000
-]  # , 20000, 30000] #, 10000] #, 10000, 20000, 30000], 50000 for cn x cn 10000 for D5
-verbose_interval = [100]  # 100
-checkpoint_interval = [5000]
+seed = [10]
+init_scale = [1e-3]#, 1e-4, 1e-5, 1e-6]
+lr = [0.0001] #, 0.00001]
+mom = [0.9]
+optimizer_name = ["PerNeuronScaledSGD"]
+epochs = [1000] #, 50000]
+verbose_interval = 100
+checkpoint_interval = 200000
 batch_size = [128]  #    128, 256]
 
 # plotting parameters
@@ -86,21 +71,20 @@ power_logscale = False
 
 # Change these if you want to resume training from a checkpoint
 resume_from_checkpoint = False
-checkpoint_epoch = 5000
-checkpoint_run_name_to_load = "y8iuevxm"
+checkpoint_epoch = 50000
+checkpoint_run_name_to_load = "run_0nnx3ive"
 
 # znz_znz specific parameters
-# mnist_digit = [4]
-# frequencies_to_learn = [3, 6, 9]  # number of frequencies to learn in the template
+image_length = [5]
 
+i_dataset_fractions = [0]
 dataset_fraction = {
     "cyclic": 1.0,
     "znz_znz": 1.0,
     "dihedral": 1.0,
-    "octahedral": 0.6,
-    "A5": 0.6,
+    "octahedral": [1.],
+    "A5": [1.0], # [0.2, 0.3, 0.4, 0.5, 0.6]
 }
 
-# git_root_path = setcwd.get_root_dir()
-# model_save_dir = "/tmp/nmiolane/"
-model_save_dir = "/tmp/adele/"
+model_save_dir = "/tmp/nmiolane/"
+# model_save_dir = "/tmp/adele/"
