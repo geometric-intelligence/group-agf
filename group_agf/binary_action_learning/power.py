@@ -15,8 +15,8 @@ class ZnZPower2D:
 
     def __init__(self, template):
         self.template = template
-        self.p = int(np.sqrt(len(template)))
-        self.template_2D = template.reshape((self.p, self.p))
+        self.group_size = int(np.sqrt(len(template)))
+        self.template_2D = template.reshape((self.group_size, self.group_size))
         self.x_freqs, self.y_freqs, self.power = self.cnxcn_power_spectrum()
 
     def cnxcn_power_spectrum(self, no_freq=False):
@@ -126,7 +126,7 @@ class GroupPower:
 
     def __init__(self, template, group):
         self.template = template
-        self.p = len(template)
+        self.group_size = len(template)
         self.group = group
         self.power = self.group_power_spectrum()
         self.freqs = list(range(len(self.power)))
