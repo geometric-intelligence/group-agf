@@ -253,6 +253,10 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
         p2 = p1
         template_power_length = p1 * (p2 // 2 + 1)
         reshape_dims = (-1, p1, p2)
+    if group_name == "cn":  # 1D template
+        template_power_length = (output_shape[0] // 2) + 1
+        p1 = output_shape[0]
+        reshape_dims = (-1, p1)
     else:  # other groups are 1D signals
         template_power_length = len(group.irreps())
         p1 = output_shape[0]

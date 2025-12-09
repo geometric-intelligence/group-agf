@@ -248,6 +248,7 @@ def main():
                 default_config.group_n
             ):
                 main_config["group_size"] = group_n
+                main_config["group_n"] = group_n
                 main_config["dataset_fraction"] = default_config.dataset_fraction[
                     "cn"
                 ]

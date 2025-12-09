@@ -323,14 +323,9 @@ def plot_neuron_weights(
             raise ValueError(
                 f"Expected weight size group_size={config['group_size']}, got {weights.shape[0]}"
             )
-        if config["group_name"] is "cnxcn" or any(
-            getattr(irrep, "size", 1) == 2 for irrep in config["group"].irreps()
-        ):  # 2D irreps
-            if config["group_name"] == "cnxcn":
-                img_len = int(np.sqrt(config["group_size"]))
-                w_img = w.reshape(img_len, img_len)
-            else:
-                w_img = w.reshape(config["group_size"], -1)
+        if config["group_name"] is "cnxcn":  # 2D irreps
+            img_len = int(np.sqrt(config["group_size"]))
+            w_img = w.reshape(img_len, img_len)
             axs[i].imshow(w_img, cmap="viridis")
             axs[i].set_title(f"Neuron {idx}")
             axs[i].axis("off")
