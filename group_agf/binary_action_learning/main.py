@@ -50,7 +50,9 @@ def main_run(config):
         ), "Template size does not match group size."
 
         if config["group_name"] == "cnxcn":
-            template_power = power.CyclicPower(template)
+            template_power = power.CyclicPower(template, template_dim=2)
+        elif config["group_name"] == "cn":
+            template_power = power.CyclicPower(template, template_dim=1)
         else:
             template_power = power.GroupPower(template, group=config["group"])
 
@@ -155,7 +157,7 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
-        if config["group_name"] != "cnxcn":
+        if config["group_name"] not in ("cnxcn", "cn"):
             print(
                 f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
             )

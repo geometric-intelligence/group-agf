@@ -8,15 +8,16 @@ def load_dataset(config):
 
     if config["group_name"] == "cnxcn":
         # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
-        template = templates.fixed_znz_znz_template(
+        template = templates.fixed_cnxcn_template(
             config["image_length"], config["fourier_coef_diag_values"]
         )
         X, Y = cnxcn_dataset(template)
+        
     elif config["group_name"] == "cn":
-        template = templates.fixed_cyclic_template(
+        template = templates.fixed_cn_template(
             config["group_n"], config["fourier_coef_diag_values"]
         )
-        X, Y = group_dataset(config["group"], template)
+        X, Y = cn_dataset(template)
 
     else:
         template = templates.fixed_group_template(
@@ -83,6 +84,25 @@ def group_dataset(group, template):
             Y[idx, :] = g12_rep @ template
             idx += 1
 
+    return X, Y
+
+
+def cn_dataset(template):
+    """Generate a dataset for the cyclic group C_n modular addition operation."""
+    group_size = len(template)
+    X = np.zeros((group_size * group_size, 2, group_size))  
+    Y = np.zeros((group_size * group_size, group_size))     
+    
+    # Generate the dataset
+    idx = 0
+    for a in range(group_size):
+        for b in range(group_size):
+            q = (a + b) % group_size  # a + b mod p
+            X[idx, 0, :] = np.roll(template, a)
+            X[idx, 1, :] = np.roll(template, b)
+            Y[idx, :] = np.roll(template, q)
+            idx += 1
+            
     return X, Y
 
 
