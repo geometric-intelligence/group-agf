@@ -6,12 +6,17 @@ import group_agf.binary_action_learning.templates as templates
 def load_dataset(config):
     """Load dataset based on configuration."""
 
-    if config["group_name"] == "znz_znz":
+    if config["group_name"] == "cnxcn":
         # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
         template = templates.fixed_znz_znz_template(
             config["image_length"], config["fourier_coef_diag_values"]
         )
-        X, Y = modular_addition_dataset_2d(template)
+        X, Y = cnxcn_dataset(template)
+    elif config["group_name"] == "cn":
+        template = templates.fixed_cyclic_template(
+            config["group_n"], config["fourier_coef_diag_values"]
+        )
+        X, Y = group_dataset(config["group"], template)
 
     else:
         template = templates.fixed_group_template(
@@ -81,13 +86,14 @@ def group_dataset(group, template):
     return X, Y
 
 
-def modular_addition_dataset_2d(template):
+def cnxcn_dataset(template):
     """Generate a dataset for the 2D modular addition operation.
 
     General idea: We are generating a dataset where each sample consists of
     two inputs (a*template and b*template) and an output (a*b)*template,
-    where $a, b \in Z/pZ x Z/pZ$. The template is a flattened 2D array
-    representing the modular addition operation in a 2D space.
+    where $(a, b) \in C_n x C_n$, where $C_n x C_n$ is the product of cn
+    groups. The template is a flattened 2D array representing the modular addition 
+    operation in a 2D space.
 
     Each element $X_i$ will contain the template with a different $a_i$, $b_i$, and
     in fact $X$ contains the template at all possible $a$, $b$ shifts.
@@ -103,11 +109,12 @@ def modular_addition_dataset_2d(template):
     Returns
     -------
     X : np.ndarray
-        Input data of shape (p^4, 2, p*p).
-        2 inputs (a and b), each with shape (p*p,).
+        Input data of shape (image_length^4, 2, image_length*image_length).
+        2 inputs (a and b), each with shape (image_length*image_length,).
          is the total number of combinations of shifted a's and b's.
     Y : np.ndarray
-        Output data of shape (p^4, p*p), where each sample is the result of the modular addition.
+        Output data of shape (image_length^4, image_length*image_length), where each 
+        sample is the result of the modular addition.
     """
     image_length = int(np.sqrt(len(template)))
     # Initialize data arrays

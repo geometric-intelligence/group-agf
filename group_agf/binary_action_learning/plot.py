@@ -141,7 +141,7 @@ def plot_training_power_over_time(
     X_tensor : torch.Tensor
         Input data tensor of shape (num_samples, ...).
     group_name : str
-        Name of the group (should distinguish 'znz_znz').
+        Name of the group (should distinguish 'cnxcn').
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     logscale : bool, optional
@@ -152,7 +152,7 @@ def plot_training_power_over_time(
         Whether to return the frequency colors used in the plot 
         (to optionally coordinate with loss curve).
     """
-    if group_name == "znz_znz":
+    if group_name == "cnxcn":
         escnn_group = None
         row_freqs, column_freqs = (
                 template_power_object.x_freqs,
@@ -186,7 +186,7 @@ def plot_training_power_over_time(
     fig = plt.figure(figsize=(6, 7))
 
     for i in power_idx:
-        if group_name == "znz_znz":
+        if group_name == "cnxcn":
             label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
         else:
             label = rf"$\xi = {freq[i]}  (dim={escnn_group.irreps()[i].size})$"
@@ -262,7 +262,7 @@ def plot_neuron_weights(
 ):
     """
     Plot the weights of specified neurons in the last linear layer of the model.
-    2D visualization (imshow) if group is 'znz_znz', otherwise 1D line plot.
+    2D visualization (imshow) if group is 'cnxcn', otherwise 1D line plot.
 
     Parameters
     ----------
@@ -318,10 +318,10 @@ def plot_neuron_weights(
             raise ValueError(
                 f"Expected weight size group_size={config['group_size']}, got {weights.shape[0]}"
             )
-        if config["group_name"] is "znz_znz" or any(
+        if config["group_name"] is "cnxcn" or any(
             getattr(irrep, "size", 1) == 2 for irrep in config["group"].irreps()
         ):  # 2D irreps
-            if config["group_name"] == "znz_znz":
+            if config["group_name"] == "cnxcn":
                 img_len = int(np.sqrt(config["group_size"]))
                 w_img = w.reshape(img_len, img_len)
             else:
@@ -359,12 +359,12 @@ def plot_model_outputs(
     show=False,
 ):
     """
-    Plot a training target vs the model output, adapting plot style for znz_znz (2D) and other groups (1D).
+    Plot a training target vs the model output, adapting plot style for cnxcn (2D) and other groups (1D).
 
     Parameters
     ----------
     group_name : object or str
-        The group instance or name (should distinguish 'znz_znz').
+        The group instance or name (should distinguish 'cnxcn').
     group_size : int
         The value of group_size.
     model : nn.Module
@@ -424,9 +424,9 @@ def plot_model_outputs(
         y_np = to_numpy(y)
         output_np = to_numpy(output)
 
-        plot_is_2D = group_name == "znz_znz"
+        plot_is_2D = group_name == "cnxcn"
 
-        # --- 2D plotting for znz_znz ---
+        # --- 2D plotting for cnxcn ---
         if plot_is_2D:
             image_size = int(np.sqrt(group_size))
             input_flat_dim = x_np.shape[-1]

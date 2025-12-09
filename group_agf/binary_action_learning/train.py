@@ -26,7 +26,7 @@ def test_accuracy(model, dataloader):
 
 def get_model_save_path(config, checkpoint_epoch):
     """Generate a unique model save path based on the config parameters."""
-    if config["group_name"] == "znz_znz":
+    if config["group_name"] == "cnxcn":
         model_save_path = (
             f"{config['model_save_dir']}model_"
             f"group_name{config['group_name']}_"

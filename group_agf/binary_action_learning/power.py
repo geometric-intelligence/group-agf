@@ -3,7 +3,7 @@ import torch
 import group_agf.binary_action_learning.group_fourier_transform as gft
 
 
-class ZnZPower2D:
+class CyclicPower:
     """Compute and store the power spectrum of the template, which can be used
     to compute theoretical loss plateau predictions for the ZnZ group and compare to learned power spectrum.
 
@@ -13,13 +13,41 @@ class ZnZPower2D:
         Flattened 2D template array.
     """
 
-    def __init__(self, template):
+    def __init__(self, template, template_dim):
         self.template = template
-        self.group_size = int(np.sqrt(len(template)))
-        self.template_2D = template.reshape((self.group_size, self.group_size))
-        self.x_freqs, self.y_freqs, self.power = self.cnxcn_power_spectrum()
+        self.template_dim = template_dim
+        if template_dim == 2:
+            self.group_size = int(np.sqrt(len(template)))
+            self.template_2D = template.reshape((self.group_size, self.group_size))
+            self.power = self.cnxcn_power_spectrum()
+        else:
+            self.group_size = len(template)
+            self.power = self.cn_power_spectrum()
 
-    def cnxcn_power_spectrum(self, no_freq=False):
+
+    def cn_power_spectrum(self):
+        """Compute the 1D power spectrum of 1D FT."""
+        num_coefficients = (self.group_size // 2) + 1
+        
+        # Perform FFT and calculate power spectrum
+        ft = np.fft.fft(self.template) # Could consider using np.fft.rfft which is designed for real valued input.
+        power = np.abs(ft[:num_coefficients])**2 / self.group_size
+        
+        # Double power for frequencies strictly between 0 and Nyquist (Nyquist is not doubled if p is even)
+        if self.group_size % 2 == 0:  # group size is even, Nyquist frequency at index num_coefficients - 1
+            power[1:num_coefficients - 1] *= 2
+        else:  # p is odd, no Nyquist frequency
+            power[1:] *= 2
+
+        # Confirm the power sum approximates the squared norm of points
+        total_power = np.sum(power)
+        norm_squared = np.linalg.norm(self.template)**2
+        if not np.isclose(total_power, norm_squared, rtol=1e-3):
+            print(f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}")
+
+        return power
+
+    def cnxcn_power_spectrum(self, return_freq=False):
         """
         Compute the 2D power spectrum of 2D FT.
 
@@ -74,14 +102,14 @@ class ZnZPower2D:
                 f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}"
             )
 
-        if no_freq:
-            return power
+        if return_freq:
+            # Frequency bins
+            row_freqs = np.fft.fftfreq(M)  # full symmetric frequencies (rows)
+            column_freqs = np.fft.rfftfreq(N)  # only non-negative frequencies (columns)
 
-        # Frequency bins
-        row_freqs = np.fft.fftfreq(M)  # full symmetric frequencies (rows)
-        column_freqs = np.fft.rfftfreq(N)  # only non-negative frequencies (columns)
+            return row_freqs, column_freqs, power
 
-        return row_freqs, column_freqs, power
+        return power
 
     def loss_plateau_predictions(self):
         """Compute theoretical loss plateau predictions from the template's power spectrum.
@@ -92,10 +120,12 @@ class ZnZPower2D:
         plateau_predictions : list of float
             Theoretical loss plateau predictions for each nonzero power, in descending order.
         """
-        p = int(np.sqrt(len(self.template)))
-        print("Computing loss plateau predictions for template of shape:", (p, p))
-        _, _, power = self.cnxcn_power_spectrum()
-        power = power.flatten()
+        power = self.power
+
+        if self.template_dim == 2:
+            img_size = int(np.sqrt(len(self.template)))
+            print("Computing loss plateau predictions for template of shape:", (img_size, img_size))
+            power = power.flatten()
 
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
@@ -105,7 +135,7 @@ class ZnZPower2D:
         power = power[i_power_descending_order]
 
         plateau_predictions = [np.sum(power[k:]) for k in range(len(power))]
-        coef = 1 / (p * p)
+        coef = 1 / self.group_size
         plateau_predictions = [alpha * coef for alpha in plateau_predictions]
 
         return plateau_predictions
@@ -193,7 +223,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     Parameters
     ----------
     group_name : str
-        Group type (e.g., 'znz_znz').
+        Group type (e.g., 'cnxcn').
     model : TwoLayerNet
         The trained model.
     param_history : list of dict
@@ -201,7 +231,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     model_inputs : torch.Tensor
         Input data tensor.
     group : Group (escnn object)
-        The escnn group object. Optional, since we don't use escnn for znz_znz.
+        The escnn group object. Optional, since we don't use escnn for cnxcn.
 
     Returns
     -------
@@ -214,7 +244,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
         test_output = model(model_inputs[:1])
     output_shape = test_output.shape[1:]
 
-    if group_name == "znz_znz":  # 2D template
+    if group_name == "cnxcn":  # 2D template
         p1 = int(np.sqrt(output_shape[0]))
         p2 = p1
         template_power_length = p1 * (p2 // 2 + 1)
@@ -256,15 +286,15 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
 
             powers = []
             for out in outputs_arr:
-                if group_name == "znz_znz":
-                    output_power = ZnZPower2D(out.flatten())
+                if group_name == "cnxcn":
+                    output_power = CyclicPower(out.flatten())
                 else:
                     output_power = GroupPower(out.flatten(), group=group)
 
-                this_power = output_power.power
+                one_power = output_power.power
                 # flatten to 1D for both 1D and 2D cases
-                this_power_flat = this_power.flatten()
-                powers.append(this_power_flat)
+                one_power_flat = one_power.flatten()
+                powers.append(one_power_flat)
             powers = np.array(powers)
 
             average_power = np.mean(powers, axis=0) # shape: (num_samples, template_power_length)
