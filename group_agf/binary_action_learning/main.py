@@ -55,7 +55,6 @@ def main_run(config):
             template_power = power.GroupPower(template, group=config["group"])
 
         print(f"Desired power values:\n {config['powers']}")
-        # raise Exception("Stop here to check the template power.")
 
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
@@ -102,7 +101,7 @@ def main_run(config):
             )
 
         print("Starting training...")
-        loss_history, accuracy_history, param_history = train.train(
+        loss_history, _, param_history = train.train(
             config,
             model,
             dataloader,
@@ -118,7 +117,7 @@ def main_run(config):
             save_path=config["model_save_dir"] + f"loss_plot_{run_name}.svg",
             show=False,
         )
-        # irreps_plot = plot.plot_irreps(config['group'], show=False)
+
         power_over_training_plot = plot.plot_training_power_over_time(
             template_power,
             model,
@@ -225,23 +224,16 @@ def main():
         print(f"dataset_fraction: {main_config['dataset_fraction']}")
         print(f"powers: {main_config['powers']}")
         print(f"fourier_coef_diag_values: {main_config['fourier_coef_diag_values']}")
-        #raise Exception("Stop here to check the config.")
 
         if group_name == "znz_znz":
             for (
-                # frequencies_to_learn,
-                # mnist_digit,
                 image_length,
             ) in itertools.product(
-                # default_config.frequencies_to_learn,
-                # default_config.mnist_digit,
                 default_config.image_length,
             ):
                 group_size = image_length * image_length
-                # main_config["mnist_digit"] = mnist_digit
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
-                # main_config["frequencies_to_learn"] = frequencies_to_learn
                 main_config["dataset_fraction"] = default_config.dataset_fraction[
                     "znz_znz"
                 ]
@@ -263,10 +255,8 @@ def main():
 
         else:
             for (
-                # signal_length_1d,
                 group_n,
             ) in itertools.product(
-                # default_config.signal_length_1d,
                 default_config.group_n
             ):
                 if group_name == "dihedral":
