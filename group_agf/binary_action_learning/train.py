@@ -172,13 +172,36 @@ def train(
     criterion,
     optimizer,
 ):
-    model.train()  # Set the model to training mode
+    """Train the model with checkpointing and resume capability.
+
+    Parameters:
+    ----------
+    config : dict
+        Configuration dictionary with training parameters.
+    model : torch.nn.Module
+        The neural network model to train.
+    dataloader : torch.utils.data.DataLoader
+        DataLoader providing the training data.
+    criterion : torch.nn.Module
+        Loss function.
+    optimizer : torch.optim.Optimizer
+        Optimizer for training.
+    Returns:
+    -------
+    loss_history : list
+        List of loss values for each epoch.
+    accuracy_history : list
+        List of accuracy values for each epoch.
+    param_history : list
+        List of model parameters for each epoch.
+    """
+
+    model.train()
     start_epoch = 0
     loss_history = []
     accuracy_history = []
     param_history = []
 
-    # Resume from checkpoint if requested
     if (
         config["resume_from_checkpoint"]
         and config["checkpoint_path"] is not None
@@ -196,7 +219,7 @@ def train(
 
     for epoch in range(start_epoch, config["epochs"]):
         running_loss = 0.0
-        for batch_idx, (inputs, labels) in enumerate(dataloader):
+        for (inputs, labels) in dataloader:
             inputs = inputs.view(inputs.shape[0], -1)  # Flatten input for FC layers
 
             optimizer.zero_grad()
