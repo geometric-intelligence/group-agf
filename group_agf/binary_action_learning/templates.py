@@ -7,6 +7,13 @@ from group_agf.binary_action_learning.group_fourier_transform import \
     compute_group_inverse_fourier_transform
 
 
+def one_hot(p):
+    """One-hot encode an integer value in R^p."""
+    vec = np.zeros(p)
+    vec[0] = 1
+    return vec
+
+
 def one_hot2D(p):
     """One-hot encode an integer value in R^pxp.
 
@@ -26,7 +33,45 @@ def one_hot2D(p):
     return mat
 
 
-def fixed_znz_znz_template(image_length, fourier_coef_mags):
+def fixed_cn_template(group_size, fourier_coef_mags):
+    """Generate a fixed template for the 1D modular addition dataset.
+
+    Parameters
+    ----------
+    group_size : int
+        n in Cn. Number of elements in the 1D modular addition
+    fourier_coef_mags : list of float
+        Magnitudes of the Fourier coefficients to set. This list can have any length, and the
+        coefficients will be assigned to frequency modes in increasing order:
+        0, 1, 2, ..., n-1 (and then their negative counterparts to ensure a real-valued template)
+        where 0 represents the zeroth frequency mode.
+    Returns
+    -------
+    template : np.ndarray
+        A 1D array of shape (group_size,) representing the template.
+    """
+    # Generate template array from Fourier spectrum
+    spectrum = np.zeros(group_size, dtype=complex)
+
+    spectrum[0] = fourier_coef_mags[0]  # Zeroth frequency component
+    fourier_coef_mags = fourier_coef_mags[1:]  # Exclude zeroth frequency
+
+    for i_mag, mag in enumerate(fourier_coef_mags):
+        mode = i_mag + 1  # Frequency mode starts from 1
+        spectrum[mode] = mag
+        spectrum[-mode] = np.conj(mag)
+        print("Setting mode:", mode, "with magnitude:", mag)
+
+    # Generate signal from spectrum
+    template = np.fft.ifft(spectrum).real
+
+    zeroth_freq = np.mean(template)
+    template = template - zeroth_freq
+
+    return template
+
+
+def fixed_cnxcn_template(image_length, fourier_coef_mags):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
@@ -35,7 +80,13 @@ def fixed_znz_znz_template(image_length, fourier_coef_mags):
     Parameters
     ----------
     image_length : int
-        image_length = p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
+        image_length = n in Cn x Cn. Number of elements per dimension in the 2D modular addition
+    fourier_coef_mags : list of float
+        Magnitudes of the Fourier coefficients to set. This list can have any length, and the
+        coefficients will be assigned to frequency modes in the following order:
+        (0,0), (1,0), (0,1), (1,1), (2,0), (0,2), (2,2), (3,0), (0,3), (3,3), ...
+        (and then their negative counterparts to ensure a real-valued template)
+        where (i,j) represents the frequency mode with frequency i in the first dimension
     
     Returns
     -------
