@@ -4,7 +4,7 @@ import collections
 import copy
 import torch
 
-import gagf.group_learning.power as power
+import group_agf.binary_action_learning.power as power
 
 FONT_SIZES = {"title": 30, "axes_label": 30, "tick_label": 30, "legend": 15}
 

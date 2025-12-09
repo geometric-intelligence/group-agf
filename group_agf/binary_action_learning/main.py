@@ -12,12 +12,12 @@ import wandb
 from escnn.group import *
 from torch.utils.data import DataLoader, TensorDataset
 
-import gagf.group_learning.datasets as datasets
-import gagf.group_learning.models as models
-import gagf.group_learning.plot as plot
-import gagf.group_learning.power as power
-import gagf.group_learning.train as train
-from gagf.group_learning.optimizer import PerNeuronScaledSGD
+import group_agf.binary_action_learning.datasets as datasets
+import group_agf.binary_action_learning.models as models
+import group_agf.binary_action_learning.plot as plot
+import group_agf.binary_action_learning.power as power
+import group_agf.binary_action_learning.train as train
+from group_agf.binary_action_learning.optimizer import PerNeuronScaledSGD
 
 today = datetime.date.today()
 
@@ -51,12 +51,6 @@ def main_run(config):
             template_power = power.ZnZPower2D(template)
         else:
             template_power = power.GroupPower(template, group=config["group"])
-            # Format template power values to only 2 decimals
-            formatted_power_list = [f"{x:.2e}" for x in template_power.power]
-            print("Template power:\n", formatted_power_list)
-            print(
-                f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
-            )
 
         print(f"Desired power values:\n {config['powers']}")
         # raise Exception("Stop here to check the template power.")

@@ -1,8 +1,8 @@
 import numpy as np
 from escnn.group import Octahedral
 
-from gagf.group_learning.datasets import generate_fixed_group_template
-from gagf.group_learning.power import GroupPower
+from group_agf.binary_action_learning.datasets import generate_fixed_group_template
+from group_agf.binary_action_learning.power import GroupPower
 
 
 def test_power_custom_template():

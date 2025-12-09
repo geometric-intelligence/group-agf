@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from escnn.group import Octahedral
 
-from gagf.group_learning.datasets import generate_fixed_group_template
-from gagf.group_learning.group_fourier_transform import (
+from group_agf.binary_action_learning.datasets import generate_fixed_group_template
+from group_agf.binary_action_learning.group_fourier_transform import (
     compute_group_fourier_transform, compute_group_inverse_fourier_transform)
 
 

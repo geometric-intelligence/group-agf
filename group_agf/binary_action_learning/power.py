@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import gagf.group_learning.group_fourier_transform as gft
+import group_agf.binary_action_learning.group_fourier_transform as gft
 
 
 class ZnZPower2D:
