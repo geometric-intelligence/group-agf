@@ -165,6 +165,9 @@ def plot_training_power_over_time(
                 for column_freq in column_freqs
             ]
         )
+    elif group_name == "cn":
+        escnn_group = None
+        freq = template_power_object.freqs
     else:
         escnn_group = template_power_object.group
         freq = template_power_object.freqs
@@ -188,6 +191,8 @@ def plot_training_power_over_time(
     for i in power_idx:
         if group_name == "cnxcn":
             label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
+        elif group_name == "cn":
+            label = rf"$\xi = {freq[i]}$"
         else:
             label = rf"$\xi = {freq[i]}  (dim={escnn_group.irreps()[i].size})$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)

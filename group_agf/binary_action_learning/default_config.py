@@ -2,7 +2,7 @@ from notebooks.C_n import power
 import numpy as np
 
 # Dataset Parameters
-group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
+group_name = "cn" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
 group_n = [6]  # n in Dn [3, 4, 5]
 
 powers = {

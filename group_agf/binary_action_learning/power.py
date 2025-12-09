@@ -19,13 +19,13 @@ class CyclicPower:
         if template_dim == 2:
             self.group_size = int(np.sqrt(len(template)))
             self.template_2D = template.reshape((self.group_size, self.group_size))
-            self.power = self.cnxcn_power_spectrum()
+            self.n_x_freqs, self.n_y_freqs, self.power = self.cnxcn_power_spectrum(return_freqs=True)
         else:
             self.group_size = len(template)
-            self.power = self.cn_power_spectrum()
+            self.freqs, self.power = self.cn_power_spectrum(return_freqs=True)
 
 
-    def cn_power_spectrum(self):
+    def cn_power_spectrum(self, return_freqs=False):
         """Compute the 1D power spectrum of 1D FT."""
         num_coefficients = (self.group_size // 2) + 1
         
@@ -45,9 +45,13 @@ class CyclicPower:
         if not np.isclose(total_power, norm_squared, rtol=1e-3):
             print(f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}")
 
+        if return_freqs:
+            freqs = np.fft.rfftfreq(self.group_size)
+            return freqs, power
+
         return power
 
-    def cnxcn_power_spectrum(self, return_freq=False):
+    def cnxcn_power_spectrum(self, return_freqs=False):
         """
         Compute the 2D power spectrum of 2D FT.
 
@@ -102,7 +106,7 @@ class CyclicPower:
                 f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}"
             )
 
-        if return_freq:
+        if return_freqs:
             # Frequency bins
             row_freqs = np.fft.fftfreq(M)  # full symmetric frequencies (rows)
             column_freqs = np.fft.rfftfreq(N)  # only non-negative frequencies (columns)
