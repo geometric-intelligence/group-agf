@@ -1,12 +1,12 @@
 import numpy as np
 
 # Dataset Parameters
-group_name = "znz_znz" #, "A5"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
+group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
 group_n = [6]  # n in Dn [3, 4, 5]
 
 powers = {
     "znz_znz": [[0, 12, 10, 8, 6, 4]],
-    "dihedral": [[0.0, 0.0, 0.0, 0.0, 0.0]],
+    "dihedral": [[0.0, 5.0, 0.0, 7.0, 0.0, 0.0]],  # [1,1,2,2,1,1],
     "octahedral": [# [1, 3, 3, 2, 1] 
         [0.0, 2000.0, 0., 0.0, 0.0] , # 1:100, 3: 900
          [0.0, 1600.0, 0.0, 0.0, 0.0] ,  # 2:400, 3: 900
@@ -38,7 +38,7 @@ fourier_coef_diag_values = {
     "znz_znz": powers["znz_znz"],
     "dihedral": [
         [
-            np.sqrt(10*p / dim**2) for p, dim in zip(powers["dihedral"][i], [1, 1, 2, 2, 1])
+            np.sqrt(10*p / dim**2) for p, dim in zip(powers["dihedral"][i], [1, 1, 2, 2, 1, 1])
         ] for i in i_powers["dihedral"]
     ],
     "octahedral": [
