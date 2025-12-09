@@ -26,7 +26,7 @@ def one_hot2D(p):
     return mat
 
 
-def fixed_template_znz_znz(image_length, fourier_coef_mags):
+def fixed_znz_znz_template(image_length, fourier_coef_mags):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
