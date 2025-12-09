@@ -165,11 +165,9 @@ def plot_training_power_over_time(
                 for column_freq in column_freqs
             ]
         )
-        label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
     else:
         escnn_group = template_power_object.group
-        freqs = template_power_object.freqs
-        label = rf"$\xi = {freqs[i]}  (dim={escnn_group.irreps()[i].size})$"
+        freq = template_power_object.freqs
 
     template_power = template_power_object.power
     template_power = np.where(template_power < 1e-20, 0, template_power)
@@ -188,6 +186,10 @@ def plot_training_power_over_time(
     fig = plt.figure(figsize=(6, 7))
 
     for i in power_idx:
+        if group_name == "znz_znz":
+            label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
+        else:
+            label = rf"$\xi = {freq[i]}  (dim={escnn_group.irreps()[i].size})$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
         plt.axhline(
             flattened_template_power[i],
@@ -279,12 +281,10 @@ def plot_neuron_weights(
     last_layer = None
     modules = list(model.modules())
     for module in reversed(modules):
-        if hasattr(module, "weight"):
+        if hasattr(module, "weight") and hasattr(module, "bias"):
             last_layer = module
             weights = last_layer.weight.detach().cpu().numpy()
             break
-        else:
-            raise ValueError("Model's last layer does not contain weights.")
     if last_layer is None:
         if hasattr(model, "U"):
             weights = model.U.detach().cpu().numpy()
@@ -295,11 +295,6 @@ def plot_neuron_weights(
                 "No suitable weights found in model (neither nn.Linear nor custom nn.Parameter 'U')."
             )
 
-    
-    if weights.shape[0] != config["group_size"]:
-        raise ValueError(
-            f"Expected weight size group_size={config['group_size']}, got {weights.shape[0]}"
-        )
 
     # Select neurons
     if neuron_indices is None:
@@ -319,6 +314,10 @@ def plot_neuron_weights(
 
     for i, idx in enumerate(neuron_indices):
         w = weights[idx]
+        if w.shape[0] != config["group_size"]:
+            raise ValueError(
+                f"Expected weight size group_size={config['group_size']}, got {weights.shape[0]}"
+            )
         if config["group_name"] is "znz_znz" or any(
             getattr(irrep, "size", 1) == 2 for irrep in config["group"].irreps()
         ):  # 2D irreps

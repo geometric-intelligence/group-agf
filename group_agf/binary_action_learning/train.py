@@ -264,7 +264,7 @@ def train(
             "epochs"
         ]:
             checkpoint_path = get_model_save_path(
-                config, checkpoint_epoch=(epoch + 1), run_name=config["run_name"]
+                config, checkpoint_epoch=(epoch + 1)
             )
             # Only save param_history in the final checkpoint to save disk space
             # (param_history can be very large as it stores all parameters for every epoch)

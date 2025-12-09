@@ -26,7 +26,7 @@ def one_hot2D(p):
     return mat
 
 
-def generate_fixed_template_znz_znz(image_length):
+def fixed_template_znz_znz(image_length, fourier_coef_mags):
     """Generate a fixed template for the 2D modular addition dataset.
 
     Note: Since our input is a flattened matrix, we should un-flatten
@@ -34,44 +34,39 @@ def generate_fixed_template_znz_znz(image_length):
 
     Parameters
     ----------
-    p : int
-        p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
+    image_length : int
+        image_length = p in Z/pZ x Z/pZ. Number of elements per dimension in the 2D modular addition
     
     Returns
     -------
     template : np.ndarray
-        A flattened 2D array of shape (p, p) representing the template.
-        After flattening, it will have shape (p*p,).
+        A flattened 2D array of shape (image_length, image_length) representing the template.
+        After flattening, it will have shape (image_length*image_length,).
     """
     # Generate template array from Fourier spectrum
     spectrum = np.zeros((image_length, image_length), dtype=complex)
 
-    # Three low-frequency bins with Gaussian-ish weights
-    v1 = 12.0  # 2.0 10.0
-    v2 = 10.0  # 0.1 # make sure this is not too close to v1 3.0
-    v3 = 8.0  # 0.7 #0.01 . 7.0
-    v4 = 6.0
-    v5 = 4.0
+    spectrum[0, 0] = fourier_coef_mags[0]  # Zeroth frequency component
+    fourier_coef_mags = fourier_coef_mags[1:]  # Exclude zeroth frequency
 
-    # Mode (1,0)
-    spectrum[1, 0] = v1
-    spectrum[-1, 0] = np.conj(v1)
+    def mode_selector(i_mag):
+        i_mode = 1 + i_mag // 3 
+        mode_type = i_mag % 3
+        if mode_type == 0:
+            return (i_mode, 0)
+        elif mode_type == 1:
+            return (0, i_mode)
+        else:
+            return (i_mode, i_mode)
 
-    # Mode (2,1)
-    spectrum[0, 1] = v2
-    spectrum[0, -1] = np.conj(v2)
+    i_mag = 0
+    while i_mag < len(fourier_coef_mags):
+        mode = mode_selector(i_mag)   
 
-    # Mode (1,1)
-    spectrum[1, 1] = v3
-    spectrum[-1, -1] = np.conj(v3)
-
-    # Mode (2,0)
-    spectrum[2, 0] = v4
-    spectrum[-2, 0] = np.conj(v4)
-
-    # Mode (0,2)
-    spectrum[0, 2] = v5
-    spectrum[0, -2] = np.conj(v5)
+        spectrum[mode[0], mode[1]] = fourier_coef_mags[i_mag]
+        spectrum[-mode[0], -mode[1]] = np.conj(fourier_coef_mags[i_mag])
+        print("Setting mode:", mode, "with magnitude:", fourier_coef_mags[i_mag])
+        i_mag += 1
 
     # Generate signal from spectrum
     template = np.fft.ifft2(spectrum).real
@@ -84,7 +79,7 @@ def generate_fixed_template_znz_znz(image_length):
     return template
 
 
-def generate_fixed_group_template(group, seed, fourier_coef_diag_values):
+def fixed_group_template(group, fourier_coef_diag_values):
     """Generate a fixed template for a group, that has non-zero Fourier coefficients
     only for a few irreps.
 

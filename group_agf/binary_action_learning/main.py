@@ -3,6 +3,8 @@ import itertools
 import logging
 import time
 
+from seaborn._core.typing import default
+
 import default_config
 import numpy as np
 import torch
@@ -176,7 +178,6 @@ def main():
     """
     run_start_time = time.strftime("%m-%d_%H-%M-%S")
     for (
-        group_name,
         init_scale,
         hidden_factor,
         seed,
@@ -186,9 +187,7 @@ def main():
         batch_size,
         epochs,
         i_power,
-        i_dataset_fraction
     ) in itertools.product(
-        default_config.group_name,
         default_config.init_scale,
         default_config.hidden_factor,
         default_config.seed,
@@ -197,9 +196,9 @@ def main():
         default_config.optimizer_name,
         default_config.batch_size,
         default_config.epochs,
-        default_config.i_powers,
-        default_config.i_dataset_fractions
+        default_config.i_powers[default_config.group_name],
     ):
+        group_name = default_config.group_name
 
         main_config = {
             "group_name": group_name,
@@ -217,7 +216,7 @@ def main():
             "model_save_dir": default_config.model_save_dir,
             "powers": default_config.powers[group_name][i_power],
             "fourier_coef_diag_values": default_config.fourier_coef_diag_values[group_name][i_power],
-            "dataset_fraction": default_config.dataset_fraction[group_name][i_dataset_fraction],
+            "dataset_fraction": default_config.dataset_fraction[group_name],
             "power_logscale": default_config.power_logscale,
             "resume_from_checkpoint": default_config.resume_from_checkpoint,
             "checkpoint_interval": default_config.checkpoint_interval,

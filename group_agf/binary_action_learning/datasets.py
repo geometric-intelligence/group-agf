@@ -8,14 +8,14 @@ def load_dataset(config):
 
     if config["group_name"] == "znz_znz":
         # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
-        template = templates.generate_fixed_template_znz_znz(
+        template = templates.fixed_template_znz_znz(
             config["image_length"], config["fourier_coef_diag_values"]
         )
         X, Y = modular_addition_dataset_2d(template)
 
     else:
-        template = templates.generate_fixed_group_template(
-            config["group"], config["seed"], config["fourier_coef_diag_values"]
+        template = templates.fixed_group_template(
+            config["group"], config["fourier_coef_diag_values"]
         )
         X, Y = group_dataset(config["group"], template)
 
