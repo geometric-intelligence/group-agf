@@ -295,7 +295,9 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
             powers = []
             for out in outputs_arr:
                 if group_name == "cnxcn":
-                    output_power = CyclicPower(out.flatten())
+                    output_power = CyclicPower(out.flatten(), template_dim=2)
+                elif group_name == "cn":
+                    output_power = CyclicPower(out.flatten(), template_dim=1)
                 else:
                     output_power = GroupPower(out.flatten(), group=group)
 

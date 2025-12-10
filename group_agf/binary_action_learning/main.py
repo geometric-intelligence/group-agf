@@ -56,7 +56,7 @@ def main_run(config):
         else:
             template_power = power.GroupPower(template, group=config["group"])
 
-        print(f"Desired power values:\n {config['powers']}")
+        print(f"Template powers:\n {template_power.power}")
 
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 

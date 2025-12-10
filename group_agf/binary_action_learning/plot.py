@@ -81,7 +81,7 @@ def plot_loss_curve(
 
     ymin, ymax = plt.ylim()
     yticks = np.linspace(ymin, ymax, num=6)
-    yticklabels = [t for t in yticks]
+    yticklabels = [f"{t:.1e}" for t in yticks]
     plt.yticks(
         yticks,
         yticklabels,
@@ -192,9 +192,9 @@ def plot_training_power_over_time(
         if group_name == "cnxcn":
             label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
         elif group_name == "cn":
-            label = rf"$\xi = {freq[i]}$"
+            label = rf"$\xi = {freq[i]:.1f}$"
         else:
-            label = rf"$\xi = {freq[i]}  (dim={escnn_group.irreps()[i].size})$"
+            label = rf"$\xi = {freq[i]:.1f}  (dim={escnn_group.irreps()[i].size})$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
         plt.axhline(
             flattened_template_power[i],
@@ -217,7 +217,8 @@ def plot_training_power_over_time(
         )
     else:
         yticks = np.linspace(ymin, ymax, num=6)
-        yticklabels = [t for t in yticks]
+        # Use scientific notation with one significant digit for yticks
+        yticklabels = [f"{t:.1e}" for t in yticks]
         plt.yticks(
             yticks,
             yticklabels,
