@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import collections
-import copy
 import torch
 
 import group_agf.binary_action_learning.power as power
