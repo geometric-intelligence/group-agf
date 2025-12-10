@@ -10,7 +10,7 @@ from group_agf.binary_action_learning.group_fourier_transform import \
 def one_hot(p):
     """One-hot encode an integer value in R^p."""
     vec = np.zeros(p)
-    vec[0] = 1
+    vec[0] = 10
     return vec
 
 

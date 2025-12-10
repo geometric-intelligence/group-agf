@@ -23,6 +23,7 @@ def load_dataset(config):
         template = templates.fixed_group_template(
             config["group"], config["fourier_coef_diag_values"]
         )
+        # template = templates.one_hot(config["group"].order())
         X, Y = group_dataset(config["group"], template)
 
         print(f"dataset_fraction: {config['dataset_fraction']}")
