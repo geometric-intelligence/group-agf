@@ -75,10 +75,6 @@ def compute_group_inverse_fourier_element(group, fourier_transform, g):
         The inverse Fourier transform at element g.
     """
     irreps = group.irreps()
-    # print("Computing inverse FT at element:", g)
-    # for i, irrep in enumerate(irreps):
-    #     print("Irrep", irrep(g).shape)
-    #     print("FT", fourier_transform[i].shape)
 
     inverse_fourier_element = (
         1
@@ -88,7 +84,7 @@ def compute_group_inverse_fourier_element(group, fourier_transform, g):
                 irrep.size
                 * np.trace(
                     irrep(g) @ fourier_transform[i]
-                )  # TODO: Shoudn't it be th inverse of g.
+                ) 
                 for i, irrep in enumerate(irreps)
             ]
         )
@@ -147,7 +143,6 @@ def group_power_spectrum(group, template):
         fourier_coef = compute_group_fourier_coef(group, template, irrep)
         power_spectrum[i] = irrep.size * np.trace(
             fourier_coef.conj().T @ fourier_coef
-        )  # TODO: check if this is correct
-        # print(f"Power of {irrep.name}: {power_spectrum[i]}, type: {type(power_spectrum[i])}")
+        ) 
     power_spectrum = power_spectrum / group.order()
     return np.array(power_spectrum)
