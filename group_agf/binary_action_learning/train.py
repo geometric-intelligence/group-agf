@@ -26,33 +26,18 @@ def test_accuracy(model, dataloader):
 
 def get_model_save_path(config, checkpoint_epoch):
     """Generate a unique model save path based on the config parameters."""
-    if config["group_name"] == "znz_znz":
-        model_save_path = (
-            f"{config['model_save_dir']}model_"
-            f"group_name{config['group_name']}_"
-            f"group_size{config['group_size']}_"
-            # f"digit{config['mnist_digit']}_"
-            f"frac{config['dataset_fraction']}_"
-            f"group_size{config['group_size']}_"
-            f"init{config['init_scale']}_"
-            f"lr{config['lr']}_"
-            f"mom{config['mom']}_"
-            f"bs{config['batch_size']}_"
-            f"checkpoint_epoch{checkpoint_epoch}_"
-            f"seed{config['seed']}.pt"
-        )
-    else:
-        model_save_path = (
-            f"{config['model_save_dir']}model_"
-            f"group_name{config['group_name']}_"
-            f"group_size{config['group_size']}_"
-            f"init{config['init_scale']}_"
-            f"lr{config['lr']}_"
-            f"mom{config['mom']}_"
-            f"bs{config['batch_size']}_"
-            f"epochs{checkpoint_epoch}_"
-            f"seed{config['seed']}.pt"
-        )
+    model_save_path = (
+        f"{config['model_save_dir']}model_"
+        f"group_name{config['group_name']}_"
+        f"group_size{config['group_size']}_"
+        f"frac{config['dataset_fraction']}_"
+        f"init{config['init_scale']}_"
+        f"lr{config['lr']}_"
+        f"mom{config['mom']}_"
+        f"bs{config['batch_size']}_"
+        f"checkpoint_epoch{checkpoint_epoch}_"
+        f"seed{config['seed']}.pt"
+    )
 
     return model_save_path
 

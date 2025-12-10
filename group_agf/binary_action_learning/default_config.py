@@ -1,11 +1,12 @@
 import numpy as np
 
 # Dataset Parameters
-group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cyclic', 'dihedral', 'znz_znz' 'A5']
-group_n = [6]  # n in Dn [3, 4, 5]
+group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
+group_n = [5]  # n in Dn [3, 4, 5]
 
 powers = {
-    "znz_znz": [[0, 12, 10, 8, 6, 4]],
+    "cn": [[0, 12.5, 10, 7.5, 5, 2.5]],
+    "cnxcn": [[0, 12, 10, 8, 6, 4]],
     "dihedral": [[0.0, 5.0, 0.0, 7.0, 0.0, 0.0]],  # [1,1,2,2,1,1],
     "octahedral": [# [1, 3, 3, 2, 1] 
         [0.0, 2000.0, 0., 0.0, 0.0] , # 1:100, 3: 900
@@ -28,14 +29,16 @@ powers = {
 }
 
 i_powers = {
-    "znz_znz": list(range(len(powers["znz_znz"]))),
+    "cn": list(range(len(powers["cn"]))),
+    "cnxcn": list(range(len(powers["cnxcn"]))),
     "dihedral": list(range(len(powers["dihedral"]))),
     "octahedral": list(range(len(powers["octahedral"]))),
     "A5": list(range(len(powers["A5"]))),
 }
 
 fourier_coef_diag_values = {
-    "znz_znz": powers["znz_znz"],
+    "cn": powers["cn"],
+    "cnxcn": powers["cnxcn"],
     "dihedral": [
         [
             np.sqrt(10*p / dim**2) for p, dim in zip(powers["dihedral"][i], [1, 1, 2, 2, 1, 1])
@@ -58,11 +61,11 @@ hidden_factor = [20] #, 30, 40, 50]  # hidden size = hidden_factor * group_size
 
 # Learning Parameters
 seed = [10]
-init_scale = [1e-3]#, 1e-4, 1e-5, 1e-6]
-lr = [0.0001] #, 0.00001]
+init_scale = [1e-5]#, 1e-3 1e-4, 1e-5, 1e-6]
+lr = [0.01] #, 0.00001]
 mom = [0.9]
 optimizer_name = ["PerNeuronScaledSGD"]
-epochs = [1000] #, 50000]
+epochs = [500000] #, 50000]
 verbose_interval = 100
 checkpoint_interval = 200000
 batch_size = [128]  #    128, 256]
@@ -71,15 +74,15 @@ batch_size = [128]  #    128, 256]
 power_logscale = False
 
 # Change these if you want to resume training from a checkpoint
-resume_from_checkpoint = False
-checkpoint_epoch = 50000
+resume_from_checkpoint = True
+checkpoint_epoch = 100000
 
-# znz_znz specific parameters
+# cnxcn specific parameters
 image_length = [5]
 
 dataset_fraction = {
-    "cyclic": 1.0,
-    "znz_znz": 1.0,
+    "cn": 1.0,
+    "cnxcn": 1.0,
     "dihedral": 1.0,
     "octahedral": 1.0,
     "A5": 1.0, # [0.2, 0.3, 0.4, 0.5, 0.6]

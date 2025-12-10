@@ -49,12 +49,14 @@ def main_run(config):
             len(template) == config["group_size"]
         ), "Template size does not match group size."
 
-        if config["group_name"] == "znz_znz":
-            template_power = power.ZnZPower2D(template)
+        if config["group_name"] == "cnxcn":
+            template_power = power.CyclicPower(template, template_dim=2)
+        elif config["group_name"] == "cn":
+            template_power = power.CyclicPower(template, template_dim=1)
         else:
             template_power = power.GroupPower(template, group=config["group"])
 
-        print(f"Desired power values:\n {config['powers']}")
+        print(f"Template powers:\n {template_power.power}")
 
         X, Y, device = datasets.move_dataset_to_device_and_flatten(X, Y, device=None)
 
@@ -155,7 +157,7 @@ def main_run(config):
         )
 
         print("Plots generated and logged to wandb.")
-        if config["group_name"] != "znz_znz":
+        if config["group_name"] not in ("cnxcn", "cn"):
             print(
                 f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
             )
@@ -225,7 +227,7 @@ def main():
         print(f"powers: {main_config['powers']}")
         print(f"fourier_coef_diag_values: {main_config['fourier_coef_diag_values']}")
 
-        if group_name == "znz_znz":
+        if group_name == "cnxcn":
             for (
                 image_length,
             ) in itertools.product(
@@ -235,7 +237,20 @@ def main():
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
                 main_config["dataset_fraction"] = default_config.dataset_fraction[
-                    "znz_znz"
+                    "cnxcn"
+                ]
+                main_run(main_config)
+
+        elif group_name == "cn":
+            for (
+                group_n,
+            ) in itertools.product(
+                default_config.group_n
+            ):
+                main_config["group_size"] = group_n
+                main_config["group_n"] = group_n
+                main_config["dataset_fraction"] = default_config.dataset_fraction[
+                    "cn"
                 ]
                 main_run(main_config)
 
@@ -261,14 +276,14 @@ def main():
             ):
                 if group_name == "dihedral":
                     group = DihedralGroup(group_n)
-                elif group_name == "cyclic":
+                elif group_name == "cn":
                     print("group_n: ", group_n)
                     group = CyclicGroup(group_n)
-                    print("n cyclic irreps: ", len(group.irreps()))
+                    print("n cn irreps: ", len(group.irreps()))
                 else:
                     raise ValueError(
                         f"Unknown group_name: {group_name}. "
-                        f"Expected one of ['dihedral', 'cyclic', 'octahedral']."
+                        f"Expected one of ['dihedral', 'cn', 'octahedral']."
                     )
                 group_size = group.order()
                 main_config["group"] = group

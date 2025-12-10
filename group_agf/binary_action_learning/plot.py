@@ -81,7 +81,7 @@ def plot_loss_curve(
 
     ymin, ymax = plt.ylim()
     yticks = np.linspace(ymin, ymax, num=6)
-    yticklabels = [t for t in yticks]
+    yticklabels = [f"{t:.1e}" for t in yticks]
     plt.yticks(
         yticks,
         yticklabels,
@@ -141,7 +141,7 @@ def plot_training_power_over_time(
     X_tensor : torch.Tensor
         Input data tensor of shape (num_samples, ...).
     group_name : str
-        Name of the group (should distinguish 'znz_znz').
+        Name of the group (should distinguish 'cnxcn').
     save_path : str, optional
         Path to save the plot. If None, the plot is not saved.
     logscale : bool, optional
@@ -152,7 +152,7 @@ def plot_training_power_over_time(
         Whether to return the frequency colors used in the plot 
         (to optionally coordinate with loss curve).
     """
-    if group_name == "znz_znz":
+    if group_name == "cnxcn":
         escnn_group = None
         row_freqs, column_freqs = (
                 template_power_object.x_freqs,
@@ -165,6 +165,9 @@ def plot_training_power_over_time(
                 for column_freq in column_freqs
             ]
         )
+    elif group_name == "cn":
+        escnn_group = None
+        freq = template_power_object.freqs
     else:
         escnn_group = template_power_object.group
         freq = template_power_object.freqs
@@ -186,10 +189,12 @@ def plot_training_power_over_time(
     fig = plt.figure(figsize=(6, 7))
 
     for i in power_idx:
-        if group_name == "znz_znz":
+        if group_name == "cnxcn":
             label = rf"$\xi = ({freq[i][0]:.1f}, {freq[i][1]:.1f})$"
+        elif group_name == "cn":
+            label = rf"$\xi = {freq[i]:.1f}$"
         else:
-            label = rf"$\xi = {freq[i]}  (dim={escnn_group.irreps()[i].size})$"
+            label = rf"$\xi = {freq[i]:.1f}  (dim={escnn_group.irreps()[i].size})$"
         plt.plot(steps, model_powers_over_time[:, i], color=f"C{i}", lw=3, label=label)
         plt.axhline(
             flattened_template_power[i],
@@ -212,7 +217,8 @@ def plot_training_power_over_time(
         )
     else:
         yticks = np.linspace(ymin, ymax, num=6)
-        yticklabels = [t for t in yticks]
+        # Use scientific notation with one significant digit for yticks
+        yticklabels = [f"{t:.1e}" for t in yticks]
         plt.yticks(
             yticks,
             yticklabels,
@@ -262,7 +268,7 @@ def plot_neuron_weights(
 ):
     """
     Plot the weights of specified neurons in the last linear layer of the model.
-    2D visualization (imshow) if group is 'znz_znz', otherwise 1D line plot.
+    2D visualization (imshow) if group is 'cnxcn', otherwise 1D line plot.
 
     Parameters
     ----------
@@ -318,14 +324,9 @@ def plot_neuron_weights(
             raise ValueError(
                 f"Expected weight size group_size={config['group_size']}, got {weights.shape[0]}"
             )
-        if config["group_name"] is "znz_znz" or any(
-            getattr(irrep, "size", 1) == 2 for irrep in config["group"].irreps()
-        ):  # 2D irreps
-            if config["group_name"] == "znz_znz":
-                img_len = int(np.sqrt(config["group_size"]))
-                w_img = w.reshape(img_len, img_len)
-            else:
-                w_img = w.reshape(config["group_size"], -1)
+        if config["group_name"] is "cnxcn":  # 2D irreps
+            img_len = int(np.sqrt(config["group_size"]))
+            w_img = w.reshape(img_len, img_len)
             axs[i].imshow(w_img, cmap="viridis")
             axs[i].set_title(f"Neuron {idx}")
             axs[i].axis("off")
@@ -359,12 +360,12 @@ def plot_model_outputs(
     show=False,
 ):
     """
-    Plot a training target vs the model output, adapting plot style for znz_znz (2D) and other groups (1D).
+    Plot a training target vs the model output, adapting plot style for cnxcn (2D) and other groups (1D).
 
     Parameters
     ----------
     group_name : object or str
-        The group instance or name (should distinguish 'znz_znz').
+        The group instance or name (should distinguish 'cnxcn').
     group_size : int
         The value of group_size.
     model : nn.Module
@@ -424,9 +425,9 @@ def plot_model_outputs(
         y_np = to_numpy(y)
         output_np = to_numpy(output)
 
-        plot_is_2D = group_name == "znz_znz"
+        plot_is_2D = group_name == "cnxcn"
 
-        # --- 2D plotting for znz_znz ---
+        # --- 2D plotting for cnxcn ---
         if plot_is_2D:
             image_size = int(np.sqrt(group_size))
             input_flat_dim = x_np.shape[-1]
