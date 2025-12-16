@@ -1,9 +1,9 @@
 import numpy as np
 
 # Dataset Parameters
-group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
+group_name = "cnxcn" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
 group_n = [6]  # n in Dn [3, 4, 5]
-template_type = "irrep_construction" # "one_hot", "irrep_construction"]
+template_type = "one_hot" # "one_hot", "irrep_construction"]
 
 powers = {
     "cn": [[0, 12.5, 10, 7.5, 5, 2.5]],

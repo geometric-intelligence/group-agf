@@ -17,25 +17,6 @@ def one_hot(p):
     return vec
 
 
-def one_hot2D(p):
-    """One-hot encode an integer value in R^pxp.
-
-    Parameters
-    ----------
-    p : int
-        p in Z/pZ x Z/pZ. Number of elements in the 2D modular addition
-
-    Returns
-    -------
-    mat : np.ndarray
-        A flattened one-hot encoded matrix of shape (p*p).
-    """
-    mat = np.zeros((p, p))
-    mat[0, 0] = 1
-    mat = mat.flatten()
-    return mat
-
-
 def fixed_cn_template(group_size, fourier_coef_mags):
     """Generate a fixed template for the 1D modular addition dataset.
 

@@ -19,7 +19,7 @@ class CyclicPower:
         if template_dim == 2:
             self.group_size = int(np.sqrt(len(template)))
             self.template_2D = template.reshape((self.group_size, self.group_size))
-            self.n_x_freqs, self.n_y_freqs, self.power = self.cnxcn_power_spectrum(return_freqs=True)
+            self.x_freqs, self.y_freqs, self.power = self.cnxcn_power_spectrum(return_freqs=True)
         else:
             self.group_size = len(template)
             self.freqs, self.power = self.cn_power_spectrum(return_freqs=True)

@@ -50,7 +50,7 @@ def template_selector(config):
                 config["group"], config["fourier_coef_diag_values"]
             )
     elif config["template_type"] == "one_hot":
-        template = templates.one_hot(config["group"].order())
+        template = templates.one_hot(config["group_size"])
     else:
         raise ValueError(f"Unknown template type: {config['template_type']}")
     return template
