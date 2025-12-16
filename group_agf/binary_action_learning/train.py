@@ -30,6 +30,7 @@ def get_model_save_path(config, checkpoint_epoch):
         f"{config['model_save_dir']}model_"
         f"group_name{config['group_name']}_"
         f"group_size{config['group_size']}_"
+        f"template_type{config['template_type']}_"
         f"frac{config['dataset_fraction']}_"
         f"init{config['init_scale']}_"
         f"lr{config['lr']}_"

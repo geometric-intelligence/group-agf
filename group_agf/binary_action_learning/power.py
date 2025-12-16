@@ -19,7 +19,7 @@ class CyclicPower:
         if template_dim == 2:
             self.group_size = int(np.sqrt(len(template)))
             self.template_2D = template.reshape((self.group_size, self.group_size))
-            self.n_x_freqs, self.n_y_freqs, self.power = self.cnxcn_power_spectrum(return_freqs=True)
+            self.x_freqs, self.y_freqs, self.power = self.cnxcn_power_spectrum(return_freqs=True)
         else:
             self.group_size = len(template)
             self.freqs, self.power = self.cn_power_spectrum(return_freqs=True)
@@ -253,7 +253,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
         p2 = p1
         template_power_length = p1 * (p2 // 2 + 1)
         reshape_dims = (-1, p1, p2)
-    if group_name == "cn":  # 1D template
+    elif group_name == "cn":  # 1D template
         template_power_length = (output_shape[0] // 2) + 1
         p1 = output_shape[0]
         reshape_dims = (-1, p1)
@@ -263,7 +263,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
         reshape_dims = (-1, p1)
 
     num_points = 200
-    num_inputs_to_compute_power = len(model_inputs) // 50
+    num_inputs_to_compute_power = max(1, len(model_inputs) // 50)  # Ensure at least 1 input
     X_tensor = model_inputs[
         :num_inputs_to_compute_power
     ]  # Added by Nina to speed up computation with octahedral.
@@ -272,7 +272,6 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     )
     steps = steps[steps > 50]
     steps = np.hstack([np.linspace(1, 50, 5).astype(int), steps])
-    print(f"Computing power over time for {num_inputs_to_compute_power} inputs and {len(steps)} steps: {steps} ")
     powers_over_time = np.zeros([len(steps), template_power_length])
 
     for i_step, step in enumerate(steps):
