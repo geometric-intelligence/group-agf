@@ -43,12 +43,6 @@ def style_axes(ax, numyticks=5, numxticks=5, labelsize=24):
     )
     ax.xaxis.set_major_locator(MaxNLocator(nbins=numxticks))
 
-    # # Scientific notation formatting
-    # if ax.get_yscale() == "linear":
-    #     ax.ticklabel_format(style="sci", axis="y", scilimits=(-2, 2))
-    # if ax.get_xscale() == "linear":
-    #     ax.ticklabel_format(style="sci", axis="x", scilimits=(-2, 2))
-
     ax.xaxis.offsetText.set_fontsize(20)
     ax.grid()
 
@@ -168,29 +162,54 @@ def plot_2d_power_spectrum(
 
 ### ----- POWER SPECTRUM FUNCTIONS ----- ###
 
-def get_power_2d(points_2d):
+def get_power_1d(points_1d):
     """
-    Compute 2D power spectrum using rfft2 (for real-valued inputs).
+    Compute 1D power spectrum using rfft (for real-valued inputs).
 
     Args:
-        points_2d: (p1, p2) array
+        points_1d: (p,) array
 
     Returns:
-        power: (p1//2+1, p2) array of power values
-        freqs_x: frequency indices along x
-        freqs_y: frequency indices along y
+        power: (p//2+1,) array of power values
+        freqs: frequency indices
     """
-    p1, p2 = points_2d.shape
+    p = len(points_1d)
 
-    # Perform 2D FFT (rfft2 for real input)
-    ft = np.fft.fft2(points_2d)  # shape: (p1//2+1, p2) for rfft, (p1, p2) for fft
-    power = np.abs(ft) ** 2 / (p1 * p2)
+    # Perform 1D FFT
+    ft = np.fft.rfft(points_1d)
+    power = np.abs(ft) ** 2 / p
+    
+    # Handle conjugate symmetry for real signals
+    power = 2 * power.copy()
+    power[0] = power[0] / 2  # DC component
+    if p % 2 == 0:
+        power[-1] = power[-1] / 2  # Nyquist frequency
 
-    freqs_x = np.fft.fftfreq(p1, 1.0) * p1  # or np.arange(p1) for index-based
-    freqs_y = np.fft.fftfreq(p2, 1.0) * p2  # or np.arange(p2) for index-based
+    freqs = np.fft.rfftfreq(p, 1.0) * p
 
-    return power, freqs_x, freqs_y
+    return power, freqs
 
+
+def topk_template_freqs_1d(template_1d: np.ndarray, K: int, min_power: float = 1e-20):
+    """
+    Return top-K frequency indices by power for 1D template.
+    
+    Args:
+        template_1d: 1D template array (p,)
+        K: Number of top frequencies to return
+        min_power: Minimum power threshold
+        
+    Returns:
+        List of frequency indices (as integers)
+    """
+    power, _ = get_power_1d(template_1d)
+    mask = power > min_power
+    if not np.any(mask):
+        return []
+    valid_power = power[mask]
+    valid_indices = np.flatnonzero(mask)
+    top_idx = valid_indices[np.argsort(valid_power)[::-1]][:K]
+    return top_idx.tolist()
 
 
 def topk_template_freqs(template_2d: np.ndarray, K: int, min_power: float = 1e-20):
@@ -259,6 +278,178 @@ def get_power_2d_adele(points, no_freq=False):
 
     return freqs_u, freqs_v, power
 
+
+def compute_theoretical_loss_levels_2d(template_2d):
+    """
+    Compute theoretical MSE loss levels based on template power spectrum.
+    
+    Returns both the initial loss (before learning) and final loss (fully converged).
+    The theory predicts step-wise loss reductions as each Fourier mode is learned.
+    
+    Args:
+        template_2d: 2D template array (p1, p2)
+    
+    Returns:
+        dict with:
+            'initial': Expected MSE before any learning (= Var(template))
+            'final': Expected MSE when fully converged (~0)
+            'levels': All intermediate loss plateaus
+    """
+    p1, p2 = template_2d.shape
+    power = get_power_2d_adele(template_2d, no_freq=True)
+    
+    power_flat = power.flatten()
+    power_flat = np.sort(power_flat[power_flat > 1e-20])[::-1]  # Descending
+    
+    coef = 1.0 / (p1 * p2)
+    
+    # Theory levels: cumulative tail sums
+    levels = [coef * np.sum(power_flat[k:]) for k in range(len(power_flat) + 1)]
+    
+    return {
+        'initial': levels[0] if levels else 0.0,  # Before learning any mode
+        'final': 0.0,  # When all modes are learned
+        'levels': levels,
+    }
+
+
+def compute_theoretical_loss_levels_1d(template_1d):
+    """
+    Compute theoretical MSE loss levels based on 1D template power spectrum.
+    
+    Args:
+        template_1d: 1D template array (p,)
+    
+    Returns:
+        dict with:
+            'initial': Expected MSE before any learning
+            'final': Expected MSE when fully converged (~0)
+            'levels': All intermediate loss plateaus
+    """
+    p = len(template_1d)
+    power, _ = get_power_1d(template_1d)
+    
+    power = np.sort(power[power > 1e-20])[::-1]  # Descending
+    
+    coef = 1.0 / p
+    
+    # Theory levels: cumulative tail sums
+    levels = [coef * np.sum(power[k:]) for k in range(len(power) + 1)]
+    
+    return {
+        'initial': levels[0] if levels else 0.0,
+        'final': 0.0,
+        'levels': levels,
+    }
+
+
+# Backward compatibility aliases
+def compute_theoretical_final_loss_2d(template_2d):
+    """Returns expected initial loss (for setting convergence targets)."""
+    return compute_theoretical_loss_levels_2d(template_2d)['initial']
+
+
+def compute_theoretical_final_loss_1d(template_1d):
+    """Returns expected initial loss (for setting convergence targets)."""
+    return compute_theoretical_loss_levels_1d(template_1d)['initial']
+
+
+def _tracked_power_from_fft2(power2d, kx, ky, p1, p2):
+    """
+    Sum power at (kx, ky) and its real-signal mirror (-kx, -ky).
+    
+    For real signals, the full FFT has conjugate symmetry, so power at (kx, ky)
+    and (-kx, -ky) are equal. This helper sums both for consistent power measurement.
+    
+    Args:
+        power2d: 2D power spectrum from fft2 (shape: p1, p2)
+        kx, ky: Frequency indices
+        p1, p2: Dimensions of the signal
+    
+    Returns:
+        float: Total power at this frequency (including mirror)
+    """
+    i0, j0 = kx % p1, ky % p2
+    i1, j1 = (-kx) % p1, (-ky) % p2
+    if (i0, j0) == (i1, j1):
+        return float(power2d[i0, j0])
+    return float(power2d[i0, j0] + power2d[i1, j1])
+
+
+def _squareish_grid(n):
+    """Compute nearly-square grid dimensions for n items."""
+    c = int(np.ceil(np.sqrt(n)))
+    r = int(np.ceil(n / c))
+    return r, c
+
+
+def _fourier_mode_2d(p1: int, p2: int, kx: int, ky: int, phase: float = 0.0):
+    """Generate a 2D Fourier mode (cosine wave), normalized to [0, 1]."""
+    y = np.arange(p1)[:, None]
+    x = np.arange(p2)[None, :]
+    mode = np.cos(2 * np.pi * (ky * y / p1 + kx * x / p2) + phase)
+    mmin, mmax = mode.min(), mode.max()
+    return (mode - mmin) / (mmax - mmin) if mmax > mmin else mode
+
+
+def _signed_k(k: int, n: int) -> int:
+    """Convert frequency index to signed representation (-n/2 to n/2)."""
+    return k if k <= n // 2 else k - n
+
+
+def _pretty_k(k: int, n: int) -> str:
+    """Format frequency for display (handles Nyquist frequency with ± symbol)."""
+    if n % 2 == 0 and k == n // 2:
+        return r"\pm{}".format(n // 2)
+    return f"{_signed_k(k, n)}"
+
+
+def _permutation_from_groups_with_dead(
+    dom_idx, phase, dom_power, l2, *,
+    within="phase", dead_l2_thresh=1e-1
+):
+    """
+    Create neuron permutation grouped by dominant frequency.
+    
+    Args:
+        dom_idx: Dominant frequency index for each neuron
+        phase: Phase at dominant frequency for each neuron
+        dom_power: Power at dominant frequency for each neuron
+        l2: L2 norm of each neuron's weights
+        within: How to order within groups ('phase', 'power', 'phase_power', 'none')
+        dead_l2_thresh: L2 threshold below which neurons are "dead"
+    
+    Returns:
+        perm: Permutation indices
+        ordered_keys: Ordered list of group keys (-1 for dead)
+        boundaries: Cumulative indices where groups end
+    """
+    dead_mask = l2 < float(dead_l2_thresh)
+    groups = {}
+    for i, f in enumerate(dom_idx):
+        key = -1 if dead_mask[i] else int(f)
+        groups.setdefault(key, []).append(i)
+    
+    freq_keys = sorted([k for k in groups.keys() if k >= 0])
+    ordered_keys = freq_keys + ([-1] if -1 in groups else [])
+    
+    perm, boundaries = [], []
+    for f in ordered_keys:
+        idxs = groups[f]
+        if f == -1:
+            idxs = sorted(idxs, key=lambda i: l2[i])
+        else:
+            if within == "phase" and phase is not None:
+                idxs = sorted(idxs, key=lambda i: (phase[i] + 2*np.pi) % (2*np.pi))
+            elif within == "power" and dom_power is not None:
+                idxs = sorted(idxs, key=lambda i: -dom_power[i])
+            elif within == "phase_power":
+                idxs = sorted(idxs, key=lambda i: 
+                             ((phase[i] + 2*np.pi) % (2*np.pi), -dom_power[i]))
+        perm.extend(idxs)
+        boundaries.append(len(perm))
+    
+    return np.array(perm, dtype=int), ordered_keys, boundaries
 
 
 def plot_training_loss_with_theory(
@@ -450,6 +641,107 @@ def plot_model_predictions_over_time(
     return fig, axes
 
 
+def plot_model_predictions_over_time_1d(
+    model,
+    param_history,
+    X_data,
+    Y_data,
+    p,
+    steps=None,
+    example_idx=None,
+    save_path=None,
+    show=False
+):
+    """
+    Plot model predictions at different training steps vs ground truth (1D version).
+    
+    Args:
+        model: The trained model
+        param_history: List of parameter snapshots from training
+        X_data: Input tensor (N, k, p)
+        Y_data: Target tensor (N, p)
+        p: Dimension
+        steps: List of epoch indices to plot (default: [1, 5, 10, final])
+        example_idx: Index of example to visualize (default: random)
+        save_path: Path to save figure
+        show: Whether to display the plot
+    """
+    import torch
+    
+    # Default steps
+    if steps is None:
+        final_step = len(param_history) - 1
+        steps = [1, min(5, final_step), min(10, final_step), final_step]
+        steps = sorted(list(set(steps)))
+    
+    # Random example if not specified
+    if example_idx is None:
+        example_idx = int(np.random.randint(len(Y_data)))
+    
+    device = next(model.parameters()).device
+    model.to(device).eval()
+    
+    # Ground truth
+    if Y_data.dim() == 3:
+        Y_data = Y_data[:, -1, :]  # only final time step
+    with torch.no_grad():
+        truth_1d = Y_data[example_idx].cpu().numpy()
+    
+    # Collect predictions at each step
+    preds = []
+    for step in steps:
+        model.load_state_dict(param_history[step], strict=True)
+        with torch.no_grad():
+            x = X_data[example_idx:example_idx+1].to(device)
+            pred = model(x)
+            if pred.dim() == 3:
+                pred = pred[:, -1, :]  # only final time step
+            pred_1d = pred.squeeze().detach().cpu().numpy()
+            preds.append(pred_1d)
+    
+    # Plot: rows = [Prediction, Target], cols = time steps
+    fig, axes = plt.subplots(
+        2, len(steps),
+        figsize=(3.5*len(steps), 4),
+        layout="constrained"
+    )
+    
+    # Handle case where there's only one step
+    if len(steps) == 1:
+        axes = axes.reshape(2, 1)
+    
+    x = np.arange(p)
+    
+    for col, (step, pred_1d) in enumerate(zip(steps, preds)):
+        # Prediction
+        axes[0, col].plot(x, pred_1d, 'b-', lw=2)
+        axes[0, col].set_title(f"Epoch {step}", fontsize=12)
+        axes[0, col].set_ylim(truth_1d.min() - 0.1 * np.abs(truth_1d.min()), 
+                               truth_1d.max() + 0.1 * np.abs(truth_1d.max()))
+        axes[0, col].set_xticks([])
+        axes[0, col].grid(True, alpha=0.3)
+        
+        # Target (same for all columns)
+        axes[1, col].plot(x, truth_1d, 'k-', lw=2)
+        axes[1, col].set_ylim(truth_1d.min() - 0.1 * np.abs(truth_1d.min()), 
+                               truth_1d.max() + 0.1 * np.abs(truth_1d.max()))
+        axes[1, col].set_xticks([])
+        axes[1, col].grid(True, alpha=0.3)
+    
+    axes[0, 0].set_ylabel("Prediction", fontsize=14)
+    axes[1, 0].set_ylabel("Target", fontsize=14)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved predictions plot to {save_path}")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    return fig, axes
+
 
 def plot_prediction_power_spectrum_over_time(
     model,
@@ -497,7 +789,7 @@ def plot_prediction_power_spectrum_over_time(
     
     # Identify top-K frequencies from template
     tracked_freqs = topk_template_freqs(template_2d, K=num_freqs_to_track)
-    template_power_2d, _, _ = get_power_2d(template_2d)
+    template_power_2d = get_power_2d_adele(template_2d, no_freq=True)
     target_powers = {(kx, ky): template_power_2d[kx, ky] for (kx, ky) in tracked_freqs}
     
     # Analyze ALL saved parameter checkpoints for full temporal resolution
@@ -534,9 +826,9 @@ def plot_prediction_power_spectrum_over_time(
                 else:
                     out_2d = outputs_flat[i]
                 out_2d = out_2d.reshape(p1, p2)
-                power_i, _, _ = get_power_2d(out_2d)  # (p1, p2)
+                power_i = get_power_2d_adele(out_2d, no_freq=True)  # (p1, p2//2+1)
                 powers_batch.append(power_i)
-            avg_power = np.mean(powers_batch, axis=0)  # (p1, p2)
+            avg_power = np.mean(powers_batch, axis=0)  # (p1, p2//2+1)
             
             # Record power at each tracked frequency
             for kx, ky in tracked_freqs:
@@ -626,6 +918,176 @@ def plot_prediction_power_spectrum_over_time(
     return fig, (ax1, ax2), powers_over_time, tracked_freqs
 
 
+def plot_prediction_power_spectrum_over_time_1d(
+    model,
+    param_history,
+    X_data,
+    Y_data,
+    template_1d,
+    p,
+    loss_history,
+    param_save_indices=None,
+    num_freqs_to_track=10,
+    checkpoint_indices=None,
+    num_samples=100,
+    save_path=None,
+    show=False
+):
+    """
+    Plot training loss with power spectrum analysis of predictions over time (1D version).
+    
+    Creates a two-panel plot:
+    - Top: Training loss with colored bands for theory lines
+    - Bottom: Power in tracked frequencies over time (computed at ALL saved checkpoints)
+    
+    Args:
+        model: The trained model
+        param_history: List of parameter snapshots (includes epoch 0)
+        X_data: Input tensor (N, k, p)
+        Y_data: Target tensor (N, p)
+        template_1d: The 1D template array (p,)
+        p: Dimension of the template
+        loss_history: List of loss values over training steps/epochs
+        param_save_indices: List of step/epoch numbers where params were saved
+        num_freqs_to_track: Number of top frequencies to track
+        checkpoint_indices: (deprecated/unused) - now analyzes ALL checkpoints
+        num_samples: Number of samples to average for power computation
+        save_path: Path to save figure
+        show: Whether to display the plot
+    """
+    import torch
+    from matplotlib.ticker import FormatStrFormatter
+    from tqdm import tqdm
+    
+    device = next(model.parameters()).device
+    
+    # Identify top-K frequencies from template
+    tracked_freqs = topk_template_freqs_1d(template_1d, K=num_freqs_to_track)
+    template_power, _ = get_power_1d(template_1d)
+    target_powers = {k: template_power[k] for k in tracked_freqs}
+    
+    # Analyze ALL saved parameter checkpoints
+    T = len(param_history)
+    steps_analysis = list(range(len(param_history)))
+    
+    # Get the actual step/epoch numbers for x-axis
+    if param_save_indices is not None:
+        actual_steps = param_save_indices
+    else:
+        actual_steps = list(range(len(param_history)))
+    
+    # Track average output power at those frequencies over training
+    powers_over_time = {freq: [] for freq in tracked_freqs}
+    
+    print(f"  Analyzing {len(steps_analysis)} checkpoints for power spectrum (1D)...")
+    
+    with torch.no_grad():
+        for step in tqdm(steps_analysis, desc="  Computing power spectra", leave=False):
+            model.load_state_dict(param_history[step], strict=True)
+            model.eval()
+            
+            # Get predictions for a batch
+            outputs_flat = (
+                model(X_data[:num_samples].to(device)).detach().cpu().numpy()
+            )  # (num_samples, p)
+            
+            # Compute power spectrum for each sample, then average
+            powers_batch = []
+            for i in range(outputs_flat.shape[0]):
+                if outputs_flat.ndim == 3:
+                    out_1d = outputs_flat[i, -1, :]  # only final time step
+                else:
+                    out_1d = outputs_flat[i]
+                power_i, _ = get_power_1d(out_1d)
+                powers_batch.append(power_i)
+            avg_power = np.mean(powers_batch, axis=0)  # (p//2+1,)
+            
+            # Record power at each tracked frequency
+            for k in tracked_freqs:
+                powers_over_time[k].append(avg_power[k])
+    
+    # Convert lists to arrays
+    for freq in tracked_freqs:
+        powers_over_time[freq] = np.array(powers_over_time[freq])
+    
+    if param_save_indices is None:
+        loss_epochs = np.arange(len(param_history))
+        loss_history_subset = loss_history
+    else:
+        loss_epochs = np.array(param_save_indices)
+        loss_history_subset = [loss_history[i] for i in param_save_indices]
+    
+    # --- Create the plot ---
+    colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.96, bottom=0.10, hspace=0.12)
+    
+    # --- Top panel: Training loss with theory bands ---
+    ax1.plot(loss_epochs, loss_history_subset, lw=4, color='#1f77b4', label='Training Loss')
+    
+    # Compute power spectrum of template for theory lines
+    power, _ = get_power_1d(template_1d)
+    power_sorted = np.sort(power[power > 1e-20])[::-1]
+    
+    # Theory levels (cumulative tail sums)
+    alpha_values = np.array([np.sum(power_sorted[k:]) for k in range(len(power_sorted))])
+    coef = 1.0 / p
+    y_levels = coef * alpha_values  # strictly decreasing
+    
+    # Shade horizontal bands between successive theory lines
+    n_bands = min(len(tracked_freqs), len(y_levels) - 1)
+    for i in range(n_bands):
+        y_top = y_levels[i]
+        y_bot = y_levels[i + 1]
+        ax1.axhspan(y_bot, y_top, facecolor=colors[i], alpha=0.15, zorder=-3)
+    
+    # Draw the black theory lines
+    for y in y_levels[:n_bands + 1]:
+        ax1.axhline(y=y, color="black", linestyle="--", linewidth=2, zorder=-2)
+    
+    ax1.set_ylabel("Theory Loss Levels", fontsize=20)
+    ax1.set_ylim(y_levels[n_bands], y_levels[0] * 1.1)
+    style_axes(ax1)
+    ax1.grid(False)
+    ax1.tick_params(labelbottom=False)
+    
+    # --- Bottom panel: Tracked mode power over time ---
+    for i, k in enumerate(tracked_freqs):
+        ax2.plot(
+            actual_steps,
+            powers_over_time[k], 
+            color=colors[i], 
+            lw=3,
+            label=f"k={k}"
+        )
+        ax2.axhline(
+            target_powers[k],
+            color=colors[i],
+            linestyle="dotted",
+            linewidth=2,
+            alpha=0.5,
+        )
+    
+    ax2.set_xlabel("Steps", fontsize=20)
+    ax2.set_ylabel("Power in Prediction", fontsize=20)
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(fontsize=10, loc='best', ncol=2)
+    style_axes(ax2)
+    ax2.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved power spectrum plot to {save_path}")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    return fig, (ax1, ax2), powers_over_time, tracked_freqs
+
+
 
 def plot_fourier_modes_reference(
     tracked_freqs,
@@ -659,31 +1121,13 @@ def plot_fourier_modes_reference(
     import matplotlib.gridspec as gridspec
     from pathlib import Path
     
-    def fourier_mode_2d(p1: int, p2: int, kx: int, ky: int, phase: float = 0.0):
-        """Generate a 2D Fourier mode (cosine wave)."""
-        y = np.arange(p1)[:, None]
-        x = np.arange(p2)[None, :]
-        mode = np.cos(2 * np.pi * (ky * y / p1 + kx * x / p2) + phase)
-        mmin, mmax = mode.min(), mode.max()
-        return (mode - mmin) / (mmax - mmin) if mmax > mmin else mode
-    
-    def signed_k(k: int, n: int) -> int:
-        """Convert to signed frequency representation."""
-        return k if k <= n // 2 else k - n
-    
-    def pretty_k(k: int, n: int) -> str:
-        """Format frequency for display (handles Nyquist frequency)."""
-        if n % 2 == 0 and k == n // 2:
-            return r"\pm{}".format(n // 2)
-        return f"{signed_k(k, n)}"
-    
     # --- Save individual mode images (optional) ---
     if save_individual and individual_dir is not None:
         individual_dir = Path(individual_dir)
         individual_dir.mkdir(exist_ok=True)
         
         for i, (kx, ky) in enumerate(tracked_freqs):
-            img = fourier_mode_2d(p1, p2, kx, ky)
+            img = _fourier_mode_2d(p1, p2, kx, ky)
             
             fig_ind, ax = plt.subplots(figsize=(3.2, 2.2))
             ax.imshow(img, cmap="RdBu_r", origin="upper")
@@ -696,8 +1140,8 @@ def plot_fourier_modes_reference(
                 ax.spines[side].set_linewidth(8)
             
             # Frequency label
-            kx_label = pretty_k(kx, p2)
-            ky_label = pretty_k(ky, p1)
+            kx_label = _pretty_k(kx, p2)
+            ky_label = _pretty_k(ky, p1)
             ax.text(
                 0.5, 0.5,
                 f"$k=({kx_label},{ky_label})$",
@@ -713,7 +1157,7 @@ def plot_fourier_modes_reference(
             plt.tight_layout()
             
             # Save with signed indices in filename
-            kx_signed, ky_signed = signed_k(kx, p2), signed_k(ky, p1)
+            kx_signed, ky_signed = _signed_k(kx, p2), _signed_k(ky, p1)
             base = f"mode_{i:03d}_kx{kx}_ky{ky}_signed_{kx_signed}_{ky_signed}"
             fig_ind.savefig(individual_dir / f"{base}.png", dpi=300, bbox_inches="tight")
             np.save(individual_dir / f"{base}.npy", img)
@@ -753,7 +1197,7 @@ def plot_fourier_modes_reference(
         
         # Image axis (left)
         ax_img = fig.add_subplot(gs[r, 0])
-        img = fourier_mode_2d(p1, p2, kx, ky)
+        img = _fourier_mode_2d(p1, p2, kx, ky)
         ax_img.imshow(img, cmap="RdBu_r", origin="upper", aspect="equal")
         ax_img.set_xticks([])
         ax_img.set_yticks([])
@@ -766,8 +1210,8 @@ def plot_fourier_modes_reference(
         # Label axis (right)
         ax_label = fig.add_subplot(gs[r, 1])
         ax_label.set_axis_off()
-        kx_label = pretty_k(kx, p2)
-        ky_label = pretty_k(ky, p1)
+        kx_label = _pretty_k(kx, p2)
+        ky_label = _pretty_k(ky, p1)
         ax_label.text(
             0.0, 0.5, f"$k=({kx_label},{ky_label})$",
             color=colors[i], fontsize=45, fontweight="bold",
@@ -825,21 +1269,6 @@ def plot_wout_neuron_specialization(
     import matplotlib.gridspec as gridspec
     from pathlib import Path
     
-    # Helper functions
-    def squareish_grid(n):
-        """Compute nearly-square grid dimensions."""
-        c = int(np.ceil(np.sqrt(n)))
-        r = int(np.ceil(n / c))
-        return r, c
-    
-    def tracked_power_from_fft2(power2d, kx, ky, p1, p2):
-        """Sum power at (kx,ky) and its real-signal mirror (-kx,-ky)."""
-        i0, j0 = kx % p1, ky % p2
-        i1, j1 = (-kx) % p1, (-ky) % p2
-        if (i0, j0) == (i1, j1):
-            return power2d[i0, j0]
-        return power2d[i0, j0] + power2d[i1, j1]
-    
     # Default steps
     if steps is None:
         final_step = len(param_history) - 1
@@ -859,7 +1288,7 @@ def plot_wout_neuron_specialization(
         vmax = max(vmax, W.max())
     
     # Grid layout
-    R_ner, C_ner = squareish_grid(H)
+    R_ner, C_ner = _squareish_grid(H)
     tile_w, tile_h = 2, 2  # inches per neuron tile
     figsize = (C_ner * tile_w, R_ner * tile_h)
     
@@ -882,7 +1311,7 @@ def plot_wout_neuron_specialization(
             m = W[j].reshape(p1, p2)
             F = np.fft.fft2(m)
             P = (F.conj() * F).real
-            tp = [tracked_power_from_fft2(P, kx, ky, p1, p2) 
+            tp = [_tracked_power_from_fft2(P, kx, ky, p1, p2) 
                   for (kx, ky) in tracked_freqs]
             dom_idx[j] = int(np.argmax(tp))
         
@@ -993,6 +1422,168 @@ def plot_wout_neuron_specialization(
     
     return figures
 
+
+def plot_wout_neuron_specialization_1d(
+    param_history,
+    tracked_freqs,
+    colors,
+    p,
+    steps=None,
+    dead_thresh_l2=0.25,
+    save_dir=None,
+    show=False
+):
+    """
+    Visualize W_out neurons colored by their dominant tracked frequency (1D version).
+    
+    Creates visualizations of output weight neurons at different training steps,
+    with colored borders indicating which Fourier mode each neuron is tuned to.
+    For 1D, neurons are shown as line plots.
+    
+    Args:
+        param_history: List of parameter snapshots from training
+        tracked_freqs: List of frequency indices (integers)
+        colors: Array of colors for each frequency
+        p: Dimension of the template
+        steps: List of epoch indices to plot (default: [1, 5, final])
+        dead_thresh_l2: L2 norm threshold below which neurons are considered "dead"
+        save_dir: Directory to save figures (Path object)
+        show: Whether to display the plots
+    
+    Returns:
+        List of figure objects
+    """
+    from matplotlib.patches import Patch
+    from pathlib import Path
+    
+    def tracked_power_from_fft(power1d, k):
+        """Get power at frequency k."""
+        return float(power1d[k])
+    
+    # Default steps
+    if steps is None:
+        final_step = len(param_history) - 1
+        steps = [1, min(5, final_step), final_step]
+        steps = sorted(list(set(steps)))
+    
+    # Get dimensions
+    W0 = param_history[steps[0]]["W_out"].detach().cpu().numpy().T  # (H, p)
+    H, D = W0.shape
+    assert p == D, f"p ({p}) must equal D ({D})."
+    
+    figures = []
+    
+    # Create one figure per time step
+    for step in steps:
+        W = param_history[step]["W_out"].detach().cpu().numpy().T  # (H, p)
+        
+        # Determine dominant frequency for each neuron
+        dom_idx = np.empty(H, dtype=int)
+        l2 = np.linalg.norm(W, axis=1)
+        dead_mask = l2 < dead_thresh_l2
+        
+        for j in range(H):
+            neuron_weights = W[j]
+            power, _ = get_power_1d(neuron_weights)
+            tp = [tracked_power_from_fft(power, k) for k in tracked_freqs]
+            dom_idx[j] = int(np.argmax(tp))
+        
+        # Assign colors
+        edge_colors = colors[dom_idx].copy()
+        edge_colors[dead_mask] = (0.6, 0.6, 0.6, 1.0)
+        
+        # Create grid of subplots
+        ncols = min(6, H)
+        nrows = int(np.ceil(H / ncols))
+        
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(2.5 * ncols, 1.5 * nrows),
+            squeeze=False
+        )
+        
+        x = np.arange(p)
+        
+        for j in range(nrows * ncols):
+            row = j // ncols
+            col = j % ncols
+            ax = axes[row, col]
+            
+            if j < H:
+                # Plot neuron weights
+                ax.plot(x, W[j], color=edge_colors[j], lw=1.5)
+                ax.set_xlim(0, p - 1)
+                ax.set_ylim(W.min(), W.max())
+                ax.set_xticks([])
+                ax.set_yticks([])
+                
+                # Colored border
+                for spine in ax.spines.values():
+                    spine.set_edgecolor(edge_colors[j])
+                    spine.set_linewidth(3)
+            else:
+                ax.axis('off')
+        
+        plt.tight_layout()
+        
+        if save_dir:
+            save_path = Path(save_dir) / f"wout_neurons_1d_epoch_{step:04d}.pdf"
+            fig.savefig(save_path, bbox_inches="tight", dpi=200)
+            print(f"  ✓ Saved W_out 1D visualization for epoch {step}")
+        
+        if show:
+            plt.show()
+        else:
+            plt.close()
+        
+        figures.append(fig)
+    
+    # Create legend figure
+    fig_legend = plt.figure(figsize=(8, 2.0))
+    ax_leg = fig_legend.add_subplot(111)
+    ax_leg.axis("off")
+    
+    handles = [
+        Patch(
+            facecolor="white",
+            edgecolor=colors[i],
+            linewidth=2.5,
+            label=f"k={tracked_freqs[i]}"
+        )
+        for i in range(len(tracked_freqs))
+    ]
+    handles.append(
+        Patch(
+            facecolor="white",
+            edgecolor=(0.6, 0.6, 0.6, 1.0),
+            linewidth=2.5,
+            label="dead"
+        )
+    )
+    
+    ax_leg.legend(
+        handles=handles,
+        ncol=min(5, len(handles)),
+        frameon=True,
+        loc="center",
+        title="Dominant frequency",
+        fontsize=10
+    )
+    
+    if save_dir:
+        save_path = Path(save_dir) / "wout_legend_1d.pdf"
+        fig_legend.savefig(save_path, bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved legend")
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    
+    figures.append(fig_legend)
+    
+    return figures
+
 def analyze_wout_frequency_dominance(state_dict, tracked_freqs, p1, p2):
     """
     Analyze W_out to find dominant frequency for each neuron.
@@ -1008,14 +1599,6 @@ def analyze_wout_frequency_dominance(state_dict, tracked_freqs, p1, p2):
         dom_power: Power at dominant frequency for each neuron
         l2: L2 norm of each neuron's weights
     """
-    def tracked_power_from_fft2(power2d, kx, ky, p1, p2):
-        """Sum power at (kx,ky) and its mirror (-kx,-ky)."""
-        i0, j0 = kx % p1, ky % p2
-        i1, j1 = (-kx) % p1, (-ky) % p2
-        if (i0, j0) == (i1, j1):
-            return float(power2d[i0, j0])
-        return float(power2d[i0, j0] + power2d[i1, j1])
-    
     Wo = state_dict["W_out"].detach().cpu().numpy()  # (p, H)
     W = Wo.T  # (H, p)
     H, D = W.shape
@@ -1031,7 +1614,7 @@ def analyze_wout_frequency_dominance(state_dict, tracked_freqs, p1, p2):
         F = np.fft.fft2(m)
         P = (F.conj() * F).real
         # Power at tracked frequencies
-        tp = [tracked_power_from_fft2(P, kx, ky, p1, p2) 
+        tp = [_tracked_power_from_fft2(P, kx, ky, p1, p2) 
               for (kx, ky) in tracked_freqs]
         jj = int(np.argmax(tp))
         dom_idx[j] = jj
@@ -1078,38 +1661,6 @@ def plot_wmix_frequency_structure(
     """
     from matplotlib.patches import Rectangle
     
-    def permutation_from_groups_with_dead(
-        dom_idx, phase, dom_power, l2, *,
-        within="phase", dead_l2_thresh=1e-1
-    ):
-        """Create neuron permutation grouped by dominant frequency."""
-        dead_mask = l2 < float(dead_l2_thresh)
-        groups = {}
-        for i, f in enumerate(dom_idx):
-            key = -1 if dead_mask[i] else int(f)
-            groups.setdefault(key, []).append(i)
-        
-        freq_keys = sorted([k for k in groups.keys() if k >= 0])
-        ordered_keys = freq_keys + ([-1] if -1 in groups else [])
-        
-        perm, boundaries = [], []
-        for f in ordered_keys:
-            idxs = groups[f]
-            if f == -1:
-                idxs = sorted(idxs, key=lambda i: l2[i])
-            else:
-                if within == "phase" and phase is not None:
-                    idxs = sorted(idxs, key=lambda i: (phase[i] + 2*np.pi) % (2*np.pi))
-                elif within == "power" and dom_power is not None:
-                    idxs = sorted(idxs, key=lambda i: -dom_power[i])
-                elif within == "phase_power":
-                    idxs = sorted(idxs, key=lambda i: 
-                                 ((phase[i] + 2*np.pi) % (2*np.pi), -dom_power[i]))
-            perm.extend(idxs)
-            boundaries.append(len(perm))
-        
-        return np.array(perm, dtype=int), ordered_keys, boundaries
-    
     # Default steps
     if steps is None:
         final_step = len(param_history) - 1
@@ -1143,7 +1694,7 @@ def plot_wmix_frequency_structure(
             raise KeyError("Neither 'W_mix' nor 'W_h' found in state dict.")
         
         # Compute permutation
-        perm, group_keys, boundaries = permutation_from_groups_with_dead(
+        perm, group_keys, boundaries = _permutation_from_groups_with_dead(
             dom_idx, phase, dom_power, l2,
             within=within_group_order,
             dead_l2_thresh=dead_l2_thresh

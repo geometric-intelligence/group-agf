@@ -32,7 +32,7 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
                    If None, inferred from model:
                    - SequentialMLP: uses k+1 where k is sequence length
                      (k-th power activation + 1 output layer = k+1 total)
-                   - Default: 2 (quadratic models)
+                   - Default: 2 (default back to SGD)
         """
         # Infer degree of homogeneity from model if not provided
         if degree is None:
@@ -41,7 +41,7 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
                 # (k from activation power, +1 from output layer)
                 degree = model.k + 1
             else:
-                # Default for quadratic models
+                # Default back to SGD
                 degree = 2
         
         # Get model parameters

@@ -21,37 +21,37 @@ data:
   # Group Parameters
   # For dimension=1: only 'p' is used
   # For dimension=2: 'p1' and 'p2' are used
-  p: 10         # Cyclic group dimension (1D only)
+  p: 10        # Cyclic group dimension (1D only)
   
-  p1: 10        # Height/rows dimension (2D only)
-  p2: 10        # Width/cols dimension (2D only)
+  p1: 4 #10       # Height/rows dimension (2D only)
+  p2: 4        # Width/cols dimension (2D only)
   
-  k: 3          # Sequence length
+  k: 2          # Sequence length
   batch_size: 1000
   seed: 5
   
   # Template Generation
-  template_type: 'mnist'    # 'mnist' | 'fourier' | 'gaussian'
+  template_type: 'fourier'    # 'mnist' | 'fourier' | 'gaussian'
   mnist_label: 4            # MNIST digit (0-9), only if template_type='mnist'
-  n_freqs: 10               # Number of Fourier modes, only if template_type='fourier'
+  n_freqs: 1               # Number of Fourier modes, only if template_type='fourier'
   
   # Dataset Mode (offline training only)
   mode: sampled             # 'sampled' | 'exhaustive'
-  num_samples: 100000
+  num_samples: 50000
 
 # Model Configuration
 # -------------------
 model:
-  model_type: 'QuadraticRNN'  # 'QuadraticRNN' | 'SequentialMLP'
+  model_type: 'SequentialMLP'  # 'QuadraticRNN' | 'SequentialMLP'
   
-  hidden_dim: 36              # Hidden layer size
+  hidden_dim: 6              # Hidden layer size
                               # Note: SequentialMLP may need larger values (e.g., 600)
   
   init_scale: 1.0e-2          # Weight initialization scale
                               # Larger k may need larger init_scale
   
-  return_all_outputs: false   # true = seq-to-seq guidance
-                              # false = seq-to-one (final output only)
+  return_all_outputs: false   # true = seq-to-seq guidance (for QuadraticRNN only)
+                              # false = seq-to-one (final output only) 
   
   transform_type: 'quadratic' # 'quadratic' | 'multiplicative'
                               # Only used for QuadraticRNN
@@ -63,10 +63,10 @@ training:
   
   # Steps/Epochs
   epochs: 200                 # Used when mode='offline'
-  num_steps: 20000 #500000           # Used when mode='online'
+  num_steps: 1000000 #500000           # Used when mode='online'
   
   # Optimizer
-  optimizer: 'adam'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
+  optimizer: 'adam' #per_neuron'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
                               # 'auto' selects optimizer based on model:
                               #   - SequentialMLP → 'per_neuron' (recommended)
                               #   - QuadraticRNN → 'adam'
@@ -91,7 +91,15 @@ training:
   # Training Dynamics
   grad_clip: 0.1
   verbose_interval: 10
-  save_param_interval: 100
+  save_param_interval: 100    # Save params every N steps/epochs
+                              # Set to null to only save initial & final (memory efficient for sweeps)
+  
+  # Early Stopping (optional)
+  # -------------------------
+  # Stop training early when loss reduction reaches a threshold.
+  # Set to null to disable (train for full num_steps/epochs).
+  reduction_threshold: 0.99   # e.g., 0.99 = stop when 99% loss reduction achieved
+                              # null = disabled (train for full steps/epochs)
 
 # Device
 # ------

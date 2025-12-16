@@ -17,14 +17,30 @@ def train(
     verbose_interval: int = 100,
     grad_clip: Optional[float] = None,
     eval_dataloader: Optional[DataLoader] = None,
-    save_param_interval: Optional[int] = None,  # NEW parameter
-) -> tuple[list[float], list[float], list[float], list[dict[str, torch.Tensor]], list[int]]:
+    save_param_interval: Optional[int] = None,
+    reduction_threshold: Optional[float] = None,
+) -> tuple[list[float], list[float], list[dict[str, torch.Tensor]], list[int], int]:
     """
-    Train a Quadratic RNN with sequential inputs (offline/epoch-based).
+    Train a model with sequential inputs (offline/epoch-based).
+    
+    Args:
+        model: The model to train
+        dataloader: Training data loader
+        criterion: Loss function
+        optimizer: Optimizer
+        epochs: Maximum number of training epochs
+        verbose_interval: Print progress every N epochs
+        grad_clip: Optional gradient clipping value
+        eval_dataloader: Optional separate validation loader
+        save_param_interval: If provided, save params every N epochs.
+                            If None, only save initial and final params (memory efficient!)
+        reduction_threshold: If provided, stop training when loss reduction reaches
+                            this threshold (e.g., 0.99 = 99% reduction). If None,
+                            train for full epochs.
     
     Returns:
-        tuple: train_loss_history, val_loss_history,
-               parameter_history, param_save_epochs (indices where params were saved)
+        tuple: (train_loss_history, val_loss_history, param_history,
+                param_save_epochs, final_epoch)
     """
     train_loss_history, val_loss_history, param_history = [], [], []
     param_save_epochs = []
@@ -47,6 +63,13 @@ def train(
     val_loss_history.append(val_loss0)
     param_history.append(snap0)
     param_save_epochs.append(0)
+    initial_loss = val_loss0
+    
+    if reduction_threshold is not None:
+        print(f"  Initial loss: {initial_loss:.6f}")
+        print(f"  Early stopping at {reduction_threshold*100:.1f}% reduction")
+
+    final_epoch = epochs
 
     # --- TRAINING LOOP (epochs 1..epochs) ---
     for epoch in range(1, epochs + 1):
@@ -66,21 +89,23 @@ def train(
         train_loss_history.append(avg_loss)
 
         model.eval()
-        if eval_dataloader is not None:
-            X_eval, Y_eval = next(iter(eval_dataloader))
-            out = model(X_eval)
-            val_loss = criterion(out, Y_eval).item()
-        else:
-            X_eval, Y_eval = next(iter(dataloader))
-            out = model(X_eval)
-            val_loss = criterion(out, Y_eval).item()
+        with torch.no_grad():
+            if eval_dataloader is not None:
+                X_eval, Y_eval = next(iter(eval_dataloader))
+                out = model(X_eval)
+                val_loss = criterion(out, Y_eval).item()
+            else:
+                X_eval, Y_eval = next(iter(dataloader))
+                out = model(X_eval)
+                val_loss = criterion(out, Y_eval).item()
 
         val_loss_history.append(val_loss)
 
         # Only save parameters at intervals or at the end
-        should_save = (save_param_interval is None or 
-                      epoch % save_param_interval == 0 or 
-                      epoch == epochs)
+        # If save_param_interval is None, only save at the very end
+        should_save = (save_param_interval is not None and 
+                      (epoch % save_param_interval == 0 or epoch == epochs)) or \
+                     (save_param_interval is None and epoch == epochs)
         
         if should_save:
             with torch.no_grad():
@@ -88,10 +113,25 @@ def train(
             param_history.append(snap)
             param_save_epochs.append(epoch)
 
-        if epoch % verbose_interval == 0:
-            print(f"[RNN] Epoch {epoch}/{epochs} | train_loss {avg_loss:.6f} | val_loss {val_loss:.6f}")
+        # Compute reduction for logging and early stopping
+        reduction = 1 - avg_loss / initial_loss if initial_loss > 0 else 0
 
-    return train_loss_history, val_loss_history, param_history, param_save_epochs
+        # Check early stopping
+        if reduction_threshold is not None and reduction >= reduction_threshold:
+            final_epoch = epoch
+            # Save final params if not already saved
+            if param_save_epochs[-1] != epoch:
+                with torch.no_grad():
+                    snap = {n: p.detach().cpu().clone() for n, p in model.named_parameters()}
+                param_history.append(snap)
+                param_save_epochs.append(epoch)
+            print(f"\n[CONVERGED] Epoch {epoch}: {reduction*100:.1f}% reduction >= {reduction_threshold*100:.1f}% threshold")
+            break
+
+        if epoch % verbose_interval == 0:
+            print(f"[Epoch {epoch:>5}/{epochs}] loss: {avg_loss:.6f} | reduction: {reduction*100:>6.1f}%")
+
+    return train_loss_history, val_loss_history, param_history, param_save_epochs, final_epoch
 
 def train_online(
     model: nn.Module,
@@ -102,22 +142,33 @@ def train_online(
     verbose_interval: int = 100,
     grad_clip: Optional[float] = None,
     eval_dataloader: Optional[DataLoader] = None,
-    save_param_interval: Optional[int] = None,  # NEW parameter
-) -> tuple[list[float], list[float], list[float], list[dict[str, torch.Tensor]], list[int]]:
+    save_param_interval: Optional[int] = None,
+    reduction_threshold: Optional[float] = None,
+) -> tuple[list[float], list[float], list[dict[str, torch.Tensor]], list[int], int]:
     """
     Train with online data generation (step-based instead of epoch-based).
     
     Args:
-        ...
+        model: The model to train
+        dataloader: Training data loader (online/infinite)
+        criterion: Loss function
+        optimizer: Optimizer
+        num_steps: Maximum number of training steps
+        verbose_interval: Print progress every N steps
+        grad_clip: Optional gradient clipping value
+        eval_dataloader: Optional separate validation loader
         save_param_interval: If provided, save params every N steps. 
-                            If None, save at every step (memory intensive!)
+                            If None, only save initial and final params (memory efficient!)
+        reduction_threshold: If provided, stop training when loss reduction reaches
+                            this threshold (e.g., 0.99 = 99% reduction). If None,
+                            train for full num_steps.
     
     Returns:
-        tuple: train_loss_history, val_loss_history,
-               parameter_history, param_save_steps (indices where params were saved)
+        tuple: (train_loss_history, val_loss_history, param_history, 
+                param_save_steps, final_step)
     """
     train_loss_history, val_loss_history, param_history = [], [], []
-    param_save_steps = []  # Track which steps have saved params
+    param_save_steps = []
     
     # Initial evaluation (step 0)
     model.eval()
@@ -137,10 +188,16 @@ def train_online(
     val_loss_history.append(val_loss0)
     param_history.append(snap0)
     param_save_steps.append(0)
+    initial_loss = val_loss0
+    
+    if reduction_threshold is not None:
+        print(f"  Initial loss: {initial_loss:.6f}")
+        print(f"  Early stopping at {reduction_threshold*100:.1f}% reduction")
     
     # Training loop
     model.train()
     data_iter = iter(dataloader)
+    final_step = num_steps
     
     for step in range(1, num_steps + 1):
         # Get fresh batch
@@ -158,7 +215,8 @@ def train_online(
         optimizer.step()
         
         # Record training loss
-        train_loss_history.append(loss.item())
+        current_loss = loss.item()
+        train_loss_history.append(current_loss)
         
         # Evaluation on validation set
         model.eval()
@@ -175,9 +233,10 @@ def train_online(
             val_loss_history.append(val_loss)
             
             # Only save parameters at specified intervals or at the end
-            should_save = (save_param_interval is None or 
-                          step % save_param_interval == 0 or 
-                          step == num_steps)
+            # If save_param_interval is None, only save at the very end
+            should_save = (save_param_interval is not None and 
+                          (step % save_param_interval == 0 or step == num_steps)) or \
+                         (save_param_interval is None and step == num_steps)
             
             if should_save:
                 snap = {n: p.detach().cpu().clone() for n, p in model.named_parameters()}
@@ -186,7 +245,22 @@ def train_online(
         
         model.train()
         
+        # Compute reduction for logging and early stopping
+        reduction = 1 - current_loss / initial_loss if initial_loss > 0 else 0
+        
+        # Check early stopping
+        if reduction_threshold is not None and reduction >= reduction_threshold:
+            final_step = step
+            # Save final params if not already saved
+            if param_save_steps[-1] != step:
+                with torch.no_grad():
+                    snap = {n: p.detach().cpu().clone() for n, p in model.named_parameters()}
+                param_history.append(snap)
+                param_save_steps.append(step)
+            print(f"\n[CONVERGED] Step {step}: {reduction*100:.1f}% reduction >= {reduction_threshold*100:.1f}% threshold")
+            break
+        
         if step % verbose_interval == 0:
-            print(f"[RNN] Step {step}/{num_steps} | train_loss {loss.item():.6f} | val_loss {val_loss:.6f}")
+            print(f"[Step {step:>6}/{num_steps}] loss: {current_loss:.6f} | reduction: {reduction*100:>6.1f}%")
     
-    return train_loss_history, val_loss_history, param_history, param_save_steps
+    return train_loss_history, val_loss_history, param_history, param_save_steps, final_step

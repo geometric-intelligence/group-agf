@@ -496,6 +496,24 @@ def generate_gaussian_template_1d(p: int, n_gaussians: int = 3, sigma_range: tup
     return template.astype(np.float32)
 
 
+def generate_onehot_template_1d(p: int):
+    """
+    Generate 1D one-hot template for cyclic group C_p.
+    
+    This creates a template with a single 1 at position 0 and 0s everywhere else.
+    When rolled, this one-hot encoding uniquely identifies each group element.
+    
+    Args:
+        p: dimension of cyclic group
+    
+    Returns:
+        template: (p,) array with template[0] = 1, all others = 0
+    """
+    template = np.zeros(p, dtype=np.float32)
+    template[0] = 1.0
+    return template
+
+
 ### 2D Templates ###
 
 def gaussian_mixture_template(

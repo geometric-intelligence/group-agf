@@ -5,6 +5,7 @@ from gagf.rnns.datamodule import (
     mnist_template_2d,
     generate_fourier_template_1d,
     generate_gaussian_template_1d,
+    generate_onehot_template_1d,
     generate_template_unique_freqs,
 )
 from gagf.rnns.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
@@ -23,12 +24,18 @@ import os
 from gagf.rnns.utils import (
     plot_training_loss_with_theory, 
     plot_model_predictions_over_time, 
+    plot_model_predictions_over_time_1d,
     plot_prediction_power_spectrum_over_time, 
+    plot_prediction_power_spectrum_over_time_1d,
     plot_fourier_modes_reference,
     topk_template_freqs,
+    topk_template_freqs_1d,
     plot_wout_neuron_specialization,
+    plot_wout_neuron_specialization_1d,
     plot_wmix_frequency_structure,
     plot_2d_signal,
+    compute_theoretical_final_loss_1d,
+    compute_theoretical_final_loss_2d,
 )
 
 import matplotlib.pyplot as plt
@@ -102,7 +109,7 @@ def save_results(
     return metadata
 
 
-def produce_plots(
+def produce_plots_2d(
     run_dir: Path,
     config: dict,
     model,
@@ -138,7 +145,7 @@ def produce_plots(
     print("\n=== Generating Analysis Plots ===")
     
     ### ----- COMPUTE X-AXIS VALUES ----- ###
-    dimension = config['data'].get('dimension', 2)
+    dimension = config['data']['dimension']
     if dimension == 1:
         p_flat = config['data']['p']
     else:
@@ -244,57 +251,57 @@ def produce_plots(
         show=False
     )
     
-    ### ----- PLOT POWER SPECTRUM ANALYSIS ----- ###
-    print("Analyzing power spectrum of predictions over training...")
-    plot_prediction_power_spectrum_over_time(
-        model,
-        param_hist,
-        X_seq_2d_t,
-        Y_seq_2d_t,
-        template_2d,
-        config['data']['p1'],
-        config['data']['p2'],
-        loss_history=train_loss_hist,
-        param_save_indices=param_save_indices,
-        num_freqs_to_track=10,
-        checkpoint_indices=checkpoint_indices,
-        num_samples=100,
-        save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
-        show=False
-    )
+    # ### ----- PLOT POWER SPECTRUM ANALYSIS ----- ###
+    # print("Analyzing power spectrum of predictions over training...")
+    # plot_prediction_power_spectrum_over_time(
+    #     model,
+    #     param_hist,
+    #     X_seq_2d_t,
+    #     Y_seq_2d_t,
+    #     template_2d,
+    #     config['data']['p1'],
+    #     config['data']['p2'],
+    #     loss_history=train_loss_hist,
+    #     param_save_indices=param_save_indices,
+    #     num_freqs_to_track=10,
+    #     checkpoint_indices=checkpoint_indices,
+    #     num_samples=100,
+    #     save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
+    #     show=False
+    # )
     
     ### ----- PLOT FOURIER MODES REFERENCE ----- ###
     print("Creating Fourier modes reference...")
     tracked_freqs = topk_template_freqs(template_2d, K=10)
     colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
     
-    plot_fourier_modes_reference(
-        tracked_freqs,
-        colors,
-        config['data']['p1'],
-        config['data']['p2'],
-        save_path=os.path.join(run_dir, "fourier_modes_reference.pdf"),
-        save_individual=True,
-        individual_dir=os.path.join(run_dir, "fourier_modes"),
-        show=False
-    )
+    # plot_fourier_modes_reference(
+    #     tracked_freqs,
+    #     colors,
+    #     config['data']['p1'],
+    #     config['data']['p2'],
+    #     save_path=os.path.join(run_dir, "fourier_modes_reference.pdf"),
+    #     save_individual=True,
+    #     individual_dir=os.path.join(run_dir, "fourier_modes"),
+    #     show=False
+    # )
     
-    ### ----- PLOT W_OUT NEURON SPECIALIZATION ----- ###
-    print("Visualizing W_out neuron specialization...")
-    plot_wout_neuron_specialization(
-        param_hist,
-        tracked_freqs,
-        colors,
-        config['data']['p1'],
-        config['data']['p2'],
-        steps=checkpoint_indices,
-        dead_thresh_l2=0.25,
-        save_dir=run_dir,
-        show=False
-    )
+    # ### ----- PLOT W_OUT NEURON SPECIALIZATION ----- ###
+    # print("Visualizing W_out neuron specialization...")
+    # plot_wout_neuron_specialization(
+    #     param_hist,
+    #     tracked_freqs,
+    #     colors,
+    #     config['data']['p1'],
+    #     config['data']['p2'],
+    #     steps=checkpoint_indices,
+    #     dead_thresh_l2=0.25,
+    #     save_dir=run_dir,
+    #     show=False
+    # )
     
     ### ----- PLOT W_MIX FREQUENCY STRUCTURE (QuadraticRNN only) ----- ###
-    model_type = config['model'].get('model_type', 'QuadraticRNN')
+    model_type = config['model']['model_type']
     if model_type == 'QuadraticRNN':
         print("Visualizing W_mix frequency structure...")
         plot_wmix_frequency_structure(
@@ -313,6 +320,160 @@ def produce_plots(
         print("Skipping W_mix frequency structure plot (not applicable for SequentialMLP)")
     
     print("\n✓ All plots generated successfully!")
+
+
+def produce_plots_1d(
+    run_dir: Path,
+    config: dict,
+    model,
+    param_hist,
+    param_save_indices,
+    train_loss_hist,
+    template_1d: np.ndarray,
+    training_mode: str,
+    device: str
+):
+    """
+    Generate all analysis plots after training (1D version).
+    
+    Args:
+        run_dir: Directory to save plots
+        config: Configuration dictionary (must have dimension=1)
+        model: Trained model (QuadraticRNN or SequentialMLP)
+        param_hist: List of parameter snapshots
+        param_save_indices: Indices where params were saved
+        train_loss_hist: Training loss history
+        template_1d: 1D template array (p,)
+        training_mode: 'online' or 'offline'
+        device: Device string ('cpu' or 'cuda')
+    """
+    print("\n=== Generating Analysis Plots (1D) ===")
+    
+    ### ----- COMPUTE X-AXIS VALUES ----- ###
+    p = config['data']['p']
+    k = config['data']['k']
+    batch_size = config['data']['batch_size']
+    total_space_size = p ** k
+    
+    # Calculate different x-axis values for plotting
+    if training_mode == 'online':
+        steps = np.arange(len(train_loss_hist))
+        samples_seen = batch_size * steps
+        fraction_of_space = samples_seen / total_space_size
+        x_label_steps = "Step"
+    else:  # offline
+        epochs = np.arange(len(train_loss_hist))
+        samples_seen = config['data']['num_samples'] * epochs
+        fraction_of_space = samples_seen / total_space_size
+        x_label_steps = "Epoch"
+    
+    # Save x-axis data
+    np.save(run_dir / "samples_seen.npy", samples_seen)
+    np.save(run_dir / "fraction_of_space_seen.npy", fraction_of_space)
+    
+    print(f"Total data space: {total_space_size:,} sequences")
+    print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1]*100:.4f}% of space)")
+    
+    ### ----- GENERATE EVALUATION DATA ----- ###
+    print("Generating evaluation data for visualization...")
+    from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_1d
+    X_seq_1d, Y_seq_1d, _ = build_modular_addition_sequence_dataset_1d(
+        config['data']['p'], 
+        template_1d, 
+        config['data']['k'], 
+        mode="sampled", 
+        num_samples=min(config['data']['num_samples'], 1000),
+        return_all_outputs=config['model']['return_all_outputs'],
+    )
+    X_seq_1d_t = torch.tensor(X_seq_1d, dtype=torch.float32, device=device)
+    Y_seq_1d_t = torch.tensor(Y_seq_1d, dtype=torch.float32, device=device)
+    print(f"  Generated {X_seq_1d_t.shape[0]} samples for visualization")
+    
+    ### ----- COMPUTE CHECKPOINT INDICES ----- ###
+    total_checkpoints = len(param_hist)
+    checkpoint_fractions = config['analysis']['checkpoints']
+    checkpoint_indices = [int(f * (total_checkpoints - 1)) for f in checkpoint_fractions]
+    
+    print(f"Analysis checkpoints: {checkpoint_indices} (out of {total_checkpoints})")
+    print(f"  Corresponding to step/epoch indices: {[param_save_indices[i] for i in checkpoint_indices]}")
+    
+    ### ----- PLOT TRAINING LOSS ----- ###
+    print("\nPlotting training loss...")
+    
+    # Create a 2x2 subplot for different scale combinations
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    
+    x_values = steps if training_mode == 'online' else epochs
+    
+    scale_configs = [
+        ('linear', 'linear', 'Linear Scale'),
+        ('linear', 'log', 'Log Y'),
+        ('log', 'linear', 'Log X'),
+        ('log', 'log', 'Log-Log'),
+    ]
+    
+    for ax, (xscale, yscale, title) in zip(axes.flat, scale_configs):
+        ax.plot(x_values, train_loss_hist, lw=2, color='#1f77b4')
+        ax.set_xscale(xscale)
+        ax.set_yscale(yscale)
+        ax.set_xlabel(x_label_steps)
+        ax.set_ylabel('Training Loss')
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(run_dir, "training_loss.pdf"), bbox_inches='tight', dpi=150)
+    plt.close()
+    print("  ✓ Saved training loss plot (all scales)")
+    
+    ### ----- PLOT MODEL PREDICTIONS ----- ###
+    print("Plotting model predictions over time...")
+    plot_model_predictions_over_time_1d(
+        model,
+        param_hist,
+        X_seq_1d_t,
+        Y_seq_1d_t,
+        p,
+        steps=checkpoint_indices,
+        save_path=os.path.join(run_dir, "predictions_over_time.pdf"),
+        show=False
+    )
+    
+    ### ----- PLOT POWER SPECTRUM ANALYSIS ----- ###
+    print("Analyzing power spectrum of predictions over training...")
+    plot_prediction_power_spectrum_over_time_1d(
+        model,
+        param_hist,
+        X_seq_1d_t,
+        Y_seq_1d_t,
+        template_1d,
+        p,
+        loss_history=train_loss_hist,
+        param_save_indices=param_save_indices,
+        num_freqs_to_track=min(10, p // 4),
+        checkpoint_indices=checkpoint_indices,
+        num_samples=100,
+        save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
+        show=False
+    )
+    
+    # ### ----- PLOT W_OUT NEURON SPECIALIZATION ----- ###
+    # print("Visualizing W_out neuron specialization...")
+    # tracked_freqs = topk_template_freqs_1d(template_1d, K=min(10, p // 4))
+    # colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
+    
+    # plot_wout_neuron_specialization_1d(
+    #     param_hist,
+    #     tracked_freqs,
+    #     colors,
+    #     p,
+    #     steps=checkpoint_indices,
+    #     dead_thresh_l2=0.25,
+    #     save_dir=run_dir,
+    #     show=False
+    # )
+    
+    print("\n✓ All 1D plots generated successfully!")
 
 
 def train_single_run(config: dict, run_dir: Path = None) -> dict:
@@ -343,8 +504,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     ### ----- GENERATE DATA ----- ###
     print("Generating data...")
     
-    dimension = config['data'].get('dimension', 2)  # Default to 2D for backwards compatibility
-    template_type = config['data'].get('template_type', 'mnist')
+    dimension = config['data']['dimension']
+    template_type = config['data']['template_type']
     
     if dimension == 1:
         # 1D template generation
@@ -354,10 +515,12 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         if template_type == 'mnist':
             template_1d = mnist_template_1d(p, config['data']['mnist_label'], root="data")
         elif template_type == 'fourier':
-            n_freqs = config['data'].get('n_freqs', min(10, p // 4))
+            n_freqs = config['data']["n_freqs"]
             template_1d = generate_fourier_template_1d(p, n_freqs=n_freqs, seed=config['data']['seed'])
         elif template_type == 'gaussian':
             template_1d = generate_gaussian_template_1d(p, n_gaussians=3, seed=config['data']['seed'])
+        elif template_type == 'onehot':
+            template_1d = generate_onehot_template_1d(p)
         else:
             raise ValueError(f"Unknown template_type: {template_type}")
         
@@ -384,7 +547,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         if template_type == 'mnist':
             template_2d = mnist_template_2d(p1, p2, config['data']['mnist_label'], root="data")
         elif template_type == 'fourier':
-            n_freqs = config['data'].get('n_freqs', min(10, (p1 * p2) // 10))
+            n_freqs = config['data']["n_freqs"]
             template_2d = generate_template_unique_freqs(p1, p2, n_freqs=n_freqs, seed=config['data']['seed'])
         else:
             raise ValueError(f"Unknown template_type for 2D: {template_type}")
@@ -408,7 +571,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     template_torch = torch.tensor(template, device=device, dtype=torch.float32).flatten()
     
     # Determine which model to use
-    model_type = config['model'].get('model_type', 'QuadraticRNN')  # Default to QuadraticRNN for backwards compatibility
+    model_type = config['model']['model_type']
     print(f"Using model type: {model_type}")
     
     if model_type == 'QuadraticRNN':
@@ -468,7 +631,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         )
     elif optimizer_name == 'per_neuron':
         # Per-neuron scaled SGD (recommended for SequentialMLP)
-        degree = config['training'].get('degree', None)
+        degree = config['training']['degree']
         lr = config['training']['learning_rate']
         
         # For SequentialMLP, use lr=1.0 by default if not specified
@@ -625,11 +788,17 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     
     ### ----- TRAIN MODEL ----- ###
     print(f"Starting training in {training_mode} mode...")
+    
+    # Get optional early stopping threshold
+    reduction_threshold = config['training'].get('reduction_threshold')
+    if reduction_threshold is not None:
+        print(f"Early stopping enabled at {reduction_threshold*100:.1f}% reduction")
+    
     start_time = time.time()
     
     if training_mode == 'online':
         from gagf.rnns.train import train_online
-        train_loss_hist, val_loss_hist, param_hist, param_save_indices = train_online(
+        train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = train_online(
             rnn_2d,
             train_loader,
             criterion,
@@ -639,10 +808,11 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             grad_clip=config['training']['grad_clip'],
             eval_dataloader=val_loader,
             save_param_interval=config['training']['save_param_interval'],
+            reduction_threshold=reduction_threshold,
         )
     else:  # offline
         from gagf.rnns.train import train
-        train_loss_hist, val_loss_hist, param_hist, param_save_indices = train(
+        train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = train(
             rnn_2d,
             train_loader,
             criterion,
@@ -652,6 +822,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             grad_clip=config['training']['grad_clip'],
             eval_dataloader=val_loader,
             save_param_interval=config['training']['save_param_interval'],
+            reduction_threshold=reduction_threshold,
         )
     
     training_time = time.time() - start_time
@@ -660,6 +831,11 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     print(f"  Final train loss: {train_loss_hist[-1]:.6f}")
     print(f"  Final val loss: {val_loss_hist[-1]:.6f}")
     print(f"  Training time: {training_time:.2f}s")
+    if reduction_threshold is not None:
+        max_steps_or_epochs = num_steps if training_mode == 'online' else epochs
+        stopped_early = final_step < max_steps_or_epochs
+        status = "CONVERGED" if stopped_early else "DID NOT CONVERGE"
+        print(f"  Status: {status} at step/epoch {final_step}")
 
     ### ----- SAVE RESULTS ----- ###
     metadata = save_results(
@@ -672,7 +848,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     ### ----- PRODUCE ALL PLOTS ----- ###
     if dimension == 2:
         # Only produce detailed plots for 2D (for now)
-        produce_plots(
+        produce_plots_2d(
             run_dir=run_dir,
             config=config,
             model=rnn_2d,
@@ -684,27 +860,35 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             device=device
         )
     else:
-        # For 1D, just plot basic training loss
-        print("\n=== Generating Basic Plots for 1D ===")
-        plt.figure(figsize=(10, 6))
-        plt.plot(train_loss_hist)
-        plt.xlabel('Step' if training_mode == 'online' else 'Epoch')
-        plt.ylabel('Training Loss')
-        plt.title('Training Loss (1D)')
-        plt.yscale('log')
-        plt.grid(True, alpha=0.3)
-        plt.savefig(os.path.join(run_dir, "training_loss.pdf"), bbox_inches='tight', dpi=150)
-        plt.close()
-        print("  ✓ Saved training loss plot")
+        # Produce detailed plots for 1D
+        produce_plots_1d(
+            run_dir=run_dir,
+            config=config,
+            model=rnn_2d,
+            param_hist=param_hist,
+            param_save_indices=param_save_indices,
+            train_loss_hist=train_loss_hist,
+            template_1d=template_1d,
+            training_mode=training_mode,
+            device=device
+        )
     
     # Return results dictionary
-    return {
+    results = {
         "final_train_loss": float(train_loss_hist[-1]),
         "final_val_loss": float(val_loss_hist[-1]),
         "training_time": training_time,
         "metadata": metadata,
         "run_dir": str(run_dir),
+        "final_step": final_step,
     }
+    
+    # Add early stopping info if enabled
+    if reduction_threshold is not None:
+        max_steps_or_epochs = num_steps if training_mode == 'online' else epochs
+        results["converged"] = final_step < max_steps_or_epochs
+    
+    return results
 
 
 def main(config: dict):

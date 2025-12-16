@@ -13,6 +13,7 @@ import datetime
 import copy
 from typing import List, Dict, Any, Tuple
 from pathlib import Path
+from itertools import product
 import numpy as np
 
 
@@ -47,20 +48,139 @@ def load_sweep_config(sweep_file: str) -> Dict:
     return sweep_config
 
 
+def expand_parameter_grid(parameter_grid: Dict) -> List[Dict]:
+    """
+    Expand a parameter grid specification into a list of parameter combinations.
+    
+    Args:
+        parameter_grid: Nested dict with lists as leaf values.
+                       Example: {'data': {'p': [5, 10], 'k': [2, 3]}, 
+                                'model': {'hidden_dim': [64, 128]}}
+    
+    Returns:
+        List of override dicts, one per combination.
+        Example: [{'data': {'p': 5, 'k': 2}, 'model': {'hidden_dim': 64}}, ...]
+    """
+    def flatten_dict(d, parent_key=''):
+        """Flatten nested dict to dot-notation keys."""
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}.{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(flatten_dict(v, new_key).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
+    
+    def unflatten_dict(d):
+        """Convert dot-notation keys back to nested dict."""
+        result = {}
+        for key, value in d.items():
+            parts = key.split('.')
+            current = result
+            for part in parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            current[parts[-1]] = value
+        return result
+    
+    # Flatten to get all parameter paths
+    flat = flatten_dict(parameter_grid)
+    
+    # Get parameter names and their value lists
+    param_names = list(flat.keys())
+    param_values = [flat[name] if isinstance(flat[name], list) else [flat[name]] 
+                    for name in param_names]
+    
+    # Generate all combinations
+    combinations = []
+    for values in product(*param_values):
+        combo = dict(zip(param_names, values))
+        combinations.append(unflatten_dict(combo))
+    
+    return combinations
+
+
+def generate_experiment_name(overrides: Dict) -> str:
+    """
+    Generate a concise experiment name from parameter overrides.
+    
+    Example: {'data': {'p': 10, 'k': 2}, 'model': {'hidden_dim': 64}}
+             -> "p10_k2_h64"
+    """
+    name_parts = []
+    
+    # Common parameter abbreviations
+    abbrev = {
+        'p': 'p',
+        'p1': 'p1', 
+        'p2': 'p2',
+        'k': 'k',
+        'hidden_dim': 'h',
+        'n_freqs': 'f',
+        'learning_rate': 'lr',
+        'batch_size': 'bs',
+    }
+    
+    def extract_params(d, prefix=''):
+        """Recursively extract parameters."""
+        for key, value in sorted(d.items()):
+            if isinstance(value, dict):
+                extract_params(value, prefix)
+            else:
+                param_name = abbrev.get(key, key)
+                name_parts.append(f"{param_name}{value}")
+    
+    extract_params(overrides)
+    return "_".join(name_parts)
+
+
 def generate_experiment_configs(sweep_config: Dict) -> List[Tuple[str, Dict]]:
-    """Generate all individual experiment configurations from sweep."""
+    """
+    Generate all individual experiment configurations from sweep.
+    
+    Supports two modes:
+    1. Explicit experiments list (original behavior)
+    2. Parameter grid (cartesian product of parameter lists)
+    """
     base_config = sweep_config["_base_config"]
-    experiments = sweep_config["experiments"]
-
-    experiment_configs = []
-    for exp in experiments:
-        exp_name = exp["name"]
-        overrides = exp.get("overrides", {})
-
-        # Merge base config with overrides
-        merged_config = deep_merge_dict(base_config, overrides)
-        experiment_configs.append((exp_name, merged_config))
-
+    global_overrides = sweep_config.get("global_overrides", {})
+    
+    # Check if using parameter grid or explicit experiments
+    if "parameter_grid" in sweep_config:
+        # Generate experiments from parameter grid
+        print("Generating experiments from parameter grid...")
+        param_combinations = expand_parameter_grid(sweep_config["parameter_grid"])
+        
+        experiment_configs = []
+        for overrides in param_combinations:
+            exp_name = generate_experiment_name(overrides)
+            
+            # Merge: base -> global_overrides -> specific overrides
+            config = deep_merge_dict(base_config, global_overrides)
+            merged_config = deep_merge_dict(config, overrides)
+            experiment_configs.append((exp_name, merged_config))
+        
+        print(f"Generated {len(experiment_configs)} experiments from parameter grid")
+        
+    elif "experiments" in sweep_config:
+        # Use explicit experiments list (original behavior)
+        experiments = sweep_config["experiments"]
+        
+        experiment_configs = []
+        for exp in experiments:
+            exp_name = exp["name"]
+            overrides = exp.get("overrides", {})
+            
+            # Merge: base -> global_overrides -> specific overrides
+            config = deep_merge_dict(base_config, global_overrides)
+            merged_config = deep_merge_dict(config, overrides)
+            experiment_configs.append((exp_name, merged_config))
+    
+    else:
+        raise ValueError("Sweep config must contain either 'experiments' or 'parameter_grid'")
+    
     return experiment_configs
 
 
