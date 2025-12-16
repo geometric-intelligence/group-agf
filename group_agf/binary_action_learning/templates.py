@@ -10,7 +10,10 @@ from group_agf.binary_action_learning.group_fourier_transform import \
 def one_hot(p):
     """One-hot encode an integer value in R^p."""
     vec = np.zeros(p)
-    vec[0] = 10
+    vec[1] = 10
+
+    zeroth_freq = np.mean(vec)
+    vec = vec - zeroth_freq
     return vec
 
 
@@ -152,9 +155,7 @@ def fixed_group_template(group, fourier_coef_diag_values):
     ), f"Number of Fourier coef. magnitudes on the diagonal {len(fourier_coef_diag_values)} must match number of irreps {len(group.irreps())}"
     for i, irrep in enumerate(group.irreps()):
         diag_values = np.full(irrep.size, fourier_coef_diag_values[i], dtype=float)
-        # Create a random full rank matrix with unique diagonal entries
         mat = np.zeros((irrep.size, irrep.size), dtype=float)
-        # print(f"diag_values for irrep {i} of dimension {dim} is: {diag_values}")
         np.fill_diagonal(mat, diag_values)
         print(f"mat for irrep {i} of dimension {irrep.size} is:\n {mat}\n")
 
