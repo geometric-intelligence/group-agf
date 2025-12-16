@@ -28,26 +28,6 @@ i_powers = {
     "A5": list(range(len(powers["A5"]))),
 }
 
-fourier_coef_diag_values = {
-    "cn": powers["cn"],
-    "cnxcn": powers["cnxcn"],
-    "dihedral": [
-        [
-            np.sqrt(10*p / dim**2) for p, dim in zip(powers["dihedral"][i], [1, 1, 2, 2, 1, 1])
-        ] for i in i_powers["dihedral"]
-    ],
-    "octahedral": [
-        [
-            np.sqrt(24*p / dim**2) for p, dim in zip(powers["octahedral"][i], [1, 3, 3, 2, 1])
-        ] for i in i_powers["octahedral"]
-    ],
-    "A5":[
-        [
-            np.sqrt(60*p / dim**2) for p, dim in zip(powers["A5"][i], [1, 3, 5, 3, 4])
-        ] for i in i_powers["A5"]
-    ]
-}
-
 # Model Parameters
 hidden_factor = [3000] #20, 30, 40, 50]  # hidden size = hidden_factor * group_size
 
