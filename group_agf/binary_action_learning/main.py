@@ -187,7 +187,7 @@ def main():
         optimizer_name,
         batch_size,
         epochs,
-        i_power,
+        powers,
     ) in itertools.product(
         default_config.init_scale[default_config.group_name],
         default_config.hidden_factor,
@@ -197,7 +197,7 @@ def main():
         default_config.optimizer_name,
         default_config.batch_size,
         default_config.epochs,
-        default_config.i_powers[default_config.group_name],
+        default_config.powers[default_config.group_name],
     ):
         group_name = default_config.group_name
 
@@ -215,7 +215,7 @@ def main():
             "verbose_interval": default_config.verbose_interval,
             "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
-            "powers": default_config.powers[group_name][i_power],
+            "powers": powers,
             "dataset_fraction": default_config.dataset_fraction[group_name],
             "power_logscale": default_config.power_logscale,
             "resume_from_checkpoint": default_config.resume_from_checkpoint,
@@ -256,7 +256,8 @@ def main():
             group = Octahedral()
             group_size = group.order()
             irreps = group.irreps()
-            irrep_dims = [ir.dim for ir in irreps]
+            irrep_dims = [ir.size for ir in irreps]
+            print(f"Running for group: {group_name}{group_n} with irrep dims {irrep_dims}")
             main_config["group"] = group
             main_config["group_size"] = group_size
             main_config["fourier_coef_diag_values"] = [
@@ -269,7 +270,8 @@ def main():
             group = Icosahedral()
             group_size = group.order()
             irreps = group.irreps()
-            irrep_dims = [ir.dim for ir in irreps]
+            irrep_dims = [ir.size for ir in irreps]
+            print(f"Running for group: {group_name}{group_n} with irrep dims {irrep_dims}")
             main_config["group"] = group
             main_config["group_size"] = group_size
             main_config["fourier_coef_diag_values"] = [
@@ -293,7 +295,8 @@ def main():
                     )
                 group_size = group.order()
                 irreps = group.irreps()
-                irrep_dims = [ir.dim for ir in irreps]
+                irrep_dims = [ir.size for ir in irreps]
+                print(f"Running for group: {group_name}{group_n} with irrep dims {irrep_dims}")
                 main_config["group"] = group
                 main_config["group_size"] = group_size
                 main_config["group_n"] = group_n

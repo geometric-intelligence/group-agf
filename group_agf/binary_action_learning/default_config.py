@@ -1,7 +1,7 @@
 import numpy as np
 
 # Dataset Parameters
-group_name = "octahedral" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
+group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
 group_n = [6]  # n in Dn [3, 4, 5]
 template_type = ["irrep_construction"] # "one_hot", "irrep_construction"]
 
@@ -20,13 +20,6 @@ powers = {
     ],
 }
 
-i_powers = {
-    "cn": list(range(len(powers["cn"]))),
-    "cnxcn": list(range(len(powers["cnxcn"]))),
-    "dihedral": list(range(len(powers["dihedral"]))),
-    "octahedral": list(range(len(powers["octahedral"]))),
-    "A5": list(range(len(powers["A5"]))),
-}
 
 # Model Parameters
 hidden_factor = [3000] #20, 30, 40, 50]  # hidden size = hidden_factor * group_size
@@ -41,11 +34,11 @@ init_scale = {
     "A5": [1e-3],
 }
 lr = {
-    "cn": 0.01,
-    "cnxcn": 0.01,
-    "dihedral": 0.01,
-    "octahedral": 0.0001,
-    "A5": 0.0001,
+    "cn": [0.01],
+    "cnxcn": [0.01],
+    "dihedral": [0.01],
+    "octahedral": [0.0001],
+    "A5": [0.0001],
 }
 
 mom = [0.9]
