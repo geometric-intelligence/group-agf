@@ -3,7 +3,7 @@ import numpy as np
 # Dataset Parameters
 group_name = "dihedral" #, "A5"]  # , 'octahedral', 'cn', 'dihedral', 'cnxcn' 'A5']
 group_n = [6]  # n in Dn [3, 4, 5]
-template_type = ["irrep_construction"] # "one_hot", "irrep_construction"]
+template_type = "irrep_construction" # "one_hot", "irrep_construction"]
 
 powers = {
     "cn": [[0, 12.5, 10, 7.5, 5, 2.5]],
@@ -20,9 +20,8 @@ powers = {
     ],
 }
 
-
 # Model Parameters
-hidden_factor = [3000] #20, 30, 40, 50]  # hidden size = hidden_factor * group_size
+hidden_factor = [30] #20, 30, 40, 50]  # hidden size = hidden_factor * group_size
 
 # Learning Parameters
 seed = [10]
@@ -43,7 +42,7 @@ lr = {
 
 mom = [0.9]
 optimizer_name = ["PerNeuronScaledSGD"]
-epochs = [10000] #, 50000]
+epochs = [1000] #, 50000]
 verbose_interval = 100
 checkpoint_interval = 200000
 batch_size = [128]  #    128, 256]

@@ -221,6 +221,7 @@ def main():
             "resume_from_checkpoint": default_config.resume_from_checkpoint,
             "checkpoint_interval": default_config.checkpoint_interval,
             "checkpoint_path": None,
+            "template_type": default_config.template_type,
         }
 
         if group_name == "cnxcn":

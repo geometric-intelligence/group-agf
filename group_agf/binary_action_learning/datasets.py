@@ -6,27 +6,18 @@ import group_agf.binary_action_learning.templates as templates
 def load_dataset(config):
     """Load dataset based on configuration."""
 
+    template = template_selector(config)
+
     if config["group_name"] == "cnxcn":
-        # template = mnist_template(config["image_length"], digit=config["mnist_digit"])
-        template = templates.fixed_cnxcn_template(
-            config["image_length"], config["fourier_coef_diag_values"]
-        )
         X, Y = cnxcn_dataset(template)
         
     elif config["group_name"] == "cn":
-        template = templates.fixed_cn_template(
-            config["group_n"], config["fourier_coef_diag_values"]
-        )
         X, Y = cn_dataset(template)
 
     else:
-        template = templates.fixed_group_template(
-            config["group"], config["fourier_coef_diag_values"]
-        )
-        # template = templates.one_hot(config["group"].order())
         X, Y = group_dataset(config["group"], template)
 
-        print(f"dataset_fraction: {config['dataset_fraction']}")
+    print(f"dataset_fraction: {config['dataset_fraction']}")
         
     if config["dataset_fraction"] != 1.0:
         assert 0 < config["dataset_fraction"] <= 1.0, "fraction must be in (0, 1]"
@@ -41,6 +32,28 @@ def load_dataset(config):
         Y = Y[indices]
 
     return X, Y, template
+
+
+def template_selector(config):
+    """Select template based on configuration."""
+    if config["template_type"] == "irrep_construction":
+        if config["group_name"] == "cnxcn":
+            template = templates.fixed_cnxcn_template(
+                config["image_length"], config["fourier_coef_diag_values"]
+            )
+        elif config["group_name"] == "cn":
+            template = templates.fixed_cn_template(
+                config["group_n"], config["fourier_coef_diag_values"]
+            )
+        else:
+            template = templates.fixed_group_template(
+                config["group"], config["fourier_coef_diag_values"]
+            )
+    elif config["template_type"] == "one_hot":
+        template = templates.one_hot(config["group"].order())
+    else:
+        raise ValueError(f"Unknown template type: {config['template_type']}")
+    return template
 
 
 def group_dataset(group, template):
