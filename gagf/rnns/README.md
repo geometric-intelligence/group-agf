@@ -103,8 +103,6 @@ python gagf/rnns/main.py --config gagf/rnns/config.yaml
 
 This will train the model and save results to the `runs/` directory.
 
-**Note on visualization:** Currently, detailed analysis plots (Fourier modes, neuron specialization, etc.) are only generated for 2D tasks. For 1D tasks, basic training loss plots are generated.
-
 ### Parameter Sweeps
 
 To run parameter sweeps with multiple configurations and seeds:
@@ -138,7 +136,7 @@ python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/example_sweep.yaml
 ```
 
 This will:
-- Run each experiment configuration with multiple seeds
+- Run each experiment configuration (potentially with multiple seeds)
 - Save results to `sweeps/{sweep_name}_{timestamp}/`
 - Generate summary statistics across seeds
 - Create experiment and sweep-level summary files
