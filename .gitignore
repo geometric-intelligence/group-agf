@@ -10,6 +10,11 @@ notebooks/figs/
 notebooks/figs_temp/
 gagf/fourier_power_only.png
 notebooks/saved_models/
+gagf/group_learning/wandb/*
+gagf/group_learning/saved_datasets/
+notebooks/checkpoint*
+notebooks/W-weights.pdf
+notebooks/predictions.pdf
 
 runs/
 data/
@@ -217,3 +222,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+#wandb
+wandb/
+gagf/group_learning/wandb
