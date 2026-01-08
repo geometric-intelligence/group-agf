@@ -16,6 +16,10 @@ notebooks/checkpoint*
 notebooks/W-weights.pdf
 notebooks/predictions.pdf
 
+runs/
+data/
+sweeps/
+
 # C extensions
 *.so
 

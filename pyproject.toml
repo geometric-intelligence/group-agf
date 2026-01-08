@@ -26,6 +26,7 @@ pykernel = "^0.1.6"
 scikit-learn = "^1.7.2"
 tqdm = "^4.67.1"
 seaborn = "^0.13.2"
+jupyter-black = "^0.4.0"
 escnn = "^1.0.11"
 
 
