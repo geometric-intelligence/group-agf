@@ -91,7 +91,7 @@ training:
   # Training Dynamics
   grad_clip: 0.1
   verbose_interval: 10
-  save_param_interval: 100    # Save params every N steps/epochs
+  save_param_interval: null    # Save params every N steps/epochs
                               # Set to null to only save initial & final (memory efficient for sweeps)
   
   # Early Stopping (optional)

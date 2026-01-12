@@ -143,17 +143,22 @@ This will:
 
 **Multi-GPU Usage:**
 
-To leverage multiple GPUs, specify the GPU ID when launching sweeps:
+The sweep runner supports automatic parallel execution across multiple GPUs:
 
 ```bash
-# Terminal 1 - Run sweep on GPU 0
-python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/sweep1.yaml --gpu 0
+# Use all available GPUs automatically (recommended)
+python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/example_sweep.yaml --gpus auto
 
-# Terminal 2 - Run sweep on GPU 1 simultaneously
-python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/sweep2.yaml --gpu 1
+# Use specific GPUs (e.g., GPUs 0-7)
+python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/example_sweep.yaml --gpus 0,1,2,3,4,5,6,7
+
+# Use a single GPU (backward compatible)
+python gagf/rnns/run_sweep.py --sweep gagf/rnns/sweeps/example_sweep.yaml --gpu 0
 ```
 
-The `--gpu` flag overrides the device setting in the config file.
+When multiple GPUs are specified, experiments and seeds are automatically distributed across GPUs using round-robin assignment, allowing parallel execution of multiple training runs simultaneously. This significantly speeds up parameter sweeps.
+
+**Note:** The `--gpus` flag takes precedence over `--gpu`. If neither is specified, the code will auto-detect and use all available GPUs if multiple GPUs are present, otherwise it falls back to the device setting in the config file.
 
 ### Sweep Results Structure
 
