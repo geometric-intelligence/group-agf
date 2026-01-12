@@ -7,6 +7,7 @@ with multiple seeds for uncertainty quantification.
 """
 
 import os
+import sys
 import yaml
 import argparse
 import datetime
@@ -18,6 +19,7 @@ import numpy as np
 import torch
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import traceback
+import multiprocessing
 
 
 def deep_merge_dict(base: Dict, override: Dict) -> Dict:
@@ -184,6 +186,16 @@ def generate_experiment_configs(sweep_config: Dict) -> List[Tuple[str, Dict]]:
     else:
         raise ValueError("Sweep config must contain either 'experiments' or 'parameter_grid'")
     
+    # Validate: Check for duplicate experiment names
+    exp_names = [name for name, _ in experiment_configs]
+    if len(exp_names) != len(set(exp_names)):
+        duplicates = [name for name in set(exp_names) if exp_names.count(name) > 1]
+        raise ValueError(
+            f"Duplicate experiment names found: {duplicates}. "
+            "Each experiment must have a unique name. "
+            "If using parameter_grid, ensure parameter combinations produce unique names."
+        )
+    
     return experiment_configs
 
 
@@ -234,6 +246,12 @@ def run_single_seed(
     Returns:
         Dictionary with run results
     """
+    # Add project root to Python path for subprocess imports
+    # This is needed because ProcessPoolExecutor spawns new processes that don't inherit PYTHONPATH
+    project_root = Path(__file__).resolve().parent.parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    
     # Create seed config
     seed_config = copy.deepcopy(config)
     seed_config["data"]["seed"] = seed
@@ -535,7 +553,7 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
     # Create sweep directory
     sweep_name = os.path.splitext(os.path.basename(sweep_file))[0]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    sweep_dir = Path("sweeps") / f"{sweep_name}_{timestamp}"
+    sweep_dir = Path("sweep_results") / f"{sweep_name}_{timestamp}"
     sweep_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\nSweep directory: {sweep_dir}")
@@ -581,6 +599,8 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
                     all_results[exp_name].append(result)
                     print(f"[{completed}/{len(tasks)}] Completed: {exp_name} seed {seed} (GPU {assigned_gpu})")
                 except Exception as e:
+                    # This catch handles exceptions during result retrieval/serialization
+                    # (run_single_seed already catches training exceptions and returns error dict)
                     print(f"[{completed}/{len(tasks)}] Failed: {exp_name} seed {seed} (GPU {assigned_gpu}): {e}")
                     if exp_name not in all_results:
                         all_results[exp_name] = []
@@ -591,10 +611,20 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
                         "error": str(e)
                     })
         
+        # Verify all tasks completed
+        total_expected = len(experiment_configs) * len(seeds)
+        total_completed = sum(len(results) for results in all_results.values())
+        if total_completed != total_expected:
+            print(f"\n⚠️  WARNING: Expected {total_expected} runs, but collected {total_completed} results")
+            print("This may indicate some tasks failed silently or were not properly tracked.")
+        
         # Generate experiment summaries for each experiment
         for exp_name in all_results.keys():
             exp_dir = sweep_dir / exp_name
             run_results = all_results[exp_name]
+            
+            # Sort results by seed for consistent ordering
+            run_results.sort(key=lambda x: x.get('seed', 0))
             
             successful_runs = [r for r in run_results if r["status"] == "completed"]
             train_losses = [
@@ -694,5 +724,14 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set multiprocessing start method to 'spawn' for CUDA compatibility
+    # This is required because CUDA cannot be re-initialized in forked subprocesses
+    # Must be set before any ProcessPoolExecutor is created
+    try:
+        multiprocessing.set_start_method('spawn', force=True)
+    except RuntimeError:
+        # Start method already set, which is fine
+        pass
+    
     main()
 
