@@ -827,8 +827,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     ### ----- GENERATE DATA ----- ###
     print("Generating data...")
     
-    dimension = config['data']['dimension'] # TODO(Nina): Here, it will be a string D3.
-    template_type = config['data']['template_type'] # TODO(Nina): Here, use a one-hot template for D3, i.e., a one-hot vector of length D3.order() = 6.
+    dimension = config['data']['dimension']
+    template_type = config['data']['template_type']
     
     if dimension == 1:
         # 1D template generation
@@ -984,7 +984,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             transform_type=config['model']['transform_type'],
         ).to(device)
     elif model_type == 'SequentialMLP':
-        rnn_2d = SequentialMLP( #TODO(NiT): Rename rnn_2d, in both if loops, to model or something similar.
+        rnn_2d = SequentialMLP(
             p=p_flat,
             d=config['model']['hidden_dim'],
             template=template_torch,
