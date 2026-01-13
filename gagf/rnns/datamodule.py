@@ -381,6 +381,8 @@ def build_modular_addition_sequence_dataset_D3(
         for idx in range(N):
             for t in range(k):
                 sequence[idx, t] = (idx // (n_elements ** t)) % n_elements
+        print(f"sequence: {sequence}")
+        raise ValueError("Stop here")
     else:
         # Sampled mode: randomly sample sequences
         N = int(num_samples)

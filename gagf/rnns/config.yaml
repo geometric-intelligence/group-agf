@@ -27,7 +27,7 @@ data:
   p1: 4 #10       # Height/rows dimension (2D only)
   p2: 4        # Width/cols dimension (2D only)
   
-  k: 5          # Sequence length
+  k: 2          # Sequence length
   batch_size: 1000
   seed: 5
   
