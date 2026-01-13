@@ -74,16 +74,16 @@ training:
   
   # Steps/Epochs
   epochs: 3000                  # Used when mode='offline'
-  num_steps: 100 #1000000 #500000           # Used when mode='online'
+  num_steps: 100                # Used when mode='online'
   
   # Optimizer
-  optimizer: per_neuron #per_neuron'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
+  optimizer: per_neuron       # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
                               # 'auto' selects optimizer based on model:
                               #   - SequentialMLP → 'per_neuron' (recommended)
                               #   - QuadraticRNN → 'adam'
                               # 'hybrid' is QuadraticRNN-specific only
   
-  learning_rate: 0.001         # Base learning rate
+  learning_rate: 0.001        # Base learning rate
                               # Recommended settings:
                               #   - adam: 1e-3 to 1e-4
                               #   - per_neuron (SequentialMLP): 1.0 (or 0.01 for D3)
