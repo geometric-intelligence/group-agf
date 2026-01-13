@@ -48,6 +48,7 @@ Automatically selects the recommended optimizer:
 To train a model on modular addition tasks:
 - **1D**: $(C_p)^k$ - Cyclic group of order $p$
 - **2D**: $(C_{p1} \times C_{p2})^k$ - Product of two cyclic groups
+- **Dihedral D3**: $D_3$ - Dihedral group of order 3
 
 **Steps:**
 

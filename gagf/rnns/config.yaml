@@ -15,12 +15,13 @@
 # Data Configuration
 # ------------------
 data:
-  # Dimension: 1 for C_p (cyclic group), 2 for C_p1 x C_p2 (product group)
-  dimension: 1  # 1 | 2
+  # Dimension: 1 for C_p (cyclic group), 2 for C_p1 x C_p2 (product group), 'D3' for Dihedral D3
+  dimension: 1  # 1 | 2 | 'D3'
   
   # Group Parameters
   # For dimension=1: only 'p' is used
   # For dimension=2: 'p1' and 'p2' are used
+  # For dimension='D3': none of p, p1, p2 are used
   p: 10        # Cyclic group dimension (1D only)
   
   p1: 4 #10       # Height/rows dimension (2D only)
@@ -44,7 +45,7 @@ data:
 model:
   model_type: 'SequentialMLP'  # 'QuadraticRNN' | 'SequentialMLP'
   
-  hidden_dim: 6              # Hidden layer size
+  hidden_dim: 600              # Hidden layer size
                               # Note: SequentialMLP may need larger values (e.g., 600)
   
   init_scale: 1.0e-2          # Weight initialization scale
@@ -62,8 +63,8 @@ training:
   mode: 'online'              # 'online' | 'offline'
   
   # Steps/Epochs
-  epochs: 200                 # Used when mode='offline'
-  num_steps: 1000000 #500000           # Used when mode='online'
+  epochs: 2 #200                 # Used when mode='offline'
+  num_steps: 100 #1000000 #500000           # Used when mode='online'
   
   # Optimizer
   optimizer: 'adam' #per_neuron'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
