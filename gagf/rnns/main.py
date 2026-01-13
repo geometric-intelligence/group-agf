@@ -555,6 +555,8 @@ def plot_power_spectrum_over_time_D3(
     template: np.ndarray,
     D3,
     k: int,
+    optimizer: str,
+    init_scale: float,
     save_path: str = None,
     num_samples_for_power: int = 100,
     num_checkpoints_to_sample: int = 50,
@@ -570,6 +572,8 @@ def plot_power_spectrum_over_time_D3(
         template: Template array (group_order,)
         D3: DihedralGroup object from escnn
         k: Sequence length
+        optimizer: Optimizer name (e.g., 'per_neuron', 'adam')
+        init_scale: Initialization scale
         save_path: Path to save the plot
         num_samples_for_power: Number of samples to average power over
         num_checkpoints_to_sample: Number of checkpoints to sample for the evolution plot
@@ -639,7 +643,7 @@ def plot_power_spectrum_over_time_D3(
     
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Power')
-    ax.set_title(f'D3 Power Evolution Over Training (k={k})', fontsize=14)
+    ax.set_title(f'D3 Power Evolution Over Training (k={k}, {optimizer}, init={init_scale:.0e})', fontsize=14)
     ax.legend(loc='upper left', fontsize=8)
     ax.grid(True, alpha=0.3)
     
@@ -777,6 +781,8 @@ def produce_plots_D3(
     
     ### ----- PLOT POWER SPECTRUM OVER TIME ----- ###
     print("\nPlotting power spectrum over time...")
+    optimizer = config['training']['optimizer']
+    init_scale = config['model']['init_scale']
     plot_power_spectrum_over_time_D3(
         model=model,
         param_hist=param_hist,
@@ -785,6 +791,8 @@ def produce_plots_D3(
         template=template_D3,
         D3=D3,
         k=k,
+        optimizer=optimizer,
+        init_scale=init_scale,
         save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
     )
     print(f"  ✓ Saved {os.path.join(run_dir, 'power_spectrum_analysis.pdf')}")
