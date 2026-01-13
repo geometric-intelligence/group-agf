@@ -381,8 +381,7 @@ def build_modular_addition_sequence_dataset_D3(
         for idx in range(N):
             for t in range(k):
                 sequence[idx, t] = (idx // (n_elements ** t)) % n_elements
-        print(f"sequence: {sequence}")
-        raise ValueError("Stop here")
+        # print(f"sequence: {sequence}") Looking good.
     else:
         # Sampled mode: randomly sample sequences
         N = int(num_samples)
@@ -397,14 +396,15 @@ def build_modular_addition_sequence_dataset_D3(
         cumulative_rep = np.eye(group_order)  # Identity matrix (identity element)
         
         for t in range(k):
-            elem_idx = sequence[i, t]
-            g_rep = rep_matrices[elem_idx]
+            elem_idx = sequence[i, t] # Take the index of the t-th element of the i-th sequence.
+            g_rep = rep_matrices[elem_idx] # Regular representation, a 6x6 matrix representing the group element.
             
             # X[i, t] = template transformed by g_t
             X[i, t, :] = g_rep @ template
             
             # Update cumulative composition: g1 * g2 * ... * g_t
-            cumulative_rep = cumulative_rep @ g_rep
+            # cumulative_rep = cumulative_rep @ g_rep
+            cumulative_rep = g_rep @ cumulative_rep
             
             # Y[i, t] = template transformed by cumulative composition
             Y[i, t, :] = cumulative_rep @ template
