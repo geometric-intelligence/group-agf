@@ -32,9 +32,16 @@ data:
   seed: 5
   
   # Template Generation
-  template_type: 'fourier'    # 'mnist' | 'fourier' | 'gaussian'
+  # For dimension=1,2: 'mnist' | 'fourier' | 'gaussian' | 'onehot'
+  # For dimension='D3': 'onehot' | 'custom_fourier'
+  template_type: 'custom_fourier'
   mnist_label: 4            # MNIST digit (0-9), only if template_type='mnist'
   n_freqs: 1               # Number of Fourier modes, only if template_type='fourier'
+  
+  # D3 custom_fourier template: powers for each irrep's Fourier coefficient
+  # D3 has 3 irreps with dimensions [1, 1, 2], so powers should have 3 values
+  # Example: [0., 1700., 400.] means DC=0, irrep1=1700, irrep2=400
+  powers: [0., 1700., 400.]
   
   # Dataset Mode (offline training only)
   mode: exhaustive          # 'sampled' | 'exhaustive'
@@ -48,8 +55,9 @@ model:
   hidden_dim: 600              # Hidden layer size
                               # Note: SequentialMLP may need larger values (e.g., 600)
   
-  init_scale: 1.0e-2          # Weight initialization scale
+  init_scale: 1.0e-6          # Weight initialization scale
                               # Larger k may need larger init_scale
+                              # Note: D3 needs very small init_scale (1e-6)
   
   return_all_outputs: false   # true = seq-to-seq guidance (for QuadraticRNN only)
                               # false = seq-to-one (final output only) 
@@ -63,7 +71,7 @@ training:
   mode: 'offline'              # 'online' | 'offline'
   
   # Steps/Epochs
-  epochs: 2000 #200                 # Used when mode='offline'
+  epochs: 5000                  # Used when mode='offline'
   num_steps: 100 #1000000 #500000           # Used when mode='online'
   
   # Optimizer
@@ -73,10 +81,10 @@ training:
                               #   - QuadraticRNN → 'adam'
                               # 'hybrid' is QuadraticRNN-specific only
   
-  learning_rate: 1.0e-3       # Base learning rate
+  learning_rate: 0.01         # Base learning rate
                               # Recommended settings:
                               #   - adam: 1e-3 to 1e-4
-                              #   - per_neuron (SequentialMLP): 1.0
+                              #   - per_neuron (SequentialMLP): 1.0 (or 0.01 for D3)
                               #   - hybrid: see scaling_factor
   
   betas: [0.9, 0.999]         # Adam/hybrid beta parameters
@@ -91,8 +99,8 @@ training:
   
   # Training Dynamics
   grad_clip: 0.1
-  verbose_interval: 10
-  save_param_interval: null    # Save params every N steps/epochs
+  verbose_interval: 1000
+  save_param_interval: 100     # Save params every N steps/epochs
                               # Set to null to only save initial & final (memory efficient for sweeps)
   
   # Early Stopping (optional)
@@ -109,4 +117,4 @@ device: cuda:1                  # 'cuda' | 'cpu'
 # Analysis & Visualization
 # ------------------------
 analysis:
-  checkpoints: [0.0, 1.0]  # Fraction of training for analysis
+  checkpoints: [0.0, 0.25, 0.5, 0.75, 1.0]  # Fraction of training for analysis

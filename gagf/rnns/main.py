@@ -550,12 +550,13 @@ def plot_model_predictions_over_time_D3(
 def plot_power_spectrum_over_time_D3(
     model,
     param_hist,
+    param_save_indices,
     X_eval,
     template: np.ndarray,
     D3,
-    checkpoint_indices: list,
     save_path: str = None,
     num_samples_for_power: int = 100,
+    num_checkpoints_to_sample: int = 50,
 ):
     """
     Plot power spectrum of model outputs vs template power spectrum over training for D3.
@@ -563,12 +564,13 @@ def plot_power_spectrum_over_time_D3(
     Args:
         model: Trained model
         param_hist: List of parameter snapshots
+        param_save_indices: List mapping param_hist index to epoch number
         X_eval: Input evaluation tensor
         template: Template array (group_order,)
         D3: DihedralGroup object from escnn
-        checkpoint_indices: Indices into param_hist to visualize
         save_path: Path to save the plot
         num_samples_for_power: Number of samples to average power over
+        num_checkpoints_to_sample: Number of checkpoints to sample for the evolution plot
     """
     from group_agf.binary_action_learning.group_fourier_transform import compute_group_fourier_coef
     
@@ -583,13 +585,26 @@ def plot_power_spectrum_over_time_D3(
         template_power[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
     template_power = template_power / group_order
     
-    # Compute model output power at each checkpoint
-    n_checkpoints = len(checkpoint_indices)
-    model_powers = np.zeros((n_checkpoints, n_irreps))
+    print(f"  Template power spectrum: {template_power}")
+    print(f"  (These are dim^2 * diag_value^2 / |G| for each irrep)")
+    
+    # Sample checkpoints uniformly for evolution plot
+    total_checkpoints = len(param_hist)
+    if total_checkpoints <= num_checkpoints_to_sample:
+        sampled_ckpt_indices = list(range(total_checkpoints))
+    else:
+        sampled_ckpt_indices = np.linspace(0, total_checkpoints - 1, num_checkpoints_to_sample, dtype=int).tolist()
+    
+    # Get corresponding epoch numbers
+    epoch_numbers = [param_save_indices[i] for i in sampled_ckpt_indices]
+    
+    # Compute model output power at each sampled checkpoint
+    n_sampled = len(sampled_ckpt_indices)
+    model_powers = np.zeros((n_sampled, n_irreps))
     
     X_subset = X_eval[:num_samples_for_power]
     
-    for ckpt_i, ckpt_idx in enumerate(checkpoint_indices):
+    for i, ckpt_idx in enumerate(sampled_ckpt_indices):
         model.load_state_dict(param_hist[ckpt_idx])
         model.eval()
         
@@ -604,25 +619,28 @@ def plot_power_spectrum_over_time_D3(
                 fourier_coef = compute_group_fourier_coef(D3, output, irrep)
                 powers[sample_i, irrep_i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
         powers = powers / group_order
-        model_powers[ckpt_i] = np.mean(powers, axis=0)
+        model_powers[i] = np.mean(powers, axis=0)
     
     # Create plot
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
-    # Left: Power spectrum comparison at checkpoints
+    # Left: Power spectrum comparison at key checkpoints (start, middle, end)
     ax1 = axes[0]
     x_pos = np.arange(n_irreps)
-    width = 0.8 / (n_checkpoints + 1)
+    key_indices = [0, n_sampled // 2, n_sampled - 1]
+    n_bars = len(key_indices) + 1  # +1 for template
+    width = 0.8 / n_bars
     
     # Plot template power
     ax1.bar(x_pos - 0.4 + width/2, template_power, width=width, label='Template', color='black', alpha=0.8)
     
-    # Plot model power at each checkpoint
-    colors = plt.cm.viridis(np.linspace(0.2, 0.8, n_checkpoints))
-    for ckpt_i, (ckpt_idx, color) in enumerate(zip(checkpoint_indices, colors)):
-        offset = -0.4 + (ckpt_i + 1.5) * width
-        ax1.bar(x_pos + offset, model_powers[ckpt_i], width=width, 
-                label=f'Ckpt {ckpt_idx}', color=color, alpha=0.7)
+    # Plot model power at key checkpoints
+    colors = ['#3498db', '#e74c3c', '#2ecc71']
+    for bar_i, (key_i, color) in enumerate(zip(key_indices, colors)):
+        offset = -0.4 + (bar_i + 1.5) * width
+        epoch = epoch_numbers[key_i]
+        ax1.bar(x_pos + offset, model_powers[key_i], width=width, 
+                label=f'Epoch {epoch}', color=color, alpha=0.7)
     
     ax1.set_xlabel('Irrep index')
     ax1.set_ylabel('Power')
@@ -632,19 +650,20 @@ def plot_power_spectrum_over_time_D3(
     ax1.legend(loc='upper right', fontsize=8)
     ax1.grid(True, alpha=0.3, axis='y')
     
-    # Right: Power evolution over checkpoints for top irreps
+    # Right: Power evolution over epochs for top irreps
     ax2 = axes[1]
     top_k = min(5, n_irreps)
     top_irrep_indices = np.argsort(template_power)[::-1][:top_k]
     
-    for irrep_idx in top_irrep_indices:
+    colors_line = plt.cm.tab10(np.linspace(0, 1, top_k))
+    for i, irrep_idx in enumerate(top_irrep_indices):
         power_values = model_powers[:, irrep_idx]
-        ax2.plot(checkpoint_indices, power_values, 'o-', lw=2, markersize=8,
+        ax2.plot(epoch_numbers, power_values, '-', lw=2, color=colors_line[i],
                 label=f'Irrep {irrep_idx} (dim={irreps[irrep_idx].size})')
         # Add horizontal line for template power
-        ax2.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5)
+        ax2.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5, color=colors_line[i])
     
-    ax2.set_xlabel('Checkpoint index')
+    ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Power')
     ax2.set_title('Power Evolution Over Training')
     ax2.legend(loc='upper left', fontsize=8)
@@ -788,10 +807,10 @@ def produce_plots_D3(
     plot_power_spectrum_over_time_D3(
         model=model,
         param_hist=param_hist,
+        param_save_indices=param_save_indices,
         X_eval=X_eval_t,
         template=template_D3,
         D3=D3,
-        checkpoint_indices=checkpoint_indices,
         save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
     )
     print(f"  ✓ Saved {os.path.join(run_dir, 'power_spectrum_analysis.pdf')}")
@@ -884,18 +903,65 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         print(f"  ✓ Saved template")
     elif dimension == 'D3':
         from escnn.group import DihedralGroup
+        from group_agf.binary_action_learning.group_fourier_transform import compute_group_inverse_fourier_transform
+        
         D3 = DihedralGroup(N=3)  # D3 = dihedral group of order 6 (3 rotations * 2 for reflections)
         group_order = D3.order()  # = 6
         p_flat = group_order  # For D3, the "p" is the group order
         
-        # Generate one-hot template of length group_order
-        # This creates a template with a spike at position 1
-        template_d3 = np.zeros(group_order, dtype=np.float32)
-        template_d3[1] = 10.0
-        template_d3 = template_d3 - np.mean(template_d3)
-        template = template_d3  # For consistency in code below
-        
         print(f"D3 group order: {group_order}")
+        print(f"D3 irreps: {[irrep.size for irrep in D3.irreps()]} (dimensions)")
+        
+        if template_type == 'onehot':
+            # Generate one-hot template of length group_order
+            # This creates a template with a spike at position 1
+            template_d3 = np.zeros(group_order, dtype=np.float32)
+            template_d3[1] = 10.0
+            template_d3 = template_d3 - np.mean(template_d3)
+            print(f"Template type: onehot")
+            
+        elif template_type == 'custom_fourier':
+            # Generate template from Fourier coefficients for each irrep
+            # powers specifies the DESIRED POWER SPECTRUM values (not diagonal values)
+            # We convert powers to Fourier coefficient diagonal values using:
+            #   diag_value = sqrt(group_size * power / dim^2)
+            # This is because: power = dim^2 * diag_value^2 / group_size
+            powers = config['data']['powers']
+            irreps = D3.irreps()
+            irrep_dims = [ir.size for ir in irreps]
+            
+            assert len(powers) == len(irreps), \
+                f"powers must have {len(irreps)} values (one per irrep), got {len(powers)}"
+            
+            # Convert powers to Fourier coefficient diagonal values
+            # (same formula as in binary_action_learning/main.py)
+            fourier_coef_diag_values = [
+                np.sqrt(group_order * p / dim**2) if p > 0 else 0.0
+                for p, dim in zip(powers, irrep_dims)
+            ]
+            
+            print(f"Template type: custom_fourier")
+            print(f"Desired powers (per irrep): {powers}")
+            print(f"Fourier coef diagonal values: {fourier_coef_diag_values}")
+            
+            # Build spectrum: list of diagonal matrices, one per irrep
+            spectrum = []
+            for i, irrep in enumerate(irreps):
+                diag_val = fourier_coef_diag_values[i]
+                diag_values = np.full(irrep.size, diag_val, dtype=float)
+                mat = np.zeros((irrep.size, irrep.size), dtype=float)
+                np.fill_diagonal(mat, diag_values)
+                print(f"  Irrep {i} (dim={irrep.size}): diag_value = {diag_val:.4f} -> power = {powers[i]}")
+                spectrum.append(mat)
+            
+            # Generate template via inverse group Fourier transform
+            template_d3 = compute_group_inverse_fourier_transform(D3, spectrum)
+            template_d3 = template_d3 - np.mean(template_d3)
+            template_d3 = template_d3.astype(np.float32)
+        else:
+            raise ValueError(f"Unknown template_type for D3: {template_type}. Must be 'onehot' or 'custom_fourier'")
+        
+        template = template_d3  # For consistency in code below
         print(f"Template shape: {template.shape}")
         
         # Visualize D3 template
@@ -904,7 +970,10 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         ax.bar(range(group_order), template_d3)
         ax.set_xlabel('Group element index')
         ax.set_ylabel('Value')
-        ax.set_title(f'D3 Template (order={group_order})')
+        title = f'D3 Template (order={group_order}, type={template_type})'
+        if template_type == 'custom_fourier':
+            title += f'\npowers={powers}'
+        ax.set_title(title)
         ax.set_xticks(range(group_order))
         fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
         plt.close(fig)
