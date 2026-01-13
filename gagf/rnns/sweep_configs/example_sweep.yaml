@@ -5,7 +5,11 @@
 base_config: "gagf/rnns/config.yaml"
 
 # Number of seeds per configuration (for uncertainty quantification)
-n_seeds: 3
+n_seeds: 1
+
+global_overrides:
+  training:
+    num_steps: 1000
 
 # Parameter sweep configurations
 experiments:

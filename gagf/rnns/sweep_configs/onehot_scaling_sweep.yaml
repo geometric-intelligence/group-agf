@@ -1,0 +1,21 @@
+# One-hot template scaling sweep
+# Explores different group sizes (p), hidden dimensions, and sequence lengths
+# Total: 20 × 20 × 3 = 1200 experiments
+
+base_config: "gagf/rnns/config.yaml"
+n_seeds: 1
+
+# Fixed parameters applied to all experiments
+global_overrides:
+  data:
+    dimension: 1
+    template_type: 'onehot'
+
+# Parameter grid specification (only varying parameters)
+parameter_grid:
+  data:
+    p: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
+    k: [2, 3, 4]
+  model:
+    hidden_dim: [80, 160, 240, 320, 400, 480, 560, 640, 720, 800, 880, 960, 1040, 1120, 1200, 1280, 1360, 1440, 1520, 1600]
+
