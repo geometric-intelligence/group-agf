@@ -554,6 +554,7 @@ def plot_power_spectrum_over_time_D3(
     X_eval,
     template: np.ndarray,
     D3,
+    k: int,
     save_path: str = None,
     num_samples_for_power: int = 100,
     num_checkpoints_to_sample: int = 50,
@@ -568,6 +569,7 @@ def plot_power_spectrum_over_time_D3(
         X_eval: Input evaluation tensor
         template: Template array (group_order,)
         D3: DihedralGroup object from escnn
+        k: Sequence length
         save_path: Path to save the plot
         num_samples_for_power: Number of samples to average power over
         num_checkpoints_to_sample: Number of checkpoints to sample for the evolution plot
@@ -621,55 +623,26 @@ def plot_power_spectrum_over_time_D3(
         powers = powers / group_order
         model_powers[i] = np.mean(powers, axis=0)
     
-    # Create plot
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    # Create single plot for power evolution over training
+    fig, ax = plt.subplots(figsize=(8, 5))
     
-    # Left: Power spectrum comparison at key checkpoints (start, middle, end)
-    ax1 = axes[0]
-    x_pos = np.arange(n_irreps)
-    key_indices = [0, n_sampled // 2, n_sampled - 1]
-    n_bars = len(key_indices) + 1  # +1 for template
-    width = 0.8 / n_bars
-    
-    # Plot template power
-    ax1.bar(x_pos - 0.4 + width/2, template_power, width=width, label='Template', color='black', alpha=0.8)
-    
-    # Plot model power at key checkpoints
-    colors = ['#3498db', '#e74c3c', '#2ecc71']
-    for bar_i, (key_i, color) in enumerate(zip(key_indices, colors)):
-        offset = -0.4 + (bar_i + 1.5) * width
-        epoch = epoch_numbers[key_i]
-        ax1.bar(x_pos + offset, model_powers[key_i], width=width, 
-                label=f'Epoch {epoch}', color=color, alpha=0.7)
-    
-    ax1.set_xlabel('Irrep index')
-    ax1.set_ylabel('Power')
-    ax1.set_title('Power Spectrum: Template vs Model Output')
-    ax1.set_xticks(x_pos)
-    ax1.set_xticklabels([f'{i}\n(dim={irreps[i].size})' for i in range(n_irreps)], fontsize=8)
-    ax1.legend(loc='upper right', fontsize=8)
-    ax1.grid(True, alpha=0.3, axis='y')
-    
-    # Right: Power evolution over epochs for top irreps
-    ax2 = axes[1]
     top_k = min(5, n_irreps)
     top_irrep_indices = np.argsort(template_power)[::-1][:top_k]
     
     colors_line = plt.cm.tab10(np.linspace(0, 1, top_k))
     for i, irrep_idx in enumerate(top_irrep_indices):
         power_values = model_powers[:, irrep_idx]
-        ax2.plot(epoch_numbers, power_values, '-', lw=2, color=colors_line[i],
+        ax.plot(epoch_numbers, power_values, '-', lw=2, color=colors_line[i],
                 label=f'Irrep {irrep_idx} (dim={irreps[irrep_idx].size})')
         # Add horizontal line for template power
-        ax2.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5, color=colors_line[i])
+        ax.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5, color=colors_line[i])
     
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Power')
-    ax2.set_title('Power Evolution Over Training')
-    ax2.legend(loc='upper left', fontsize=8)
-    ax2.grid(True, alpha=0.3)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Power')
+    ax.set_title(f'D3 Power Evolution Over Training (k={k})', fontsize=14)
+    ax.legend(loc='upper left', fontsize=8)
+    ax.grid(True, alpha=0.3)
     
-    plt.suptitle('D3 Power Spectrum Analysis', fontsize=14)
     plt.tight_layout()
     
     if save_path:
@@ -811,6 +784,7 @@ def produce_plots_D3(
         X_eval=X_eval_t,
         template=template_D3,
         D3=D3,
+        k=k,
         save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
     )
     print(f"  ✓ Saved {os.path.join(run_dir, 'power_spectrum_analysis.pdf')}")

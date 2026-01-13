@@ -27,7 +27,7 @@ data:
   p1: 4 #10       # Height/rows dimension (2D only)
   p2: 4        # Width/cols dimension (2D only)
   
-  k: 3          # Sequence length
+  k: 2          # Sequence length
   batch_size: 1000
   seed: 5
   
@@ -70,7 +70,7 @@ training:
   mode: 'offline'              # 'online' | 'offline'
   
   # Steps/Epochs
-  epochs: 5000                  # Used when mode='offline'
+  epochs: 3000                  # Used when mode='offline'
   num_steps: 100 #1000000 #500000           # Used when mode='online'
   
   # Optimizer
