@@ -327,7 +327,6 @@ def build_modular_addition_sequence_dataset_2d(
     return X, Y, sequence_xy
 
 def build_modular_addition_sequence_dataset_D3(
-    p: int,
     template: np.ndarray,
     k: int,
     mode: str = "sampled",
@@ -335,23 +334,87 @@ def build_modular_addition_sequence_dataset_D3(
     return_all_outputs: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Build 3D modular addition dataset.
+    Build D3 (dihedral group) composition dataset for sequence length k.
+    
+    Uses the regular representation of D3 to transform the template.
+    For a sequence of k group elements (g1, g2, ..., gk), we compute:
+    - X[i, t, :] = regular_rep(g_t) @ template  (template transformed by g_t)
+    - Y[i, :] = regular_rep(g1 * g2 * ... * gk) @ template  (template transformed by composition)
 
     Args:
-        p: dimension of Dihedral D3
-        template: (p,) template array
-        k: sequence length
+        template: (group_order,) template array, where group_order = 6 for D3
+        k: sequence length (number of group elements to compose)
         mode: "sampled" or "exhaustive"
         num_samples: number of samples for "sampled" mode
+        return_all_outputs: if True, return intermediate outputs after each composition
 
     Returns:
-        X: (N, k, p) where token t is template rolled by shift_t
-        Y: (N, p) or (N, k-1, p) target rolled by cumulative sum
-        sequence: (N, k) integer group elements (shifts) per token
+        X: (N, k, group_order) input sequences
+        Y: (N, group_order) or (N, k-1, group_order) target outputs
+        sequence: (N, k) integer indices of group elements per token
     """
-    assert template.shape == (p,), f"template must be ({p},), got {template.shape}"
-    #TODO(Nina): Use code from binary_action_learning/ folder.
-    raise NotImplementedError("build_modular_addition_sequence_dataset_D3 is not implemented yet.")
+    from escnn.group import DihedralGroup
+    
+    # Create D3 group (dihedral group of order 6)
+    D3 = DihedralGroup(N=3)
+    group_order = D3.order()  # = 6
+    
+    assert template.shape == (group_order,), f"template must be ({group_order},), got {template.shape}"
+    
+    # Get regular representation and list of elements
+    regular_rep = D3.representations["regular"]
+    elements = list(D3.elements)
+    n_elements = len(elements)  # = 6
+    
+    # Pre-compute representation matrices for all elements
+    rep_matrices = np.array([regular_rep(g) for g in elements])  # (6, 6, 6)
+    
+    if mode == "exhaustive":
+        # Total number of sequences: n_elements^k
+        total = n_elements ** k
+        if total > 1_000_000:
+            raise ValueError(f"n_elements^k = {total} is huge; use mode='sampled' instead.")
+        N = total
+        
+        # Generate all possible sequences of k element indices
+        sequence = np.zeros((N, k), dtype=np.int64)
+        for idx in range(N):
+            for t in range(k):
+                sequence[idx, t] = (idx // (n_elements ** t)) % n_elements
+    else:
+        # Sampled mode: randomly sample sequences
+        N = int(num_samples)
+        sequence = np.random.randint(0, n_elements, size=(N, k), dtype=np.int64)
+    
+    # Initialize output arrays
+    X = np.zeros((N, k, group_order), dtype=np.float32)
+    Y = np.zeros((N, k, group_order), dtype=np.float32)
+    
+    for i in range(N):
+        # Compute cumulative composition of group elements
+        cumulative_rep = np.eye(group_order)  # Identity matrix (identity element)
+        
+        for t in range(k):
+            elem_idx = sequence[i, t]
+            g_rep = rep_matrices[elem_idx]
+            
+            # X[i, t] = template transformed by g_t
+            X[i, t, :] = g_rep @ template
+            
+            # Update cumulative composition: g1 * g2 * ... * g_t
+            cumulative_rep = cumulative_rep @ g_rep
+            
+            # Y[i, t] = template transformed by cumulative composition
+            Y[i, t, :] = cumulative_rep @ template
+    
+    if not return_all_outputs:
+        # Only return final output
+        Y = Y[:, -1, :]  # (N, group_order)
+    else:
+        # Return all intermediate outputs (skip first since it's just g1, not a composition)
+        Y = Y[:, 1:, :]  # (N, k-1, group_order)
+    
+    return X, Y, sequence
 
 def sequence_to_paths_xy(sequence_xy: np.ndarray, p1: int, p2: int) -> np.ndarray:
     """

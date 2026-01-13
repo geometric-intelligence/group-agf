@@ -16,7 +16,7 @@
 # ------------------
 data:
   # Dimension: 1 for C_p (cyclic group), 2 for C_p1 x C_p2 (product group), 'D3' for Dihedral D3
-  dimension: 1  # 1 | 2 | 'D3'
+  dimension: 'D3'  # 1 | 2 | 'D3'
   
   # Group Parameters
   # For dimension=1: only 'p' is used
@@ -37,7 +37,7 @@ data:
   n_freqs: 1               # Number of Fourier modes, only if template_type='fourier'
   
   # Dataset Mode (offline training only)
-  mode: sampled             # 'sampled' | 'exhaustive'
+  mode: exhaustive          # 'sampled' | 'exhaustive'
   num_samples: 50000
 
 # Model Configuration
@@ -63,11 +63,11 @@ training:
   mode: 'offline'              # 'online' | 'offline'
   
   # Steps/Epochs
-  epochs: 2 #200                 # Used when mode='offline'
+  epochs: 2000 #200                 # Used when mode='offline'
   num_steps: 100 #1000000 #500000           # Used when mode='online'
   
   # Optimizer
-  optimizer: 'adam' #per_neuron'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
+  optimizer: 'per_neuron' #per_neuron'           # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
                               # 'auto' selects optimizer based on model:
                               #   - SequentialMLP → 'per_neuron' (recommended)
                               #   - QuadraticRNN → 'adam'
@@ -99,7 +99,7 @@ training:
   # -------------------------
   # Stop training early when loss reduction reaches a threshold.
   # Set to null to disable (train for full num_steps/epochs).
-  reduction_threshold: 0.99   # e.g., 0.99 = stop when 99% loss reduction achieved
+  reduction_threshold: null   # e.g., 0.99 = stop when 99% loss reduction achieved
                               # null = disabled (train for full steps/epochs)
 
 # Device
@@ -109,4 +109,4 @@ device: cuda:1                  # 'cuda' | 'cpu'
 # Analysis & Visualization
 # ------------------------
 analysis:
-  checkpoints: [0.0, 0.25, 0.5, 0.75, 1.0]  # Fraction of training for analysis
+  checkpoints: [0.0, 1.0]  # Fraction of training for analysis

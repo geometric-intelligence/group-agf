@@ -476,6 +476,188 @@ def produce_plots_1d(
     print("\n✓ All 1D plots generated successfully!")
 
 
+def plot_model_predictions_over_time_D3(
+    model,
+    param_hist,
+    X_eval,
+    Y_eval,
+    group_order: int,
+    checkpoint_indices: list,
+    save_path: str = None,
+    num_samples: int = 5,
+):
+    """
+    Plot model predictions vs targets at different training checkpoints for D3.
+    
+    Args:
+        model: Trained model
+        param_hist: List of parameter snapshots
+        X_eval: Input evaluation tensor (N, k, group_order)
+        Y_eval: Target evaluation tensor (N, group_order)
+        group_order: Order of D3 group (6)
+        checkpoint_indices: Indices into param_hist to visualize
+        save_path: Path to save the plot
+        num_samples: Number of samples to show
+    """
+    n_checkpoints = len(checkpoint_indices)
+    
+    fig, axes = plt.subplots(num_samples, n_checkpoints, figsize=(4 * n_checkpoints, 3 * num_samples))
+    if num_samples == 1:
+        axes = axes.reshape(1, -1)
+    if n_checkpoints == 1:
+        axes = axes.reshape(-1, 1)
+    
+    # Select random sample indices
+    sample_indices = np.random.choice(len(X_eval), size=min(num_samples, len(X_eval)), replace=False)
+    
+    for col, ckpt_idx in enumerate(checkpoint_indices):
+        # Load parameters for this checkpoint
+        model.load_state_dict(param_hist[ckpt_idx])
+        model.eval()
+        
+        with torch.no_grad():
+            outputs = model(X_eval[sample_indices])
+            outputs_np = outputs.cpu().numpy()
+            targets_np = Y_eval[sample_indices].cpu().numpy()
+        
+        for row, (output, target) in enumerate(zip(outputs_np, targets_np)):
+            ax = axes[row, col]
+            x_axis = np.arange(group_order)
+            
+            ax.bar(x_axis - 0.15, target, width=0.3, label='Target', alpha=0.7, color='#2ecc71')
+            ax.bar(x_axis + 0.15, output, width=0.3, label='Output', alpha=0.7, color='#e74c3c')
+            
+            if row == 0:
+                ax.set_title(f'Checkpoint {ckpt_idx}')
+            if col == 0:
+                ax.set_ylabel(f'Sample {sample_indices[row]}')
+            if row == num_samples - 1:
+                ax.set_xlabel('Group element')
+            if row == 0 and col == n_checkpoints - 1:
+                ax.legend(loc='upper right', fontsize=8)
+            
+            ax.set_xticks(x_axis)
+            ax.grid(True, alpha=0.3)
+    
+    plt.suptitle('D3 Model Predictions vs Targets Over Training', fontsize=14)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+    plt.close()
+
+
+def plot_power_spectrum_over_time_D3(
+    model,
+    param_hist,
+    X_eval,
+    template: np.ndarray,
+    D3,
+    checkpoint_indices: list,
+    save_path: str = None,
+    num_samples_for_power: int = 100,
+):
+    """
+    Plot power spectrum of model outputs vs template power spectrum over training for D3.
+    
+    Args:
+        model: Trained model
+        param_hist: List of parameter snapshots
+        X_eval: Input evaluation tensor
+        template: Template array (group_order,)
+        D3: DihedralGroup object from escnn
+        checkpoint_indices: Indices into param_hist to visualize
+        save_path: Path to save the plot
+        num_samples_for_power: Number of samples to average power over
+    """
+    from group_agf.binary_action_learning.group_fourier_transform import compute_group_fourier_coef
+    
+    group_order = D3.order()
+    irreps = D3.irreps()
+    n_irreps = len(irreps)
+    
+    # Compute template power spectrum
+    template_power = np.zeros(n_irreps)
+    for i, irrep in enumerate(irreps):
+        fourier_coef = compute_group_fourier_coef(D3, template, irrep)
+        template_power[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
+    template_power = template_power / group_order
+    
+    # Compute model output power at each checkpoint
+    n_checkpoints = len(checkpoint_indices)
+    model_powers = np.zeros((n_checkpoints, n_irreps))
+    
+    X_subset = X_eval[:num_samples_for_power]
+    
+    for ckpt_i, ckpt_idx in enumerate(checkpoint_indices):
+        model.load_state_dict(param_hist[ckpt_idx])
+        model.eval()
+        
+        with torch.no_grad():
+            outputs = model(X_subset)
+            outputs_np = outputs.cpu().numpy()
+        
+        # Average power over all samples
+        powers = np.zeros((len(outputs_np), n_irreps))
+        for sample_i, output in enumerate(outputs_np):
+            for irrep_i, irrep in enumerate(irreps):
+                fourier_coef = compute_group_fourier_coef(D3, output, irrep)
+                powers[sample_i, irrep_i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
+        powers = powers / group_order
+        model_powers[ckpt_i] = np.mean(powers, axis=0)
+    
+    # Create plot
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    
+    # Left: Power spectrum comparison at checkpoints
+    ax1 = axes[0]
+    x_pos = np.arange(n_irreps)
+    width = 0.8 / (n_checkpoints + 1)
+    
+    # Plot template power
+    ax1.bar(x_pos - 0.4 + width/2, template_power, width=width, label='Template', color='black', alpha=0.8)
+    
+    # Plot model power at each checkpoint
+    colors = plt.cm.viridis(np.linspace(0.2, 0.8, n_checkpoints))
+    for ckpt_i, (ckpt_idx, color) in enumerate(zip(checkpoint_indices, colors)):
+        offset = -0.4 + (ckpt_i + 1.5) * width
+        ax1.bar(x_pos + offset, model_powers[ckpt_i], width=width, 
+                label=f'Ckpt {ckpt_idx}', color=color, alpha=0.7)
+    
+    ax1.set_xlabel('Irrep index')
+    ax1.set_ylabel('Power')
+    ax1.set_title('Power Spectrum: Template vs Model Output')
+    ax1.set_xticks(x_pos)
+    ax1.set_xticklabels([f'{i}\n(dim={irreps[i].size})' for i in range(n_irreps)], fontsize=8)
+    ax1.legend(loc='upper right', fontsize=8)
+    ax1.grid(True, alpha=0.3, axis='y')
+    
+    # Right: Power evolution over checkpoints for top irreps
+    ax2 = axes[1]
+    top_k = min(5, n_irreps)
+    top_irrep_indices = np.argsort(template_power)[::-1][:top_k]
+    
+    for irrep_idx in top_irrep_indices:
+        power_values = model_powers[:, irrep_idx]
+        ax2.plot(checkpoint_indices, power_values, 'o-', lw=2, markersize=8,
+                label=f'Irrep {irrep_idx} (dim={irreps[irrep_idx].size})')
+        # Add horizontal line for template power
+        ax2.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5)
+    
+    ax2.set_xlabel('Checkpoint index')
+    ax2.set_ylabel('Power')
+    ax2.set_title('Power Evolution Over Training')
+    ax2.legend(loc='upper left', fontsize=8)
+    ax2.grid(True, alpha=0.3)
+    
+    plt.suptitle('D3 Power Spectrum Analysis', fontsize=14)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+    plt.close()
+
+
 def produce_plots_D3(
     run_dir: Path,
     config: dict,
@@ -484,27 +666,137 @@ def produce_plots_D3(
     param_save_indices,
     train_loss_hist,
     template_D3: np.ndarray,
+    device: str = 'cpu',
 ):
     """
     Generate all analysis plots after training (D3 version).
     
     Args:
         run_dir: Directory to save plots
-        config: Configuration dictionary (must have dimension=3)
+        config: Configuration dictionary (must have dimension='D3')
         model: Trained model (QuadraticRNN or SequentialMLP)
         param_hist: List of parameter snapshots
         param_save_indices: Indices where params were saved
-
         train_loss_hist: Training loss history
-        template_D3: 3D template array (p, p, p)
+        template_D3: 1D template array of shape (group_order,) where group_order=6 for D3
+        device: Device string ('cpu' or 'cuda')
     """
     print("\n=== Generating Analysis Plots (D3) ===")
     
-    ### ----- COMPUTE X-AXIS VALUES ----- ###
-    p = config['data']['p']
+    from escnn.group import DihedralGroup
+    D3 = DihedralGroup(N=3)
+    group_order = D3.order()  # = 6
+    
     k = config['data']['k']
-
-    # TODO(Nina): Using code in binary_action_learning.py
+    batch_size = config['data']['batch_size']
+    training_mode = config['training']['mode']
+    
+    # Total data space size for D3 with k compositions
+    total_space_size = group_order ** k
+    
+    # Calculate x-axis values
+    if training_mode == 'online':
+        steps = np.arange(len(train_loss_hist))
+        samples_seen = batch_size * steps
+        fraction_of_space = samples_seen / total_space_size
+        x_label = "Step"
+        x_values = steps
+    else:  # offline
+        epochs = np.arange(len(train_loss_hist))
+        samples_seen = config['data']['num_samples'] * epochs
+        fraction_of_space = samples_seen / total_space_size
+        x_label = "Epoch"
+        x_values = epochs
+    
+    # Save x-axis data
+    samples_seen_path = run_dir / "samples_seen.npy"
+    fraction_path = run_dir / "fraction_of_space_seen.npy"
+    np.save(samples_seen_path, samples_seen)
+    np.save(fraction_path, fraction_of_space)
+    print(f"  ✓ Saved {samples_seen_path}")
+    print(f"  ✓ Saved {fraction_path}")
+    
+    print(f"\nD3 group order: {group_order}")
+    print(f"Sequence length k: {k}")
+    print(f"Total data space: {total_space_size:,} sequences")
+    if len(samples_seen) > 0:
+        print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1]*100:.4f}% of space)")
+    
+    ### ----- GENERATE EVALUATION DATA ----- ###
+    print("\nGenerating evaluation data for visualization...")
+    from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_D3
+    X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_D3(
+        template_D3, 
+        k, 
+        mode="sampled", 
+        num_samples=min(config['data']['num_samples'], 1000),
+        return_all_outputs=config['model']['return_all_outputs'],
+    )
+    X_eval_t = torch.tensor(X_eval, dtype=torch.float32, device=device)
+    Y_eval_t = torch.tensor(Y_eval, dtype=torch.float32, device=device)
+    print(f"  Generated {X_eval_t.shape[0]} samples for visualization")
+    
+    ### ----- COMPUTE CHECKPOINT INDICES ----- ###
+    total_checkpoints = len(param_hist)
+    checkpoint_fractions = config['analysis']['checkpoints']
+    checkpoint_indices = [int(f * (total_checkpoints - 1)) for f in checkpoint_fractions]
+    print(f"Analysis checkpoints: {checkpoint_indices} (out of {total_checkpoints})")
+    
+    ### ----- PLOT TRAINING LOSS ----- ###
+    print("\nPlotting training loss...")
+    
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    
+    scale_configs = [
+        ('linear', 'linear', 'Linear Scale'),
+        ('linear', 'log', 'Log Y'),
+        ('log', 'linear', 'Log X'),
+        ('log', 'log', 'Log-Log'),
+    ]
+    
+    for ax, (xscale, yscale, title) in zip(axes.flat, scale_configs):
+        ax.plot(x_values, train_loss_hist, lw=2, color='#1f77b4')
+        ax.set_xscale(xscale)
+        ax.set_yscale(yscale)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel('Training Loss')
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+    
+    plt.suptitle(f'D3 Group Composition (k={k})', fontsize=14)
+    plt.tight_layout()
+    training_loss_path = os.path.join(run_dir, "training_loss.pdf")
+    plt.savefig(training_loss_path, bbox_inches='tight', dpi=150)
+    plt.close()
+    print(f"  ✓ Saved {training_loss_path}")
+    
+    ### ----- PLOT MODEL PREDICTIONS OVER TIME ----- ###
+    print("\nPlotting model predictions over time...")
+    plot_model_predictions_over_time_D3(
+        model=model,
+        param_hist=param_hist,
+        X_eval=X_eval_t,
+        Y_eval=Y_eval_t,
+        group_order=group_order,
+        checkpoint_indices=checkpoint_indices,
+        save_path=os.path.join(run_dir, "predictions_over_time.pdf"),
+    )
+    print(f"  ✓ Saved {os.path.join(run_dir, 'predictions_over_time.pdf')}")
+    
+    ### ----- PLOT POWER SPECTRUM OVER TIME ----- ###
+    print("\nPlotting power spectrum over time...")
+    plot_power_spectrum_over_time_D3(
+        model=model,
+        param_hist=param_hist,
+        X_eval=X_eval_t,
+        template=template_D3,
+        D3=D3,
+        checkpoint_indices=checkpoint_indices,
+        save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
+    )
+    print(f"  ✓ Saved {os.path.join(run_dir, 'power_spectrum_analysis.pdf')}")
+    
+    print("\n✓ All D3 plots generated successfully!")
 
 def train_single_run(config: dict, run_dir: Path = None) -> dict:
     """
@@ -592,15 +884,30 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         print(f"  ✓ Saved template")
     elif dimension == 'D3':
         from escnn.group import DihedralGroup
-        D3 = DihedralGroup(order=3)
-        template_d3 = np.eye(D3.order())
+        D3 = DihedralGroup(N=3)  # D3 = dihedral group of order 6 (3 rotations * 2 for reflections)
+        group_order = D3.order()  # = 6
+        p_flat = group_order  # For D3, the "p" is the group order
+        
+        # Generate one-hot template of length group_order
+        # This creates a template with a spike at position 1
+        template_d3 = np.zeros(group_order, dtype=np.float32)
+        template_d3[1] = 10.0
         template_d3 = template_d3 - np.mean(template_d3)
         template = template_d3  # For consistency in code below
         
-        # Visualize 3D template
+        print(f"D3 group order: {group_order}")
+        print(f"Template shape: {template.shape}")
+        
+        # Visualize D3 template
         print("Visualizing template...")
-        fig, ax = plt.plot(template_d3, title="Template", cmap="gray")
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.bar(range(group_order), template_d3)
+        ax.set_xlabel('Group element index')
+        ax.set_ylabel('Value')
+        ax.set_title(f'D3 Template (order={group_order})')
+        ax.set_xticks(range(group_order))
         fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
+        plt.close(fig)
         print(f"  ✓ Saved template")
     else:
         raise ValueError(f"dimension must be 1 or 2, got {dimension}")
@@ -743,8 +1050,14 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 device=device,
                 return_all_outputs=config['model']['return_all_outputs'],
             )
-        else: # Note: nothing to add here yet for D3.
-            raise ValueError(f"dimension must be 1 or 2, got {dimension}")
+        elif dimension == 'D3':
+            # Online training for D3 is not yet implemented
+            raise NotImplementedError(
+                "Online training mode is not yet implemented for D3. "
+                "Please use training.mode='offline' in the config."
+            )
+        else:
+            raise ValueError(f"dimension must be 1, 2, or 'D3', got {dimension}")
         
         train_loader = DataLoader(train_dataset, batch_size=None, num_workers=0)
         val_loader = DataLoader(val_dataset, batch_size=None, num_workers=0)
@@ -804,18 +1117,21 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 num_samples=val_samples,
                 return_all_outputs=config['model']['return_all_outputs'],
             )
-        elif dimension == 'D3': # TODO(Nina): Add the option to ingest the D3 train and validation datasets.
-            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_d3
-            X_train, Y_train, _ = build_modular_addition_sequence_dataset_d3(
-                config['data']['p'],
+        elif dimension == 'D3':
+            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_D3
+            
+            # Generate training dataset
+            X_train, Y_train, _ = build_modular_addition_sequence_dataset_D3(
                 template_d3,
                 config['data']['k'],
                 mode=config['data']['mode'],
                 num_samples=config['data']['num_samples'],
                 return_all_outputs=config['model']['return_all_outputs'],
             )
-            X_val, Y_val, _ = build_modular_addition_sequence_dataset_d3(
-                config['data']['p'],
+            
+            # Generate validation dataset
+            val_samples = max(1000, config['data']['num_samples'] // 10)
+            X_val, Y_val, _ = build_modular_addition_sequence_dataset_D3(
                 template_d3,
                 config['data']['k'],
                 mode='sampled',
@@ -936,8 +1252,20 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             training_mode=training_mode,
             device=device
         )
-    else: # TODO(Nina): Add the option to ingest the D3 train and validation datasets.
-        raise ValueError(f"dimension must be 1 or 2, got {dimension}")
+    elif dimension == 'D3':
+        # Produce basic plots for D3
+        produce_plots_D3(
+            run_dir=run_dir,
+            config=config,
+            model=rnn_2d,
+            param_hist=param_hist,
+            param_save_indices=param_save_indices,
+            train_loss_hist=train_loss_hist,
+            template_D3=template_d3,
+            device=device,
+        )
+    else:
+        raise ValueError(f"dimension must be 1, 2, or 'D3', got {dimension}")
     
     # Return results dictionary
     results = {
