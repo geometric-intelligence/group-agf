@@ -60,7 +60,7 @@ model:
 # Training Configuration
 # ----------------------
 training:
-  mode: 'online'              # 'online' | 'offline'
+  mode: 'offline'              # 'online' | 'offline'
   
   # Steps/Epochs
   epochs: 2 #200                 # Used when mode='offline'

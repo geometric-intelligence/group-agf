@@ -476,6 +476,36 @@ def produce_plots_1d(
     print("\n✓ All 1D plots generated successfully!")
 
 
+def produce_plots_D3(
+    run_dir: Path,
+    config: dict,
+    model,
+    param_hist,
+    param_save_indices,
+    train_loss_hist,
+    template_D3: np.ndarray,
+):
+    """
+    Generate all analysis plots after training (D3 version).
+    
+    Args:
+        run_dir: Directory to save plots
+        config: Configuration dictionary (must have dimension=3)
+        model: Trained model (QuadraticRNN or SequentialMLP)
+        param_hist: List of parameter snapshots
+        param_save_indices: Indices where params were saved
+
+        train_loss_hist: Training loss history
+        template_D3: 3D template array (p, p, p)
+    """
+    print("\n=== Generating Analysis Plots (D3) ===")
+    
+    ### ----- COMPUTE X-AXIS VALUES ----- ###
+    p = config['data']['p']
+    k = config['data']['k']
+
+    # TODO(Nina): Using code in binary_action_learning.py
+
 def train_single_run(config: dict, run_dir: Path = None) -> dict:
     """
     Train a model (QuadraticRNN or SequentialMLP) on modular addition for a single configuration.
@@ -504,8 +534,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     ### ----- GENERATE DATA ----- ###
     print("Generating data...")
     
-    dimension = config['data']['dimension']
-    template_type = config['data']['template_type']
+    dimension = config['data']['dimension'] # TODO(Nina): Here, it will be a string D3.
+    template_type = config['data']['template_type'] # TODO(Nina): Here, use a one-hot template for D3, i.e., a one-hot vector of length D3.order() = 6.
     
     if dimension == 1:
         # 1D template generation
@@ -560,6 +590,18 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         fig, ax = plot_2d_signal(template_2d, title="Template", cmap="gray")
         fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
         print(f"  ✓ Saved template")
+    elif dimension == 'D3':
+        from escnn.group import DihedralGroup
+        D3 = DihedralGroup(order=3)
+        template_d3 = np.eye(D3.order())
+        template_d3 = template_d3 - np.mean(template_d3)
+        template = template_d3  # For consistency in code below
+        
+        # Visualize 3D template
+        print("Visualizing template...")
+        fig, ax = plt.plot(template_d3, title="Template", cmap="gray")
+        fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
+        print(f"  ✓ Saved template")
     else:
         raise ValueError(f"dimension must be 1 or 2, got {dimension}")
 
@@ -584,7 +626,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             transform_type=config['model']['transform_type'],
         ).to(device)
     elif model_type == 'SequentialMLP':
-        rnn_2d = SequentialMLP(
+        rnn_2d = SequentialMLP( #TODO(NiT): Rename rnn_2d, in both if loops, to model or something similar.
             p=p_flat,
             d=config['model']['hidden_dim'],
             template=template_torch,
@@ -659,7 +701,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             from gagf.rnns.datamodule import OnlineModularAdditionDataset1D
             
             # Training dataset
-            train_dataset = OnlineModularAdditionDataset1D(
+            train_dataset = OnlineModularAdditionDataset1D( 
                 p=config['data']['p'],
                 template=template_1d,
                 k=config['data']['k'],
@@ -677,7 +719,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 device=device,
                 return_all_outputs=config['model']['return_all_outputs'],
             )
-        else:  # dimension == 2
+        elif dimension == 2:
             from gagf.rnns.datamodule import OnlineModularAdditionDataset2D
             
             # Training dataset
@@ -701,6 +743,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 device=device,
                 return_all_outputs=config['model']['return_all_outputs'],
             )
+        else: # Note: nothing to add here yet for D3.
+            raise ValueError(f"dimension must be 1 or 2, got {dimension}")
         
         train_loader = DataLoader(train_dataset, batch_size=None, num_workers=0)
         val_loader = DataLoader(val_dataset, batch_size=None, num_workers=0)
@@ -735,7 +779,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 num_samples=val_samples,
                 return_all_outputs=config['model']['return_all_outputs'],
             )
-        else:  # dimension == 2
+        elif dimension == 2:
             from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_2d
             
             # Generate training dataset
@@ -760,7 +804,27 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 num_samples=val_samples,
                 return_all_outputs=config['model']['return_all_outputs'],
             )
-        
+        elif dimension == 'D3': # TODO(Nina): Add the option to ingest the D3 train and validation datasets.
+            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_d3
+            X_train, Y_train, _ = build_modular_addition_sequence_dataset_d3(
+                config['data']['p'],
+                template_d3,
+                config['data']['k'],
+                mode=config['data']['mode'],
+                num_samples=config['data']['num_samples'],
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+            X_val, Y_val, _ = build_modular_addition_sequence_dataset_d3(
+                config['data']['p'],
+                template_d3,
+                config['data']['k'],
+                mode='sampled',
+                num_samples=val_samples,
+                return_all_outputs=config['model']['return_all_outputs'],
+            )
+        else:
+            raise ValueError(f"dimension must be 1 or 2, got {dimension}")
+
         X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
         Y_train_t = torch.tensor(Y_train, dtype=torch.float32, device=device)
         X_val_t = torch.tensor(X_val, dtype=torch.float32, device=device)
@@ -859,7 +923,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             training_mode=training_mode,
             device=device
         )
-    else:
+    elif dimension == 1:
         # Produce detailed plots for 1D
         produce_plots_1d(
             run_dir=run_dir,
@@ -872,6 +936,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             training_mode=training_mode,
             device=device
         )
+    else: # TODO(Nina): Add the option to ingest the D3 train and validation datasets.
+        raise ValueError(f"dimension must be 1 or 2, got {dimension}")
     
     # Return results dictionary
     results = {

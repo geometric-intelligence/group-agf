@@ -326,6 +326,32 @@ def build_modular_addition_sequence_dataset_2d(
 
     return X, Y, sequence_xy
 
+def build_modular_addition_sequence_dataset_D3(
+    p: int,
+    template: np.ndarray,
+    k: int,
+    mode: str = "sampled",
+    num_samples: int = 65536,
+    return_all_outputs: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build 3D modular addition dataset.
+
+    Args:
+        p: dimension of Dihedral D3
+        template: (p,) template array
+        k: sequence length
+        mode: "sampled" or "exhaustive"
+        num_samples: number of samples for "sampled" mode
+
+    Returns:
+        X: (N, k, p) where token t is template rolled by shift_t
+        Y: (N, p) or (N, k-1, p) target rolled by cumulative sum
+        sequence: (N, k) integer group elements (shifts) per token
+    """
+    assert template.shape == (p,), f"template must be ({p},), got {template.shape}"
+    #TODO(Nina): Use code from binary_action_learning/ folder.
+    raise NotImplementedError("build_modular_addition_sequence_dataset_D3 is not implemented yet.")
 
 def sequence_to_paths_xy(sequence_xy: np.ndarray, p1: int, p2: int) -> np.ndarray:
     """
