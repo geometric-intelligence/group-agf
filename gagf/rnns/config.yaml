@@ -34,14 +34,14 @@ data:
   # Template Generation
   # For dimension=1,2: 'mnist' | 'fourier' | 'gaussian' | 'onehot'
   # For dimension='D3': 'onehot' | 'custom_fourier'
-  template_type: 'custom_fourier'
+  template_type: 'onehot'
   mnist_label: 4            # MNIST digit (0-9), only if template_type='mnist'
   n_freqs: 1               # Number of Fourier modes, only if template_type='fourier'
   
   # D3 custom_fourier template: powers for each irrep's Fourier coefficient
   # D3 has 3 irreps with dimensions [1, 1, 2], so powers should have 3 values
   # Example: [0., 1700., 400.] means DC=0, irrep1=1700, irrep2=400
-  powers: [0., 1700., 400.]
+  powers: [0., 2600., 1200.]
   
   # Dataset Mode (offline training only)
   mode: exhaustive          # 'sampled' | 'exhaustive'
@@ -117,4 +117,4 @@ device: cuda:1                  # 'cuda' | 'cpu'
 # Analysis & Visualization
 # ------------------------
 analysis:
-  checkpoints: [0.0, 0.25, 0.5, 0.75, 1.0]  # Fraction of training for analysis
+  checkpoints: [0.0, 1.0]  # Fraction of training for analysis
