@@ -627,25 +627,68 @@ def plot_power_spectrum_over_time_D3(
         powers = powers / group_order
         model_powers[i] = np.mean(powers, axis=0)
     
-    # Create single plot for power evolution over training
-    fig, ax = plt.subplots(figsize=(8, 5))
+    # Create 3 subplots: linear, log-x, log-log
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     
     top_k = min(5, n_irreps)
     top_irrep_indices = np.argsort(template_power)[::-1][:top_k]
     
     colors_line = plt.cm.tab10(np.linspace(0, 1, top_k))
+    
+    # Filter out zero epochs for log scales
+    valid_mask = np.array(epoch_numbers) > 0
+    valid_epochs = np.array(epoch_numbers)[valid_mask]
+    valid_model_powers = model_powers[valid_mask, :]
+    
+    # Plot 1: Linear scales
+    ax = axes[0]
     for i, irrep_idx in enumerate(top_irrep_indices):
         power_values = model_powers[:, irrep_idx]
         ax.plot(epoch_numbers, power_values, '-', lw=2, color=colors_line[i],
                 label=f'Irrep {irrep_idx} (dim={irreps[irrep_idx].size})')
-        # Add horizontal line for template power
         ax.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5, color=colors_line[i])
-    
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Power')
-    ax.set_title(f'D3 Power Evolution Over Training (k={k}, {optimizer}, init={init_scale:.0e})', fontsize=14)
-    ax.legend(loc='upper left', fontsize=8)
+    ax.set_title('Linear Scales', fontsize=12)
+    ax.legend(loc='upper left', fontsize=7)
     ax.grid(True, alpha=0.3)
+    
+    # Plot 2: Log x-axis only
+    ax = axes[1]
+    for i, irrep_idx in enumerate(top_irrep_indices):
+        power_values = valid_model_powers[:, irrep_idx]
+        ax.plot(valid_epochs, power_values, '-', lw=2, color=colors_line[i],
+                label=f'Irrep {irrep_idx} (dim={irreps[irrep_idx].size})')
+        ax.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5, color=colors_line[i])
+    ax.set_xscale('log')
+    ax.set_xlabel('Epoch (log scale)')
+    ax.set_ylabel('Power')
+    ax.set_title('Log X-axis', fontsize=12)
+    ax.legend(loc='upper left', fontsize=7)
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 3: Log-log scales
+    ax = axes[2]
+    for i, irrep_idx in enumerate(top_irrep_indices):
+        power_values = valid_model_powers[:, irrep_idx]
+        # Filter out zero powers for log scale
+        power_mask = power_values > 0
+        if np.any(power_mask):
+            ax.plot(valid_epochs[power_mask], power_values[power_mask], '-', lw=2, color=colors_line[i],
+                    label=f'Irrep {irrep_idx} (dim={irreps[irrep_idx].size})')
+        if template_power[irrep_idx] > 0:
+            ax.axhline(template_power[irrep_idx], linestyle='--', alpha=0.5, color=colors_line[i])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel('Epoch (log scale)')
+    ax.set_ylabel('Power (log scale)')
+    ax.set_title('Log-Log Scales', fontsize=12)
+    ax.legend(loc='upper left', fontsize=7)
+    ax.grid(True, alpha=0.3)
+    
+    # Overall title
+    fig.suptitle(f'D3 Power Evolution Over Training (k={k}, {optimizer}, init={init_scale:.0e})', 
+                 fontsize=14, fontweight='bold')
     
     plt.tight_layout()
     

@@ -27,7 +27,7 @@ data:
   p1: 4 #10       # Height/rows dimension (2D only)
   p2: 4        # Width/cols dimension (2D only)
   
-  k: 5          # Sequence length
+  k: 2          # Sequence length
   batch_size: 1000
   seed: 5
   
@@ -58,7 +58,7 @@ model:
   hidden_dim: 600              # Hidden layer size
                               # Note: SequentialMLP may need larger values (e.g., 600)
   
-  init_scale: 1.0e-6          # Weight initialization scale
+  init_scale: 2.0e-7          # Weight initialization scale
                               # Larger k may need larger init_scale
   
   return_all_outputs: false   # true = seq-to-seq guidance (for QuadraticRNN only)
@@ -73,17 +73,17 @@ training:
   mode: offline              # 'online' | 'offline'
   
   # Steps/Epochs
-  epochs: 3000                  # Used when mode='offline'
+  epochs: 2000                  # Used when mode='offline'
   num_steps: 100                # Used when mode='online'
   
   # Optimizer
-  optimizer: per_neuron       # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
+  optimizer: adam       # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
                               # 'auto' selects optimizer based on model:
                               #   - SequentialMLP → 'per_neuron' (recommended)
                               #   - QuadraticRNN → 'adam'
                               # 'hybrid' is QuadraticRNN-specific only
   
-  learning_rate: 0.001        # Base learning rate
+  learning_rate: 0.00005        # Base learning rate
                               # Recommended settings:
                               #   - adam: 1e-3 to 1e-4
                               #   - per_neuron (SequentialMLP): 1.0 (or 0.01 for D3)
