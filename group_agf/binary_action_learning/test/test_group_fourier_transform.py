@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from escnn.group import Octahedral
 
-from group_agf.binary_action_learning.datasets import generate_fixed_group_template
+from group_agf.binary_action_learning.templates import fixed_group_template
 from group_agf.binary_action_learning.group_fourier_transform import (
     compute_group_fourier_transform, compute_group_inverse_fourier_transform)
 
@@ -30,7 +30,7 @@ def test_fourier_inverse_is_identity():
     seed = 42
 
     # Generate template with nontrivial spectrum
-    template = generate_fixed_group_template(group, seed=seed, fourier_coef_diag_values=[100.0, 20.0, 0.0, 0.0, 0.0])
+    template = fixed_group_template(group, fourier_coef_diag_values=[100.0, 20.0, 0.0, 0.0, 0.0])
 
     # Forward Fourier transform
     fourier_transform = compute_group_fourier_transform(group, template)
@@ -55,9 +55,6 @@ def test_fourier_inverse_is_identity():
         assert np.allclose(ft, ft_rec, atol=1e-10), \
             f"Fourier transform failed at index {i}! max diff: {np.max(np.abs(ft - ft_rec))}"
         print(f'diff at index {i}: {np.max(np.abs(ft - ft_rec))}')
-    #print(f'diff: {(np.abs(fourier_transform - fourier_transform_reconstructed))}')
-
-    raise Exception("Stop here to check the max diff.")
 
 if __name__ == "__main__":
     test_fourier_inverse_is_identity()

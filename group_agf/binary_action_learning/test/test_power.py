@@ -1,7 +1,7 @@
 import numpy as np
 from escnn.group import Octahedral
 
-from group_agf.binary_action_learning.datasets import generate_fixed_group_template
+from group_agf.binary_action_learning.templates import fixed_group_template
 from group_agf.binary_action_learning.power import GroupPower
 
 
@@ -12,7 +12,7 @@ def test_power_custom_template():
     seed = 42
     powers = [0., 20.0, 20.0, 100.0, 0.0]  # on irreps [1, 3, 3, 2, 1]
     fourier_coef_diag_values = [np.sqrt(group.order()*p / dim**2) for p, dim in zip(powers, irrep_sizes)]
-    template = generate_fixed_group_template(group, seed=seed, fourier_coef_diag_values=fourier_coef_diag_values)
+    template = fixed_group_template(group, fourier_coef_diag_values=fourier_coef_diag_values)
 
     gp = GroupPower(template, group)
     power = gp.power
