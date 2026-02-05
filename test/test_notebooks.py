@@ -39,14 +39,19 @@ def get_notebooks_dir():
 
 # Notebooks to skip (with reasons)
 SKIP_NOTEBOOKS = {
-    # These notebooks have hardcoded paths to /home/facosta/... which don't exist
-    "seq_mlp_group_size": "Has hardcoded paths to another user's filesystem",
-    "rnn_gagf": "Has hardcoded paths to another user's filesystem",
+    # These notebooks have hardcoded paths to /home/facosta/ which don't exist
+    "seq_mlp_group_size": "Has hardcoded paths to /home/facosta/ filesystem",
+    "rnn_gagf": "Has hardcoded paths to /home/facosta/ filesystem",
     # These notebooks require pre-trained model files or external data
-    "paper_figures": "Requires pre-trained model files not included in repo",
+    "paper_figures": "Requires pre-trained model .pkl files not included in repo",
     # These notebooks have import/code issues that need separate debugging
-    "2D": "Has import issues with missing functions (get_power_2d)",
-    # These notebooks also don't run
+    "2D": "Missing function: cannot import 'get_power_2d' from gagf.rnns.utils",
+    "znz_znz": "Missing function: datasets.choose_template() does not exist",
+    "seq_mlp": "Plotting error: Invalid vmin/vmax values during visualization",
+    # These notebooks have visualization code with hardcoded indices that fail with reduced p
+    "C_n": "IndexError in visualization code when running with reduced parameters",
+    "dihedral": "IndexError in visualization code when running with reduced parameters",
+    "modular_arithmetic": "IndexError in visualization code when running with reduced parameters",
 }
 
 
