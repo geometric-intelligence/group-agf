@@ -7,24 +7,6 @@ from group_agf.binary_action_learning.group_fourier_transform import (
     compute_group_fourier_transform, compute_group_inverse_fourier_transform)
 
 
-# def test_fourier_transform_of_fixed_template():
-#     group = Octahedral()
-#     seed = 42
-
-#     # Generate template with nontrivial spectrum
-#     template = generate_fixed_group_template(
-#         group, seed=seed, powers=[100.0, 20.0, 0.0, 0.0, 0.0]
-#     )
-
-#     # Forward Fourier transform
-#     fourier_transform = compute_group_fourier_transform(group, template)
-
-#     for i, ft in enumerate(fourier_transform):
-#         print(f"Fourier transform element {i}:")
-#         print(ft)
-#     raise Exception("Stop here to check the Fourier transform.")
-
-
 def test_fourier_inverse_is_identity():
     group = Octahedral()
     seed = 42
