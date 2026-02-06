@@ -45,7 +45,7 @@ def temp_run_dir():
 @pytest.fixture
 def mock_all_plots():
     """Mock all produce_plots_* and plt.savefig/close to skip visualization entirely."""
-    import src.main  # noqa: F401
+    import src.main as main  # noqa: F401
 
     with (
         patch("src.main.produce_plots_1d") as mock_1d,
@@ -76,9 +76,9 @@ def mock_savefig():
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
 def test_load_config():
     """Test that load_config correctly loads a YAML file."""
-    from src.main import load_config
+    import src.main as main
 
-    config = load_config(str(CONFIG_FILES["c10"]))
+    config = main.load_config(str(CONFIG_FILES["c10"]))
 
     assert "data" in config
     assert "model" in config
@@ -93,10 +93,10 @@ def test_load_config():
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
 def test_main_c10(temp_run_dir, mock_all_plots):
     """Test main() with C_10 cyclic group config."""
-    from src.main import load_config, train_single_run
+    import src.main as main
 
-    config = load_config(str(CONFIG_FILES["c10"]))
-    results = train_single_run(config, run_dir=temp_run_dir)
+    config = main.load_config(str(CONFIG_FILES["c10"]))
+    results = main.train_single_run(config, run_dir=temp_run_dir)
 
     assert "final_train_loss" in results
     assert "final_val_loss" in results
@@ -107,10 +107,10 @@ def test_main_c10(temp_run_dir, mock_all_plots):
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
 def test_main_c4x4(temp_run_dir, mock_all_plots):
     """Test main() with C_4 x C_4 product group config."""
-    from src.main import load_config, train_single_run
+    import src.main as main
 
-    config = load_config(str(CONFIG_FILES["c4x4"]))
-    results = train_single_run(config, run_dir=temp_run_dir)
+    config = main.load_config(str(CONFIG_FILES["c4x4"]))
+    results = main.train_single_run(config, run_dir=temp_run_dir)
 
     assert "final_train_loss" in results
     assert "final_val_loss" in results
@@ -128,10 +128,10 @@ def test_main_d3(temp_run_dir, mock_savefig):
     This validates the TwoLayerNet-compatible eval data path in produce_plots_group,
     which is shared by octahedral and A5 (mocked in their tests for speed).
     """
-    from src.main import load_config, train_single_run
+    import src.main as main
 
-    config = load_config(str(CONFIG_FILES["d3"]))
-    results = train_single_run(config, run_dir=temp_run_dir)
+    config = main.load_config(str(CONFIG_FILES["d3"]))
+    results = main.train_single_run(config, run_dir=temp_run_dir)
 
     assert "final_train_loss" in results
     assert "final_val_loss" in results
@@ -145,10 +145,10 @@ def test_main_octahedral(temp_run_dir, mock_all_plots):
     Mocks produce_plots_group for speed (octahedral order=24, plotting is expensive).
     Training + data pipeline still fully exercised.
     """
-    from src.main import load_config, train_single_run
+    import src.main as main
 
-    config = load_config(str(CONFIG_FILES["octahedral"]))
-    results = train_single_run(config, run_dir=temp_run_dir)
+    config = main.load_config(str(CONFIG_FILES["octahedral"]))
+    results = main.train_single_run(config, run_dir=temp_run_dir)
 
     assert "final_train_loss" in results
     assert "final_val_loss" in results
@@ -163,10 +163,10 @@ def test_main_a5(temp_run_dir, mock_all_plots):
     Mocks produce_plots_group for speed (A5 order=60, plotting is expensive).
     Training + data pipeline still fully exercised.
     """
-    from src.main import load_config, train_single_run
+    import src.main as main
 
-    config = load_config(str(CONFIG_FILES["a5"]))
-    results = train_single_run(config, run_dir=temp_run_dir)
+    config = main.load_config(str(CONFIG_FILES["a5"]))
+    results = main.train_single_run(config, run_dir=temp_run_dir)
 
     assert "final_train_loss" in results
     assert "final_val_loss" in results

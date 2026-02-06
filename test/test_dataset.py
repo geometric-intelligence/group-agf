@@ -1,15 +1,10 @@
-"""Tests for gagf.rnns.datamodule module."""
+"""Tests for src.dataset module."""
 
 import numpy as np
 import pytest
+import torch
 
-from src.datamodule import (
-    OnlineModularAdditionDataset1D,
-    OnlineModularAdditionDataset2D,
-    build_modular_addition_sequence_dataset_1d,
-    build_modular_addition_sequence_dataset_2d,
-    build_modular_addition_sequence_dataset_D3,
-)
+import src.dataset as dataset
 
 
 class TestBuildModularAdditionSequenceDataset1D:
@@ -28,7 +23,7 @@ class TestBuildModularAdditionSequenceDataset1D:
         k = 3
         num_samples = 100
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_1d(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_1d(
             p=p, template=template_1d, k=k, mode="sampled", num_samples=num_samples
         )
 
@@ -41,7 +36,7 @@ class TestBuildModularAdditionSequenceDataset1D:
         p = len(template_1d)
         k = 2
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_1d(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_1d(
             p=p, template=template_1d, k=k, mode="exhaustive"
         )
 
@@ -56,7 +51,7 @@ class TestBuildModularAdditionSequenceDataset1D:
         k = 4
         num_samples = 50
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_1d(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_1d(
             p=p,
             template=template_1d,
             k=k,
@@ -75,7 +70,7 @@ class TestBuildModularAdditionSequenceDataset1D:
         p = len(template_1d)
         k = 2
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_1d(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_1d(
             p=p, template=template_1d, k=k, mode="exhaustive"
         )
 
@@ -101,7 +96,7 @@ class TestBuildModularAdditionSequenceDataset2D:
         k = 3
         num_samples = 100
 
-        X, Y, sequence_xy = build_modular_addition_sequence_dataset_2d(
+        X, Y, sequence_xy = dataset.build_modular_addition_sequence_dataset_2d(
             p1=p1, p2=p2, template=template_2d, k=k, mode="sampled", num_samples=num_samples
         )
 
@@ -120,7 +115,7 @@ class TestBuildModularAdditionSequenceDataset2D:
         template = np.random.randn(p1, p2).astype(np.float32)
         k = 2
 
-        X, Y, sequence_xy = build_modular_addition_sequence_dataset_2d(
+        X, Y, sequence_xy = dataset.build_modular_addition_sequence_dataset_2d(
             p1=p1, p2=p2, template=template, k=k, mode="exhaustive"
         )
 
@@ -147,7 +142,7 @@ class TestBuildModularAdditionSequenceDatasetD3:
         num_samples = 100
         group_order = len(template_d3)
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_D3(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_D3(
             template=template_d3, k=k, mode="sampled", num_samples=num_samples
         )
 
@@ -161,7 +156,7 @@ class TestBuildModularAdditionSequenceDatasetD3:
         group_order = len(template_d3)
         n_elements = group_order  # D3 has 6 elements
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_D3(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_D3(
             template=template_d3, k=k, mode="exhaustive"
         )
 
@@ -176,7 +171,7 @@ class TestBuildModularAdditionSequenceDatasetD3:
         num_samples = 50
         group_order = len(template_d3)
 
-        X, Y, sequence = build_modular_addition_sequence_dataset_D3(
+        X, Y, sequence = dataset.build_modular_addition_sequence_dataset_D3(
             template=template_d3,
             k=k,
             mode="sampled",
@@ -199,12 +194,12 @@ class TestOnlineModularAdditionDataset1D:
         batch_size = 16
         template = np.random.randn(p).astype(np.float32)
 
-        dataset = OnlineModularAdditionDataset1D(
+        ds = dataset.OnlineModularAdditionDataset1D(
             p=p, template=template, k=k, batch_size=batch_size, device="cpu"
         )
 
         # Get first batch
-        iterator = iter(dataset)
+        iterator = iter(ds)
         X, Y = next(iterator)
 
         assert X.shape == (batch_size, k, p), f"X shape mismatch: {X.shape}"
@@ -217,7 +212,7 @@ class TestOnlineModularAdditionDataset1D:
         batch_size = 16
         template = np.random.randn(p).astype(np.float32)
 
-        dataset = OnlineModularAdditionDataset1D(
+        ds = dataset.OnlineModularAdditionDataset1D(
             p=p,
             template=template,
             k=k,
@@ -226,7 +221,7 @@ class TestOnlineModularAdditionDataset1D:
             return_all_outputs=True,
         )
 
-        iterator = iter(dataset)
+        iterator = iter(ds)
         X, Y = next(iterator)
 
         assert X.shape == (batch_size, k, p)
@@ -243,11 +238,11 @@ class TestOnlineModularAdditionDataset2D:
         batch_size = 16
         template = np.random.randn(p1, p2).astype(np.float32)
 
-        dataset = OnlineModularAdditionDataset2D(
+        ds = dataset.OnlineModularAdditionDataset2D(
             p1=p1, p2=p2, template=template, k=k, batch_size=batch_size, device="cpu"
         )
 
-        iterator = iter(dataset)
+        iterator = iter(ds)
         X, Y = next(iterator)
 
         p_flat = p1 * p2
@@ -261,7 +256,7 @@ class TestOnlineModularAdditionDataset2D:
         batch_size = 16
         template = np.random.randn(p1, p2).astype(np.float32)
 
-        dataset = OnlineModularAdditionDataset2D(
+        ds = dataset.OnlineModularAdditionDataset2D(
             p1=p1,
             p2=p2,
             template=template,
@@ -271,9 +266,143 @@ class TestOnlineModularAdditionDataset2D:
             return_all_outputs=True,
         )
 
-        iterator = iter(dataset)
+        iterator = iter(ds)
         X, Y = next(iterator)
 
         p_flat = p1 * p2
         assert X.shape == (batch_size, k, p_flat)
         assert Y.shape == (batch_size, k - 1, p_flat)
+
+
+class TestCnDataset:
+    """Tests for cn_dataset function."""
+
+    def test_output_shape(self):
+        """Test that output shapes are correct."""
+        group_size = 7
+        template = np.random.randn(group_size)
+
+        X, Y = dataset.cn_dataset(template)
+
+        n_samples = group_size**2
+        assert X.shape == (n_samples, 2, group_size), f"X shape mismatch: {X.shape}"
+        assert Y.shape == (n_samples, group_size), f"Y shape mismatch: {Y.shape}"
+
+    def test_modular_addition_property(self):
+        """Test that Y is the rolled template by (a+b) mod p."""
+        group_size = 5
+        template = np.arange(group_size).astype(float)
+
+        X, Y = dataset.cn_dataset(template)
+
+        # Check a specific case: a=1, b=2 -> q=(1+2)%5=3
+        idx = 1 * group_size + 2
+        expected_y = np.roll(template, 3)
+        np.testing.assert_allclose(Y[idx], expected_y)
+
+    def test_covers_all_pairs(self):
+        """Test that all pairs (a, b) are covered."""
+        group_size = 4
+        template = np.random.randn(group_size)
+
+        X, Y = dataset.cn_dataset(template)
+
+        assert X.shape[0] == group_size**2
+
+
+class TestCnxcnDataset:
+    """Tests for cnxcn_dataset function."""
+
+    def test_output_shape(self):
+        """Test that output shapes are correct."""
+        image_length = 4
+        template = np.random.randn(image_length * image_length)
+
+        X, Y = dataset.cnxcn_dataset(template)
+
+        n_samples = image_length**4
+        n_features = image_length * image_length
+        assert X.shape == (n_samples, 2, n_features), f"X shape mismatch: {X.shape}"
+        assert Y.shape == (n_samples, n_features), f"Y shape mismatch: {Y.shape}"
+
+    def test_covers_all_combinations(self):
+        """Test that all combinations are covered."""
+        image_length = 3
+        template = np.random.randn(image_length * image_length)
+
+        X, Y = dataset.cnxcn_dataset(template)
+
+        expected_n = image_length**4
+        assert X.shape[0] == expected_n
+
+
+class TestGroupDataset:
+    """Tests for group_dataset function."""
+
+    @pytest.fixture
+    def dihedral_group(self):
+        """Create a DihedralGroup for testing."""
+        from escnn.group import DihedralGroup
+
+        return DihedralGroup(N=3)
+
+    def test_output_shape(self, dihedral_group):
+        """Test that output shapes are correct for D3."""
+        group_order = dihedral_group.order()
+        template = np.random.randn(group_order)
+
+        X, Y = dataset.group_dataset(dihedral_group, template)
+
+        n_samples = group_order**2
+        assert X.shape == (n_samples, 2, group_order), f"X shape mismatch: {X.shape}"
+        assert Y.shape == (n_samples, group_order), f"Y shape mismatch: {Y.shape}"
+
+    def test_template_length_mismatch_error(self, dihedral_group):
+        """Test that mismatched template length raises error."""
+        wrong_size = dihedral_group.order() + 1
+        template = np.random.randn(wrong_size)
+
+        with pytest.raises(AssertionError):
+            dataset.group_dataset(dihedral_group, template)
+
+
+class TestMoveDatasetToDeviceAndFlatten:
+    """Tests for move_dataset_to_device_and_flatten function."""
+
+    def test_output_shape_and_type(self):
+        """Test that output shapes and types are correct."""
+        group_size = 5
+        n_samples = 10
+
+        X = np.random.randn(n_samples, 2, group_size)
+        Y = np.random.randn(n_samples, group_size)
+
+        X_tensor, Y_tensor, device = dataset.move_dataset_to_device_and_flatten(X, Y, device="cpu")
+
+        assert isinstance(X_tensor, torch.Tensor)
+        assert isinstance(Y_tensor, torch.Tensor)
+        assert X_tensor.shape == (n_samples, 2 * group_size)
+        assert Y_tensor.shape == (n_samples, group_size)
+
+    def test_flattening(self):
+        """Test that X is correctly flattened."""
+        group_size = 4
+        n_samples = 5
+
+        X = np.arange(n_samples * 2 * group_size).reshape(n_samples, 2, group_size).astype(float)
+        Y = np.random.randn(n_samples, group_size)
+
+        X_tensor, Y_tensor, device = dataset.move_dataset_to_device_and_flatten(X, Y, device="cpu")
+
+        expected_flat = np.concatenate([X[0, 0, :], X[0, 1, :]])
+        np.testing.assert_allclose(X_tensor[0].numpy(), expected_flat)
+
+    def test_device_cpu(self):
+        """Test explicit CPU device."""
+        X = np.random.randn(5, 2, 4)
+        Y = np.random.randn(5, 4)
+
+        X_tensor, Y_tensor, device = dataset.move_dataset_to_device_and_flatten(X, Y, device="cpu")
+
+        assert X_tensor.device.type == "cpu"
+        assert Y_tensor.device.type == "cpu"

@@ -13,25 +13,13 @@ import yaml
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from src.datamodule import (
-    generate_fourier_template_1d,
-    generate_gaussian_template_1d,
-    generate_onehot_template_1d,
-    generate_template_unique_freqs,
-    mnist_template_1d,
-    mnist_template_2d,
-)
-from src.model import QuadraticRNN, SequentialMLP, TwoLayerNet
-from src.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
-from src.utils import (
-    plot_2d_signal,
-    plot_model_predictions_over_time,
-    plot_model_predictions_over_time_1d,
-    plot_prediction_power_spectrum_over_time_1d,
-    plot_training_loss_with_theory,
-    plot_wmix_frequency_structure,
-    topk_template_freqs,
-)
+import src.dataset as dataset
+import src.fourier as fourier
+import src.model as model
+import src.optimizer as optimizer
+import src.power as power
+import src.template as template
+import src.viz as viz
 
 matplotlib.rcParams["pdf.fonttype"] = 42  # TrueType fonts for PDF viewer compatibility
 matplotlib.rcParams["ps.fonttype"] = 42
@@ -172,9 +160,7 @@ def produce_plots_2d(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("Generating evaluation data for visualization...")
-    from src.datamodule import build_modular_addition_sequence_dataset_2d
-
-    X_seq_2d, Y_seq_2d, _ = build_modular_addition_sequence_dataset_2d(
+    X_seq_2d, Y_seq_2d, _ = dataset.build_modular_addition_sequence_dataset_2d(
         config["data"]["p1"],
         config["data"]["p2"],
         template_2d,
@@ -201,7 +187,7 @@ def produce_plots_2d(
     print("\nPlotting training loss...")
 
     # Plot 1: Loss vs Steps/Epochs
-    plot_training_loss_with_theory(
+    viz.plot_train_loss_with_theory(
         loss_history=train_loss_hist,
         template_2d=template_2d,
         p1=config["data"]["p1"],
@@ -213,7 +199,7 @@ def produce_plots_2d(
     )
 
     # Plot 2: Loss vs Samples Seen
-    plot_training_loss_with_theory(
+    viz.plot_train_loss_with_theory(
         loss_history=train_loss_hist,
         template_2d=template_2d,
         p1=config["data"]["p1"],
@@ -225,7 +211,7 @@ def produce_plots_2d(
     )
 
     # Plot 3: Loss vs Fraction of Space
-    plot_training_loss_with_theory(
+    viz.plot_train_loss_with_theory(
         loss_history=train_loss_hist,
         template_2d=template_2d,
         p1=config["data"]["p1"],
@@ -238,7 +224,7 @@ def produce_plots_2d(
 
     ### ----- PLOT MODEL PREDICTIONS ----- ###
     print("Plotting model predictions over time...")
-    plot_model_predictions_over_time(
+    viz.plot_predictions_2d(
         model,
         param_hist,
         X_seq_2d_t,
@@ -252,14 +238,14 @@ def produce_plots_2d(
 
     ### ----- PLOT FOURIER MODES REFERENCE ----- ###
     print("Creating Fourier modes reference...")
-    tracked_freqs = topk_template_freqs(template_2d, K=10)
+    tracked_freqs = power.topk_template_freqs(template_2d, K=10)
     colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
 
     ### ----- PLOT W_MIX FREQUENCY STRUCTURE (QuadraticRNN only) ----- ###
     model_type = config["model"]["model_type"]
     if model_type == "QuadraticRNN":
         print("Visualizing W_mix frequency structure...")
-        plot_wmix_frequency_structure(
+        viz.plot_wmix_structure(
             param_hist,
             tracked_freqs,
             colors,
@@ -331,9 +317,7 @@ def produce_plots_1d(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("Generating evaluation data for visualization...")
-    from src.datamodule import build_modular_addition_sequence_dataset_1d
-
-    X_seq_1d, Y_seq_1d, _ = build_modular_addition_sequence_dataset_1d(
+    X_seq_1d, Y_seq_1d, _ = dataset.build_modular_addition_sequence_dataset_1d(
         config["data"]["p"],
         template_1d,
         config["data"]["k"],
@@ -386,7 +370,7 @@ def produce_plots_1d(
 
     ### ----- PLOT MODEL PREDICTIONS ----- ###
     print("Plotting model predictions over time...")
-    plot_model_predictions_over_time_1d(
+    viz.plot_predictions_1d(
         model,
         param_hist,
         X_seq_1d_t,
@@ -399,7 +383,7 @@ def produce_plots_1d(
 
     ### ----- PLOT POWER SPECTRUM ANALYSIS ----- ###
     print("Analyzing power spectrum of predictions over training...")
-    plot_prediction_power_spectrum_over_time_1d(
+    viz.plot_power_1d(
         model,
         param_hist,
         X_seq_1d_t,
@@ -416,224 +400,6 @@ def produce_plots_1d(
     )
 
     print("\n✓ All 1D plots generated successfully!")
-
-
-def plot_model_predictions_over_time_group(
-    model,
-    param_hist,
-    X_eval,
-    Y_eval,
-    group_order: int,
-    checkpoint_indices: list,
-    save_path: str = None,
-    num_samples: int = 5,
-    group_label: str = "Group",
-):
-    """
-    Plot model predictions vs targets at different training checkpoints.
-
-    Args:
-        model: Trained model
-        param_hist: List of parameter snapshots
-        X_eval: Input evaluation tensor (N, k, group_order)
-        Y_eval: Target evaluation tensor (N, group_order)
-        group_order: Order of the group
-        checkpoint_indices: Indices into param_hist to visualize
-        save_path: Path to save the plot
-        num_samples: Number of samples to show
-        group_label: Human-readable label for the group (used in plot title)
-    """
-    n_checkpoints = len(checkpoint_indices)
-
-    fig, axes = plt.subplots(
-        num_samples, n_checkpoints, figsize=(4 * n_checkpoints, 3 * num_samples)
-    )
-    if num_samples == 1:
-        axes = axes.reshape(1, -1)
-    if n_checkpoints == 1:
-        axes = axes.reshape(-1, 1)
-
-    # Select random sample indices
-    sample_indices = np.random.choice(
-        len(X_eval), size=min(num_samples, len(X_eval)), replace=False
-    )
-
-    for col, ckpt_idx in enumerate(checkpoint_indices):
-        # Load parameters for this checkpoint
-        model.load_state_dict(param_hist[ckpt_idx])
-        model.eval()
-
-        with torch.no_grad():
-            outputs = model(X_eval[sample_indices])
-            outputs_np = outputs.cpu().numpy()
-            targets_np = Y_eval[sample_indices].cpu().numpy()
-
-        for row, (output, target) in enumerate(zip(outputs_np, targets_np)):
-            ax = axes[row, col]
-            x_axis = np.arange(group_order)
-
-            ax.bar(x_axis - 0.15, target, width=0.3, label="Target", alpha=0.7, color="#2ecc71")
-            ax.bar(x_axis + 0.15, output, width=0.3, label="Output", alpha=0.7, color="#e74c3c")
-
-            if row == 0:
-                ax.set_title(f"Checkpoint {ckpt_idx}")
-            if col == 0:
-                ax.set_ylabel(f"Sample {sample_indices[row]}")
-            if row == num_samples - 1:
-                ax.set_xlabel("Group element")
-            if row == 0 and col == n_checkpoints - 1:
-                ax.legend(loc="upper right", fontsize=8)
-
-            ax.set_xticks(x_axis)
-            ax.grid(True, alpha=0.3)
-
-    plt.suptitle(f"{group_label} Predictions vs Targets Over Training", fontsize=14)
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, bbox_inches="tight", dpi=150)
-    plt.close()
-
-
-def plot_power_spectrum_over_time_group(
-    model,
-    param_hist,
-    param_save_indices,
-    X_eval,
-    template: np.ndarray,
-    group,
-    k: int,
-    optimizer: str,
-    init_scale: float,
-    save_path: str = None,
-    group_label: str = "Group",
-):
-    """
-    Plot power spectrum of model outputs vs template power spectrum over training.
-
-    Uses GroupPower from src/power.py for template power and model_power_over_time
-    for model output power over training checkpoints.
-
-    Args:
-        model: Trained model
-        param_hist: List of parameter snapshots
-        param_save_indices: List mapping param_hist index to epoch number
-        X_eval: Input evaluation tensor
-        template: Template array (group_order,)
-        group: escnn group object
-        k: Sequence length
-        optimizer: Optimizer name (e.g., 'per_neuron', 'adam')
-        init_scale: Initialization scale
-        save_path: Path to save the plot
-        group_label: Human-readable label for the group (used in plot titles)
-    """
-    from src.power import GroupPower, model_power_over_time
-
-    group_name = "group"  # generic group for model_power_over_time dispatch
-    irreps = group.irreps()
-    n_irreps = len(irreps)
-
-    # Compute template power spectrum using GroupPower
-    template_power_obj = GroupPower(template, group=group)
-    template_power = template_power_obj.power
-
-    print(f"  Template power spectrum: {template_power}")
-    print("  (These are dim^2 * diag_value^2 / |G| for each irrep)")
-
-    # Compute model output power over training using model_power_over_time
-    model_powers, steps = model_power_over_time(group_name, model, param_hist, X_eval, group=group)
-    # Map step indices to epoch numbers
-    epoch_numbers = [param_save_indices[min(s, len(param_save_indices) - 1)] for s in steps]
-
-    # Create 3 subplots: linear, log-x, log-log
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-
-    top_k = min(5, n_irreps)
-    top_irrep_indices = np.argsort(template_power)[::-1][:top_k]
-
-    colors_line = plt.cm.tab10(np.linspace(0, 1, top_k))
-
-    # Filter out zero epochs for log scales
-    valid_mask = np.array(epoch_numbers) > 0
-    valid_epochs = np.array(epoch_numbers)[valid_mask]
-    valid_model_powers = model_powers[valid_mask, :]
-
-    # Plot 1: Linear scales
-    ax = axes[0]
-    for i, irrep_idx in enumerate(top_irrep_indices):
-        power_values = model_powers[:, irrep_idx]
-        ax.plot(
-            epoch_numbers,
-            power_values,
-            "-",
-            lw=2,
-            color=colors_line[i],
-            label=f"Irrep {irrep_idx} (dim={irreps[irrep_idx].size})",
-        )
-        ax.axhline(template_power[irrep_idx], linestyle="--", alpha=0.5, color=colors_line[i])
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Power")
-    ax.set_title("Linear Scales", fontsize=12)
-    ax.legend(loc="upper left", fontsize=7)
-    ax.grid(True, alpha=0.3)
-
-    # Plot 2: Log x-axis only
-    ax = axes[1]
-    for i, irrep_idx in enumerate(top_irrep_indices):
-        power_values = valid_model_powers[:, irrep_idx]
-        ax.plot(
-            valid_epochs,
-            power_values,
-            "-",
-            lw=2,
-            color=colors_line[i],
-            label=f"Irrep {irrep_idx} (dim={irreps[irrep_idx].size})",
-        )
-        ax.axhline(template_power[irrep_idx], linestyle="--", alpha=0.5, color=colors_line[i])
-    ax.set_xscale("log")
-    ax.set_xlabel("Epoch (log scale)")
-    ax.set_ylabel("Power")
-    ax.set_title("Log X-axis", fontsize=12)
-    ax.legend(loc="upper left", fontsize=7)
-    ax.grid(True, alpha=0.3)
-
-    # Plot 3: Log-log scales
-    ax = axes[2]
-    for i, irrep_idx in enumerate(top_irrep_indices):
-        power_values = valid_model_powers[:, irrep_idx]
-        # Filter out zero powers for log scale
-        power_mask = power_values > 0
-        if np.any(power_mask):
-            ax.plot(
-                valid_epochs[power_mask],
-                power_values[power_mask],
-                "-",
-                lw=2,
-                color=colors_line[i],
-                label=f"Irrep {irrep_idx} (dim={irreps[irrep_idx].size})",
-            )
-        if template_power[irrep_idx] > 0:
-            ax.axhline(template_power[irrep_idx], linestyle="--", alpha=0.5, color=colors_line[i])
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("Epoch (log scale)")
-    ax.set_ylabel("Power (log scale)")
-    ax.set_title("Log-Log Scales", fontsize=12)
-    ax.legend(loc="upper left", fontsize=7)
-    ax.grid(True, alpha=0.3)
-
-    # Overall title
-    fig.suptitle(
-        f"{group_label} Power Evolution Over Training (k={k}, {optimizer}, init={init_scale:.0e})",
-        fontsize=14,
-        fontweight="bold",
-    )
-
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, bbox_inches="tight", dpi=150)
-    plt.close()
 
 
 def produce_plots_group(
@@ -719,10 +485,10 @@ def produce_plots_group(
 
     if model_type == "TwoLayerNet":
         # TwoLayerNet expects flattened binary pair input: (N, 2*group_size)
-        from src.datasets import group_dataset, move_dataset_to_device_and_flatten
-
-        X_raw, Y_raw = group_dataset(group, template)
-        X_eval_t, Y_eval_t, device = move_dataset_to_device_and_flatten(X_raw, Y_raw, device=device)
+        X_raw, Y_raw = dataset.group_dataset(group, template)
+        X_eval_t, Y_eval_t, device = dataset.move_dataset_to_device_and_flatten(
+            X_raw, Y_raw, device=device
+        )
         # Optionally subsample for visualization
         n_eval = min(len(X_eval_t), 1000)
         if n_eval < len(X_eval_t):
@@ -731,9 +497,7 @@ def produce_plots_group(
             Y_eval_t = Y_eval_t[indices]
     else:
         # Sequence models use the generic sequence dataset
-        from src.datamodule import build_modular_addition_sequence_dataset_generic
-
-        X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_generic(
+        X_eval, Y_eval, _ = dataset.build_modular_addition_sequence_dataset_generic(
             template,
             k,
             group=group,
@@ -782,7 +546,7 @@ def produce_plots_group(
 
     ### ----- PLOT MODEL PREDICTIONS OVER TIME ----- ###
     print("\nPlotting model predictions over time...")
-    plot_model_predictions_over_time_group(
+    viz.plot_predictions_group(
         model=model,
         param_hist=param_hist,
         X_eval=X_eval_t,
@@ -796,9 +560,9 @@ def produce_plots_group(
 
     ### ----- PLOT POWER SPECTRUM OVER TIME ----- ###
     print("\nPlotting power spectrum over time...")
-    optimizer = config["training"]["optimizer"]
+    optimizer_name = config["training"]["optimizer"]
     init_scale = config["model"]["init_scale"]
-    plot_power_spectrum_over_time_group(
+    viz.plot_power_group(
         model=model,
         param_hist=param_hist,
         param_save_indices=param_save_indices,
@@ -806,7 +570,7 @@ def produce_plots_group(
         template=template,
         group=group,
         k=k,
-        optimizer=optimizer,
+        optimizer=optimizer_name,
         init_scale=init_scale,
         save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
         group_label=group_label,
@@ -854,23 +618,19 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         p_flat = p
 
         if template_type == "mnist":
-            template_1d = mnist_template_1d(p, config["data"]["mnist_label"], root="data")
+            template_1d = template.mnist_1d(p, config["data"]["mnist_label"], root="data")
         elif template_type == "fourier":
             n_freqs = config["data"]["n_freqs"]
-            template_1d = generate_fourier_template_1d(
-                p, n_freqs=n_freqs, seed=config["data"]["seed"]
-            )
+            template_1d = template.fourier_1d(p, n_freqs=n_freqs, seed=config["data"]["seed"])
         elif template_type == "gaussian":
-            template_1d = generate_gaussian_template_1d(
-                p, n_gaussians=3, seed=config["data"]["seed"]
-            )
+            template_1d = template.gaussian_1d(p, n_gaussians=3, seed=config["data"]["seed"])
         elif template_type == "onehot":
-            template_1d = generate_onehot_template_1d(p)
+            template_1d = template.onehot_1d(p)
         else:
             raise ValueError(f"Unknown template_type: {template_type}")
 
         template_1d = template_1d - np.mean(template_1d)
-        template = template_1d  # For consistency in code below
+        tpl = template_1d  # For consistency in code below
 
         # Visualize 1D template
         print("Visualizing template...")
@@ -890,28 +650,24 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         p_flat = p1 * p2
 
         if template_type == "mnist":
-            template_2d = mnist_template_2d(p1, p2, config["data"]["mnist_label"], root="data")
+            template_2d = template.mnist_2d(p1, p2, config["data"]["mnist_label"], root="data")
         elif template_type == "fourier":
             n_freqs = config["data"]["n_freqs"]
-            template_2d = generate_template_unique_freqs(
+            template_2d = template.unique_freqs_2d(
                 p1, p2, n_freqs=n_freqs, seed=config["data"]["seed"]
             )
         else:
             raise ValueError(f"Unknown template_type for cnxcn: {template_type}")
 
         template_2d = template_2d - np.mean(template_2d)
-        template = template_2d  # For consistency in code below
+        tpl = template_2d  # For consistency in code below
 
         # Visualize 2D template
         print("Visualizing template...")
-        fig, ax = plot_2d_signal(template_2d, title="Template", cmap="gray")
+        fig, ax = viz.plot_signal_2d(template_2d, title="Template", cmap="gray")
         fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
         print("  ✓ Saved template")
     elif group_name in ("dihedral", "octahedral", "A5"):
-        from src.group_fourier_transform import (
-            compute_group_inverse_fourier_transform,
-        )
-
         # Construct the escnn group object
         if group_name == "dihedral":
             from escnn.group import DihedralGroup
@@ -938,9 +694,9 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
 
         # Generate template
         if template_type == "onehot":
-            template = np.zeros(group_order, dtype=np.float32)
-            template[1] = 10.0
-            template = template - np.mean(template)
+            tpl = np.zeros(group_order, dtype=np.float32)
+            tpl[1] = 10.0
+            tpl = tpl - np.mean(tpl)
             print("Template type: onehot")
 
         elif template_type == "custom_fourier":
@@ -972,21 +728,21 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 )
                 spectrum.append(mat)
 
-            template = compute_group_inverse_fourier_transform(group, spectrum)
-            template = template - np.mean(template)
-            template = template.astype(np.float32)
+            tpl = fourier.group_fourier_inverse(group, spectrum)
+            tpl = tpl - np.mean(tpl)
+            tpl = tpl.astype(np.float32)
         else:
             raise ValueError(
                 f"Unknown template_type for {group_name}: {template_type}. "
                 "Must be 'onehot' or 'custom_fourier'"
             )
 
-        print(f"Template shape: {template.shape}")
+        print(f"Template shape: {tpl.shape}")
 
         # Visualize template
         print("Visualizing template...")
         fig, ax = plt.subplots(figsize=(max(8, group_order // 5), 4))
-        ax.bar(range(group_order), template)
+        ax.bar(range(group_order), tpl)
         ax.set_xlabel("Group element index")
         ax.set_ylabel("Value")
         title = f"{group_label} Template (order={group_order}, type={template_type})"
@@ -1007,14 +763,14 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     print("Setting up model and training...")
 
     # Flatten template for model (works for both 1D and 2D)
-    template_torch = torch.tensor(template, device=device, dtype=torch.float32).flatten()
+    template_torch = torch.tensor(tpl, device=device, dtype=torch.float32).flatten()
 
     # Determine which model to use
     model_type = config["model"]["model_type"]
     print(f"Using model type: {model_type}")
 
     if model_type == "QuadraticRNN":
-        rnn_2d = QuadraticRNN(
+        rnn_2d = model.QuadraticRNN(
             p=p_flat,
             d=config["model"]["hidden_dim"],
             template=template_torch,
@@ -1023,7 +779,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             transform_type=config["model"]["transform_type"],
         ).to(device)
     elif model_type == "SequentialMLP":
-        rnn_2d = SequentialMLP(
+        rnn_2d = model.SequentialMLP(
             p=p_flat,
             d=config["model"]["hidden_dim"],
             template=template_torch,
@@ -1035,7 +791,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         hidden_dim = config["model"]["hidden_dim"]
         nonlinearity = config["model"].get("nonlinearity", "square")
         output_scale = config["model"].get("output_scale", 1.0)
-        rnn_2d = TwoLayerNet(
+        rnn_2d = model.TwoLayerNet(
             group_size=p_flat,
             hidden_size=hidden_dim,
             nonlinearity=nonlinearity,
@@ -1064,7 +820,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         print(f"Using optimizer: {optimizer_name}")
 
     if optimizer_name == "adam":
-        optimizer = optim.Adam(
+        opt = optim.Adam(
             rnn_2d.parameters(),
             lr=config["training"]["learning_rate"],
             betas=tuple(config["training"]["betas"]),
@@ -1075,7 +831,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             raise ValueError(
                 f"'hybrid' optimizer is only supported for QuadraticRNN, got {model_type}"
             )
-        optimizer = HybridRNNOptimizer(
+        opt = optimizer.HybridRNNOptimizer(
             rnn_2d,
             lr=1,
             scaling_factor=config["training"]["scaling_factor"],
@@ -1093,12 +849,12 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             print("  Note: Using lr=1.0 for per_neuron optimizer with SequentialMLP")
             lr = 1.0
 
-        optimizer = PerNeuronScaledSGD(
+        opt = optimizer.PerNeuronScaledSGD(
             rnn_2d,
             lr=lr,
             degree=degree,  # Will auto-infer as k+1 for SequentialMLP (k = sequence length)
         )
-        print(f"  Degree of homogeneity: {optimizer.param_groups[0]['degree']}")
+        print(f"  Degree of homogeneity: {opt.param_groups[0]['degree']}")
     else:
         raise ValueError(
             f"Invalid optimizer: {optimizer_name}. Must be 'adam', 'hybrid', or 'per_neuron'"
@@ -1111,10 +867,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         print("Using ONLINE data generation...")
 
         if group_name == "cn":
-            from src.datamodule import OnlineModularAdditionDataset1D
-
             # Training dataset
-            train_dataset = OnlineModularAdditionDataset1D(
+            train_dataset = dataset.OnlineModularAdditionDataset1D(
                 p=config["data"]["p"],
                 template=template_1d,
                 k=config["data"]["k"],
@@ -1124,7 +878,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             )
 
             # Validation dataset
-            val_dataset = OnlineModularAdditionDataset1D(
+            val_dataset = dataset.OnlineModularAdditionDataset1D(
                 p=config["data"]["p"],
                 template=template_1d,
                 k=config["data"]["k"],
@@ -1133,10 +887,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 return_all_outputs=config["model"]["return_all_outputs"],
             )
         elif group_name == "cnxcn":
-            from src.datamodule import OnlineModularAdditionDataset2D
-
             # Training dataset
-            train_dataset = OnlineModularAdditionDataset2D(
+            train_dataset = dataset.OnlineModularAdditionDataset2D(
                 p1=config["data"]["p1"],
                 p2=config["data"]["p2"],
                 template=template_2d,
@@ -1147,7 +899,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             )
 
             # Validation dataset
-            val_dataset = OnlineModularAdditionDataset2D(
+            val_dataset = dataset.OnlineModularAdditionDataset2D(
                 p1=config["data"]["p1"],
                 p2=config["data"]["p2"],
                 template=template_2d,
@@ -1178,26 +930,21 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         from torch.utils.data import TensorDataset
 
         if model_type == "TwoLayerNet":
-            # TwoLayerNet uses binary pair datasets from src/datasets.py
+            # TwoLayerNet uses binary pair datasets from src/datamodule.py
             # Data shape: X=(N, 2, group_size) -> flattened to (N, 2*group_size), Y=(N, group_size)
-            from src.datasets import (
-                cn_dataset,
-                cnxcn_dataset,
-                group_dataset,
-                move_dataset_to_device_and_flatten,
-            )
-
             if group_name == "cn":
-                X_raw, Y_raw = cn_dataset(template)
+                X_raw, Y_raw = dataset.cn_dataset(tpl)
             elif group_name == "cnxcn":
-                X_raw, Y_raw = cnxcn_dataset(template)
+                X_raw, Y_raw = dataset.cnxcn_dataset(tpl)
             elif group_name in ("dihedral", "octahedral", "A5"):
-                X_raw, Y_raw = group_dataset(group, template)
+                X_raw, Y_raw = dataset.group_dataset(group, tpl)
             else:
                 raise ValueError(f"Unsupported group_name for TwoLayerNet: {group_name}")
 
             # Flatten X from (N, 2, group_size) to (N, 2*group_size) and convert to tensors
-            X_all, Y_all, device = move_dataset_to_device_and_flatten(X_raw, Y_raw, device=device)
+            X_all, Y_all, device = dataset.move_dataset_to_device_and_flatten(
+                X_raw, Y_raw, device=device
+            )
 
             # Apply dataset_fraction if configured
             dataset_fraction = config["data"].get("dataset_fraction", 1.0)
@@ -1218,10 +965,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         else:
             # Sequence models (QuadraticRNN, SequentialMLP) use sequence datasets
             if group_name == "cn":
-                from src.datamodule import build_modular_addition_sequence_dataset_1d
-
                 # Generate training dataset
-                X_train, Y_train, _ = build_modular_addition_sequence_dataset_1d(
+                X_train, Y_train, _ = dataset.build_modular_addition_sequence_dataset_1d(
                     config["data"]["p"],
                     template_1d,
                     config["data"]["k"],
@@ -1232,7 +977,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
 
                 # Generate validation dataset
                 val_samples = max(1000, config["data"]["num_samples"] // 10)
-                X_val, Y_val, _ = build_modular_addition_sequence_dataset_1d(
+                X_val, Y_val, _ = dataset.build_modular_addition_sequence_dataset_1d(
                     config["data"]["p"],
                     template_1d,
                     config["data"]["k"],
@@ -1241,10 +986,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                     return_all_outputs=config["model"]["return_all_outputs"],
                 )
             elif group_name == "cnxcn":
-                from src.datamodule import build_modular_addition_sequence_dataset_2d
-
                 # Generate training dataset
-                X_train, Y_train, _ = build_modular_addition_sequence_dataset_2d(
+                X_train, Y_train, _ = dataset.build_modular_addition_sequence_dataset_2d(
                     config["data"]["p1"],
                     config["data"]["p2"],
                     template_2d,
@@ -1256,7 +999,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
 
                 # Generate validation dataset
                 val_samples = max(1000, config["data"]["num_samples"] // 10)
-                X_val, Y_val, _ = build_modular_addition_sequence_dataset_2d(
+                X_val, Y_val, _ = dataset.build_modular_addition_sequence_dataset_2d(
                     config["data"]["p1"],
                     config["data"]["p2"],
                     template_2d,
@@ -1266,10 +1009,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                     return_all_outputs=config["model"]["return_all_outputs"],
                 )
             elif group_name in ("dihedral", "octahedral", "A5"):
-                from src.datamodule import build_modular_addition_sequence_dataset_generic
-
-                X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
-                    template,
+                X_train, Y_train, _ = dataset.build_modular_addition_sequence_dataset_generic(
+                    tpl,
                     config["data"]["k"],
                     group=group,
                     mode=config["data"]["mode"],
@@ -1278,8 +1019,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 )
 
                 val_samples = max(1000, config["data"]["num_samples"] // 10)
-                X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
-                    template,
+                X_val, Y_val, _ = dataset.build_modular_addition_sequence_dataset_generic(
+                    tpl,
                     config["data"]["k"],
                     group=group,
                     mode="sampled",
@@ -1323,34 +1064,38 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     start_time = time.time()
 
     if training_mode == "online":
-        from src.train import train_online
+        from src import train as train_mod
 
-        train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = train_online(
-            rnn_2d,
-            train_loader,
-            criterion,
-            optimizer,
-            num_steps=num_steps,
-            verbose_interval=config["training"]["verbose_interval"],
-            grad_clip=config["training"]["grad_clip"],
-            eval_dataloader=val_loader,
-            save_param_interval=config["training"]["save_param_interval"],
-            reduction_threshold=reduction_threshold,
+        train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = (
+            train_mod.train_online(
+                rnn_2d,
+                train_loader,
+                criterion,
+                opt,
+                num_steps=num_steps,
+                verbose_interval=config["training"]["verbose_interval"],
+                grad_clip=config["training"]["grad_clip"],
+                eval_dataloader=val_loader,
+                save_param_interval=config["training"]["save_param_interval"],
+                reduction_threshold=reduction_threshold,
+            )
         )
     else:  # offline
-        from src.train import train
+        from src import train as train_mod
 
-        train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = train(
-            rnn_2d,
-            train_loader,
-            criterion,
-            optimizer,
-            epochs=epochs,
-            verbose_interval=config["training"]["verbose_interval"],
-            grad_clip=config["training"]["grad_clip"],
-            eval_dataloader=val_loader,
-            save_param_interval=config["training"]["save_param_interval"],
-            reduction_threshold=reduction_threshold,
+        train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = (
+            train_mod.train(
+                rnn_2d,
+                train_loader,
+                criterion,
+                opt,
+                epochs=epochs,
+                verbose_interval=config["training"]["verbose_interval"],
+                grad_clip=config["training"]["grad_clip"],
+                eval_dataloader=val_loader,
+                save_param_interval=config["training"]["save_param_interval"],
+                reduction_threshold=reduction_threshold,
+            )
         )
 
     training_time = time.time() - start_time
@@ -1373,7 +1118,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         train_loss_hist,
         val_loss_hist,
         param_hist,
-        template,
+        tpl,
         training_time,
         device,
     )
@@ -1413,7 +1158,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             param_hist=param_hist,
             param_save_indices=param_save_indices,
             train_loss_hist=train_loss_hist,
-            template=template,
+            template=tpl,
             device=device,
             group=group,
         )
