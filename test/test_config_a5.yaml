@@ -1,0 +1,37 @@
+# Minimal test config: Icosahedral Group (A5)
+data:
+  group_name: A5
+  k: 2
+  batch_size: 2
+  seed: 42
+  template_type: onehot
+  mode: sampled
+  num_samples: 10
+  powers: [0.0, 1800.0, 0.0, 1800.0, 0.0]
+
+model:
+  model_type: SequentialMLP
+  hidden_dim: 10
+  init_scale: 0.001
+  return_all_outputs: false
+  transform_type: quadratic
+
+training:
+  mode: offline
+  epochs: 2
+  num_steps: 2
+  optimizer: adam
+  learning_rate: 0.001
+  betas: [0.9, 0.999]
+  weight_decay: 0.0
+  degree: null
+  scaling_factor: -3
+  grad_clip: 0.1
+  verbose_interval: 1
+  save_param_interval: null
+  reduction_threshold: null
+
+device: cpu
+
+analysis:
+  checkpoints: [0.0, 1.0]

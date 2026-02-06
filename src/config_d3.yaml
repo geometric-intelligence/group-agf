@@ -1,0 +1,45 @@
+# ============================================================================
+# Configuration: Dihedral Group D3
+# ============================================================================
+# D3 has 3 irreps with dimensions [1, 1, 2]
+
+data:
+  group_name: dihedral
+  group_n: 3
+  k: 5
+  batch_size: 128
+  seed: 10
+  template_type: onehot
+  mode: exhaustive
+  num_samples: 1000
+
+  # custom_fourier powers (one per irrep)
+  # D3 irreps: [1, 1, 2]
+  powers: [0.0, 5.0, 7.0]
+
+model:
+  model_type: SequentialMLP
+  hidden_dim: 180  # hidden_factor=30 * group_size=6
+  init_scale: 0.000001  # 1e-6 from default_config
+  return_all_outputs: false
+  transform_type: quadratic
+
+training:
+  mode: offline
+  epochs: 1000
+  num_steps: 100
+  optimizer: per_neuron
+  learning_rate: 0.01
+  betas: [0.9, 0.999]
+  weight_decay: 0.0
+  degree: null
+  scaling_factor: -3
+  grad_clip: 0.1
+  verbose_interval: 100
+  save_param_interval: 10
+  reduction_threshold: null
+
+device: cuda:0
+
+analysis:
+  checkpoints: [0.0, 1.0]

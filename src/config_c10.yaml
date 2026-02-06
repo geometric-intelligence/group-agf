@@ -1,0 +1,40 @@
+# ============================================================================
+# Configuration: Cyclic Group C_10
+# ============================================================================
+
+data:
+  group_name: cn
+  p: 10
+  k: 5
+  batch_size: 128
+  seed: 10
+  template_type: onehot
+  mode: exhaustive
+  num_samples: 1000
+
+model:
+  model_type: SequentialMLP
+  hidden_dim: 300  # hidden_factor=30 * group_size=10
+  init_scale: 0.01
+  return_all_outputs: false
+  transform_type: quadratic
+
+training:
+  mode: offline
+  epochs: 1000
+  num_steps: 100
+  optimizer: per_neuron
+  learning_rate: 0.01
+  betas: [0.9, 0.999]
+  weight_decay: 0.0
+  degree: null
+  scaling_factor: -3
+  grad_clip: 0.1
+  verbose_interval: 100
+  save_param_interval: 10
+  reduction_threshold: null
+
+device: cuda:0
+
+analysis:
+  checkpoints: [0.0, 1.0]

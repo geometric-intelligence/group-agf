@@ -1,0 +1,42 @@
+# ============================================================================
+# Configuration: Product Group C_4 x C_4
+# ============================================================================
+
+data:
+  group_name: cnxcn
+  p1: 4
+  p2: 4
+  k: 5
+  batch_size: 128
+  seed: 10
+  template_type: fourier
+  n_freqs: 1
+  mode: exhaustive
+  num_samples: 1000
+
+model:
+  model_type: SequentialMLP
+  hidden_dim: 480  # hidden_factor=30 * group_size=16
+  init_scale: 0.01
+  return_all_outputs: false
+  transform_type: quadratic
+
+training:
+  mode: offline
+  epochs: 1000
+  num_steps: 100
+  optimizer: per_neuron
+  learning_rate: 0.01
+  betas: [0.9, 0.999]
+  weight_decay: 0.0
+  degree: null
+  scaling_factor: -3
+  grad_clip: 0.1
+  verbose_interval: 100
+  save_param_interval: 10
+  reduction_threshold: null
+
+device: cuda:0
+
+analysis:
+  checkpoints: [0.0, 1.0]

@@ -1,0 +1,45 @@
+# ============================================================================
+# Configuration: Icosahedral Group (A5)
+# ============================================================================
+# A5 (Icosahedral) group has order 60 and 5 irreps with dimensions [1, 3, 5, 3, 4]
+
+data:
+  group_name: A5
+  k: 5
+  batch_size: 128
+  seed: 10
+  template_type: onehot
+  mode: sampled
+  num_samples: 1000
+  dataset_fraction: 1.0
+
+  # custom_fourier powers (one per irrep)
+  # A5 irreps: [1, 3, 5, 3, 4]
+  powers: [0.0, 1800.0, 0.0, 1800.0, 0.0]
+
+model:
+  model_type: SequentialMLP
+  hidden_dim: 1800  # hidden_factor=30 * group_size=60
+  init_scale: 0.001  # 1e-3 from default_config
+  return_all_outputs: false
+  transform_type: quadratic
+
+training:
+  mode: offline
+  epochs: 1000
+  num_steps: 100
+  optimizer: per_neuron
+  learning_rate: 0.0001
+  betas: [0.9, 0.999]
+  weight_decay: 0.0
+  degree: null
+  scaling_factor: -3
+  grad_clip: 0.1
+  verbose_interval: 100
+  save_param_interval: 10
+  reduction_threshold: null
+
+device: cuda:0
+
+analysis:
+  checkpoints: [0.0, 1.0]
