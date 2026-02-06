@@ -1,8 +1,5 @@
 import numpy as np
 import torch
-import torch.nn as nn
-import torchvision
-import torchvision.transforms as transforms
 from torch.utils.data import IterableDataset
 
 
@@ -537,523 +534,170 @@ def sequence_to_paths_xy(sequence_xy: np.ndarray, p1: int, p2: int) -> np.ndarra
     return paths_xy
 
 
-def mnist_template_1d(p: int, label: int, root: str = "data", axis: int = 0):
-    """
-    Return a (p,) 1D template from a random MNIST image by taking a slice or projection.
-    Values are float32 in [0, 1].
+# ---------------------------------------------------------------------------
+# Dataset functions moved from datasets.py
+# ---------------------------------------------------------------------------
 
-    Args:
-        p: dimension of the cyclic group
-        label: MNIST digit class (0-9)
-        root: MNIST data directory
-        axis: 0 for row average, 1 for column average, 2 for diagonal
 
-    Returns:
-        template: (p,) array
-    """
-    if not (0 <= int(label) <= 9):
-        raise ValueError("label must be an integer in [0, 9].")
+def load_dataset(config):
+    """Load dataset based on configuration."""
+    import src.template as template
 
-    ds = torchvision.datasets.MNIST(
-        root=root, train=True, download=True, transform=transforms.ToTensor()
-    )
-    cls_idxs = (ds.targets == int(label)).nonzero(as_tuple=True)[0]
-    if cls_idxs.numel() == 0:
-        raise ValueError(f"No samples for label {label}.")
+    tpl = template.template_selector(config)
 
-    idx = cls_idxs[torch.randint(len(cls_idxs), (1,)).item()].item()
-    img, _ = ds[idx]  # img: (1, 28, 28) in [0,1]
-    img = img[0].numpy()  # (28, 28)
+    if config["group_name"] == "cnxcn":
+        X, Y = cnxcn_dataset(tpl)
 
-    # Get 1D signal from 2D image
-    if axis == 0:
-        # Average over columns (vertical projection)
-        signal = img.mean(axis=1)  # (28,)
-    elif axis == 1:
-        # Average over rows (horizontal projection)
-        signal = img.mean(axis=0)  # (28,)
-    elif axis == 2:
-        # Diagonal
-        signal = np.diag(img)  # (28,)
+    elif config["group_name"] == "cn":
+        X, Y = cn_dataset(tpl)
+
     else:
-        raise ValueError("axis must be 0, 1, or 2")
+        X, Y = group_dataset(config["group"], tpl)
 
-    # Interpolate to desired size p
-    from scipy.interpolate import interp1d
+    print(f"dataset_fraction: {config['dataset_fraction']}")
 
-    x_old = np.linspace(0, 1, len(signal))
-    x_new = np.linspace(0, 1, p)
-    f = interp1d(x_old, signal, kind="cubic")
-    template = f(x_new)
+    if config["dataset_fraction"] != 1.0:
+        assert 0 < config["dataset_fraction"] <= 1.0, "fraction must be in (0, 1]"
+        N = X.shape[0]
+        n_sample = int(np.ceil(N * config["dataset_fraction"]))
+        rng = np.random.default_rng(config["seed"])
+        indices = rng.choice(N, size=n_sample, replace=False)
+        X = X[indices]
+        Y = Y[indices]
 
-    return template.astype(np.float32)
+    return X, Y, tpl
 
 
-def mnist_template_2d(p1: int, p2: int, label: int, root: str = "data"):
+def group_dataset(group, template):
+    """Generate a dataset of group elements acting on the template.
+
+    Using the regular representation.
+
+    Parameters
+    ----------
+    group : Group (escnn object)
+        The group.
+    template : np.ndarray, shape=[group.order()]
+        The template to generate the dataset from.
+
+    Returns
+    -------
+    X : np.ndarray, shape=[group.order()**2, 2, group.order()]
+    Y : np.ndarray, shape=[group.order()**2, group.order()]
     """
-    Return a (p1, p2) template from a random MNIST image of the given class label (0–9).
-    Values are float32 in [0, 1].
+    group_order = group.order()
+    assert len(template) == group_order, "template must have the same length as the group order"
+    n_samples = group_order**2
+    X = np.zeros((n_samples, 2, group_order))
+    Y = np.zeros((n_samples, group_order))
+    regular_rep = group.representations["regular"]
+
+    idx = 0
+    for g1 in group.elements:
+        for g2 in group.elements:
+            g1_rep = regular_rep(g1)
+            g2_rep = regular_rep(g2)
+            g12_rep = g1_rep @ g2_rep
+
+            X[idx, 0, :] = g1_rep @ template
+            X[idx, 1, :] = g2_rep @ template
+            Y[idx, :] = g12_rep @ template
+            idx += 1
+
+    return X, Y
+
+
+def cn_dataset(template):
+    """Generate a dataset for the cyclic group C_n modular addition operation."""
+    group_size = len(template)
+    X = np.zeros((group_size * group_size, 2, group_size))
+    Y = np.zeros((group_size * group_size, group_size))
+
+    idx = 0
+    for a in range(group_size):
+        for b in range(group_size):
+            q = (a + b) % group_size
+            X[idx, 0, :] = np.roll(template, a)
+            X[idx, 1, :] = np.roll(template, b)
+            Y[idx, :] = np.roll(template, q)
+            idx += 1
+
+    return X, Y
+
+
+def cnxcn_dataset(template):
+    r"""Generate a dataset for the 2D modular addition operation.
+
+    Parameters
+    ----------
+    template : np.ndarray
+        A flattened 2D square image of shape (image_length*image_length,).
+
+    Returns
+    -------
+    X : np.ndarray
+        Input data of shape (image_length^4, 2, image_length*image_length).
+    Y : np.ndarray
+        Output data of shape (image_length^4, image_length*image_length).
     """
-    if not (0 <= int(label) <= 9):
-        raise ValueError("label must be an integer in [0, 9].")
+    image_length = int(np.sqrt(len(template)))
+    X = np.zeros((image_length**4, 2, image_length * image_length))
+    Y = np.zeros((image_length**4, image_length * image_length))
+    translations = np.zeros((image_length**4, 3, 2), dtype=int)
 
-    ds = torchvision.datasets.MNIST(
-        root=root, train=True, download=True, transform=transforms.ToTensor()
-    )
-    cls_idxs = (ds.targets == int(label)).nonzero(as_tuple=True)[0]
-    if cls_idxs.numel() == 0:
-        raise ValueError(f"No samples for label {label}.")
+    idx = 0
+    template_2d = template.reshape((image_length, image_length))
+    for a_x in range(image_length):
+        for a_y in range(image_length):
+            for b_x in range(image_length):
+                for b_y in range(image_length):
+                    q_x = (a_x + b_x) % image_length
+                    q_y = (a_y + b_y) % image_length
+                    X[idx, 0, :] = np.roll(np.roll(template_2d, a_x, axis=0), a_y, axis=1).flatten()
+                    X[idx, 1, :] = np.roll(np.roll(template_2d, b_x, axis=0), b_y, axis=1).flatten()
+                    Y[idx, :] = np.roll(np.roll(template_2d, q_x, axis=0), q_y, axis=1).flatten()
+                    translations[idx, 0, :] = (a_x, a_y)
+                    translations[idx, 1, :] = (b_x, b_y)
+                    translations[idx, 2, :] = (q_x, q_y)
+                    idx += 1
 
-    idx = cls_idxs[torch.randint(len(cls_idxs), (1,)).item()].item()
-    img, _ = ds[idx]  # img: (1, 28, 28) in [0,1]
-    img = nn.functional.interpolate(
-        img.unsqueeze(0), size=(p1, p2), mode="bilinear", align_corners=False
-    )[0, 0]
-    return img.numpy().astype(np.float32)  # (p1, p2)
+    return X, Y
 
 
-### ----- SYNTHETIC TEMPLATES ----- ###
+def move_dataset_to_device_and_flatten(X, Y, device=None):
+    """Move dataset tensors to available or specified device.
 
-### 1D Templates ###
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data of shape (num_samples, 2, p*p)
+    Y : np.ndarray
+        Target data of shape (num_samples, p*p)
+    device : torch.device, optional
+        Device to move tensors to.
 
-
-def generate_fourier_template_1d(
-    p: int, n_freqs: int, amp_max: float = 100, amp_min: float = 10, seed=None
-):
+    Returns
+    -------
+    X : torch.Tensor
+        Input data tensor on specified device, flattened to (num_samples, 2*p*p)
+    Y : torch.Tensor
+        Target data tensor on specified device, flattened to (num_samples, p*p)
     """
-    Generate 1D template from random Fourier modes.
+    num_data_features = len(X[0][0])
+    X_flat = X.reshape(X.shape[0], 2 * num_data_features)
+    Y_flat = Y.reshape(Y.shape[0], num_data_features)
+    X_tensor = torch.tensor(X_flat, dtype=torch.float32)
+    Y_tensor = torch.tensor(Y_flat, dtype=torch.float32)
 
-    Args:
-        p: dimension of cyclic group
-        n_freqs: number of frequency components to include
-        amp_max: maximum amplitude
-        amp_min: minimum amplitude
-        seed: random seed
-
-    Returns:
-        template: (p,) real-valued array
-    """
-    rng = np.random.default_rng(seed)
-    spectrum = np.zeros(p, dtype=np.complex128)
-
-    # Select frequencies (skip DC)
-    available_freqs = list(range(1, p // 2 + 1))
-    if len(available_freqs) < n_freqs:
-        raise ValueError(
-            f"Only {len(available_freqs)} non-DC frequencies available for p={p}, requested {n_freqs}"
-        )
-
-    chosen_freqs = rng.choice(
-        available_freqs, size=min(n_freqs, len(available_freqs)), replace=False
-    )
-
-    # Amplitudes decreasing with frequency index
-    amps = np.sqrt(np.linspace(amp_max, amp_min, len(chosen_freqs)))
-    phases = rng.uniform(0.0, 2 * np.pi, size=len(chosen_freqs))
-
-    for freq, amp, phi in zip(chosen_freqs, amps, phases):
-        v = amp * np.exp(1j * phi)
-        spectrum[freq] = v
-        spectrum[-freq] = np.conj(v)  # Hermitian symmetry for real signal
-
-    template = np.fft.ifft(spectrum).real
-    template -= template.mean()
-    s = template.std()
-    if s > 1e-12:
-        template /= s
-
-    return template.astype(np.float32)
-
-
-def generate_gaussian_template_1d(
-    p: int, n_gaussians: int = 3, sigma_range: tuple = (0.5, 2.0), seed=None
-):
-    """
-    Generate 1D template as sum of Gaussians.
-
-    Args:
-        p: dimension of cyclic group
-        n_gaussians: number of Gaussian bumps
-        sigma_range: (min_sigma, max_sigma) for Gaussian widths
-        seed: random seed
-
-    Returns:
-        template: (p,) real-valued array
-    """
-    rng = np.random.default_rng(seed)
-    x = np.arange(p)
-    template = np.zeros(p, dtype=np.float32)
-
-    for _ in range(n_gaussians):
-        center = rng.uniform(0, p)
-        sigma = rng.uniform(*sigma_range)
-        amplitude = rng.uniform(0.5, 1.0)
-
-        # Periodic distance
-        dist = np.minimum(np.abs(x - center), p - np.abs(x - center))
-        template += amplitude * np.exp(-(dist**2) / (2 * sigma**2))
-
-    template -= template.mean()
-    s = template.std()
-    if s > 1e-12:
-        template /= s
-
-    return template.astype(np.float32)
-
-
-def generate_onehot_template_1d(p: int):
-    """
-    Generate 1D one-hot template for cyclic group C_p.
-
-    This creates a template with a single 1 at position 0 and 0s everywhere else.
-    When rolled, this one-hot encoding uniquely identifies each group element.
-
-    Args:
-        p: dimension of cyclic group
-
-    Returns:
-        template: (p,) array with template[0] = 1, all others = 0
-    """
-    template = np.zeros(p, dtype=np.float32)
-    template[0] = 1.0
-    return template
-
-
-### 2D Templates ###
-
-
-def gaussian_mixture_template(
-    p1=20,
-    p2=20,
-    n_blobs=8,
-    frac_broad=0.7,
-    sigma_broad=(3.5, 6.0),
-    sigma_narrow=(1.0, 2.0),
-    amp_broad=1.0,
-    amp_narrow=0.5,
-    seed=None,
-    normalize=True,
-):
-    """
-    Build a (p1 x p2) template as a periodic mixture of Gaussians.
-    Broad Gaussians (low-frequency) get higher weight; a few narrow ones add detail.
-    """
-    rng = np.random.default_rng(seed)
-    H, W = p1, p2
-    Y, X = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
-
-    k_broad = int(round(n_blobs * frac_broad))
-    k_narrow = n_blobs - k_broad
-
-    def add_blobs(k, sigma_range, amp):
-        out = np.zeros((H, W), dtype=float)
-        for _ in range(k):
-            cy, cx = rng.uniform(0, H), rng.uniform(0, W)
-            sigma = rng.uniform(*sigma_range)
-            dy = np.minimum(np.abs(Y - cy), H - np.abs(Y - cy))  # periodic (torus) distance
-            dx = np.minimum(np.abs(X - cx), W - np.abs(X - cx))
-            out += amp * np.exp(-(dx**2 + dy**2) / (2.0 * sigma**2))
-        return out
-
-    template = (
-        add_blobs(k_broad, sigma_broad, amp_broad)  # broad, low-freq power
-        + add_blobs(k_narrow, sigma_narrow, amp_narrow)  # a bit of high-freq detail
-    )
-
-    if normalize:
-        template -= template.mean()
-        s = template.std()
-        if s > 1e-12:
-            template /= s
-    return template.astype(np.float32)
-
-
-def generate_template_unique_freqs(p1, p2, n_freqs, amp_max=100, amp_min=10, seed=None):
-    """
-    Real (p1 x p2) template from n_freqs Fourier modes where:
-      - No two selected bins are conjugates of each other.
-      - Self-conjugate singletons are excluded.
-      - Frequencies are chosen (low→high) by radial order from the rfft-style half-plane.
-
-    Conjugate symmetry: F[ky,kx] = conj( F[-ky mod p1, -kx mod p2] ).
-    On the rfft half-plane kx ∈ [0, p2//2]:
-      - If 0 < kx < p2//2, the conjugate sits at kx' = p2 - kx (outside the half-plane) → safe.
-      - If kx in {0, p2//2 (when even)}, the conjugate keeps the same kx and flips ky → avoid picking both ky and -ky.
-      - Self-conjugate happens only if kx in {0, p2//2 (when even)} AND ky in {0, p1//2 (when even)} → exclude.
-    """
-    rng = np.random.default_rng(seed)
-    spectrum = np.zeros((p1, p2), dtype=np.complex128)
-
-    # Helpers
-    def ky_signed(ky):  # map ky ∈ [0..p1-1] to signed range
-        return ky if ky <= p1 // 2 else ky - p1
-
-    def is_self_conj(ky, kx):
-        on_self_kx = (kx == 0) or (p2 % 2 == 0 and kx == p2 // 2)
-        if not on_self_kx:
-            return False
-        s = ky_signed(ky)
-        return (s == 0) or (p1 % 2 == 0 and abs(s) == p1 // 2)
-
-    # Build candidate list on rfft half-plane, skip DC and self-conjugate singletons
-    cand = []
-    for ky in range(p1):
-        s = ky_signed(ky)
-        for kx in range(p2 // 2 + 1):
-            if ky == 0 and kx == 0:
-                continue  # DC
-            if is_self_conj(ky, kx):
-                continue  # exclude singletons
-            r2 = (s**2) + (kx**2)
-            cand.append((r2, ky, kx))
-    cand.sort(key=lambda t: (t[0], abs(ky_signed(t[1])), t[2]))
-
-    # Select without conjugate collisions
-    chosen = []
-    seen_axis_pairs = set()  # for kx in {0, mid}, prevent picking both ky and -ky
-
-    mid_kx = p2 // 2 if (p2 % 2 == 0) else None
-    for _, ky, kx in cand:
-        if len(chosen) >= n_freqs:
-            break
-        if (kx == 0) or (mid_kx is not None and kx == mid_kx):
-            s = ky_signed(ky)
-            key = (kx, min(s, -s))  # canonicalize ±ky
-            if key in seen_axis_pairs:
-                continue
-            seen_axis_pairs.add(key)
-            chosen.append((ky, kx))
+    if device is None:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            print("GPU is available. Using CUDA.")
         else:
-            # 0 < kx < mid_kx (or no mid): conjugate lives outside half-plane → always safe
-            chosen.append((ky, kx))
+            device = torch.device("cpu")
+            print("GPU is not available. Using CPU.")
 
-    if len(chosen) < n_freqs:
-        raise ValueError(
-            f"Could only find {len(chosen)} unique non-conjugate bins; "
-            f"requested {n_freqs}. Increase grid size or reduce n_freqs."
-        )
+    X_tensor = X_tensor.to(device)
+    Y_tensor = Y_tensor.to(device)
 
-    # Amplitudes + random phases, then place each bin + its conjugate
-    amps = np.sqrt(np.linspace(amp_max, amp_min, n_freqs, dtype=float))
-    phases = rng.uniform(0.0, 2 * np.pi, size=n_freqs)
-
-    for (ky, kx), a, phi in zip(chosen, amps, phases):
-        kyc, kxc = (-ky) % p1, (-kx) % p2
-        v = a * np.exp(1j * phi)
-        spectrum[ky, kx] += v
-        spectrum[kyc, kxc] += np.conj(v)
-
-    template = np.fft.ifft2(spectrum).real
-    template -= template.mean()
-    s = template.std()
-    if s > 1e-12:
-        template /= s
-    return template.astype(np.float32)
-
-
-def generate_fixed_template_2d(p1: int, p2: int) -> np.ndarray:
-    """
-    Generate 2D template array from Fourier spectrum.
-
-    Args:
-        p1: height dimension
-        p2: width dimension
-
-    Returns:
-        template: (p1, p2) real-valued array
-    """
-    # Generate template array from 2D Fourier spectrum
-    spectrum = np.zeros((p1, p2), dtype=complex)
-
-    assert p1 > 5 and p2 > 5, "p1 and p2 must be greater than 5"
-
-    # Set 2D frequency components with specific amplitudes
-    # Format: spectrum[kx, ky] where kx is "vertical freq", ky is "horizontal freq"
-
-    # Axis-aligned frequencies
-    spectrum[1, 0] = 10.0  # vertical frequency 1
-    spectrum[-1, 0] = 10.0  # conjugate
-    # spectrum[0, 1] = 10.0      # horizontal frequency 1
-    # spectrum[0, -1] = 10.0     # conjugate
-
-    # Higher frequency components
-    # spectrum[3, 0] = 7.5
-    # spectrum[-3, 0] = 7.5
-    spectrum[0, 3] = 7.5
-    spectrum[0, -3] = 7.5
-
-    # Diagonal/mixed frequencies
-    spectrum[2, 1] = 5.0
-    spectrum[-2, -1] = 5.0  # conjugate
-    # spectrum[1, 2] = 5.0
-    # spectrum[-1, -2] = 5.0    # conjugate
-
-    # Generate signal from spectrum
-    template = np.fft.ifft2(spectrum).real
-
-    return template
-
-
-# Spherically Symmetric Templates
-
-
-def _fft_indices(n):
-    """
-    Return integer-like frequency indices aligned with numpy's FFT layout.
-    Example: n=8 -> [0,1,2,3,4,-3,-2,-1]
-    """
-    k = np.fft.fftfreq(n) * n
-    return k.astype(int)
-
-
-def generate_hexagon_tie_template_2d(p1: int, p2: int, k0: float = 6.0, amp: float = 1.0):
-    """
-    Real template whose 2D Fourier spectrum has equal maxima at six directions
-    (0°, 60°, 120°, 180°, 240°, 300°) with radius ~ k0 (in FFT index units).
-
-    Args:
-        p1, p2: spatial dims (height, width). Require > 5 recommended.
-        k0: desired radius (index units). Not necessarily integer; we round.
-        amp: amplitude per spike (before conjugate pairing)
-
-    Returns:
-        template: (p1, p2) real-valued array
-    """
-    assert p1 > 5 and p2 > 5, "p1 and p2 must be > 5"
-    spec = np.zeros((p1, p2), dtype=np.complex128)
-
-    # Six target angles for a hexagon
-    thetas = np.arange(6) * (np.pi / 3.0)
-
-    # FFT index grids
-    Kx = _fft_indices(p1)
-    Ky = _fft_indices(p2)
-
-    # Map from (kx,ky) in index space to array indices (wrapped)
-    def put(kx, ky, val):
-        spec[int(kx) % p1, int(ky) % p2] += val
-
-    used = set()
-    for th in thetas:
-        # Target continuous coordinates at radius k0
-        kx_f = k0 * np.cos(th)
-        ky_f = k0 * np.sin(th)
-        # Round to nearest integer grid point
-        kx = int(np.round(kx_f))
-        ky = int(np.round(ky_f))
-        # Avoid (0,0) and duplicates
-        if (kx, ky) == (0, 0):
-            # nudge radius by 1 if rounding hit DC
-            if abs(np.cos(th)) > abs(np.sin(th)):
-                kx = 1 if kx >= 0 else -1
-            else:
-                ky = 1 if ky >= 0 else -1
-        if (kx, ky) in used:
-            continue
-        used.add((kx, ky))
-        used.add((-kx, -ky))
-
-        # Place equal-amplitude spikes with Hermitian symmetry
-        put(kx, ky, amp)  # +k
-        put(-kx, -ky, np.conjugate(amp))  # -k (conjugate)
-
-    # Remove DC (optional) to avoid mean offset
-    spec[0, 0] = 0.0
-
-    # Real template
-    x = np.fft.ifft2(spec).real
-    return x
-
-
-def generate_ring_isotropic_template_2d(
-    p1: int, p2: int, r0: float = 6.0, sigma: float = 0.5, total_power: float = 1.0
-):
-    """
-    Real template with a narrow, isotropic ring in the 2D spectrum: |X(k)| ≈ exp(- (||k||-r0)^2 / (2 sigma^2)).
-    This produces a spherical (circular) symmetry -> orientation tie across the ring.
-
-    Args:
-        p1, p2: spatial dims
-        r0: target radius (index units)
-        sigma: radial width of the ring
-        total_power: scales overall energy (roughly)
-
-    Returns:
-        template: (p1, p2) real-valued array
-    """
-    assert p1 > 5 and p2 > 5, "p1 and p2 must be > 5"
-
-    # Build index grids in FFT layout
-    kx = _fft_indices(p1)[:, None]  # (p1,1)
-    ky = _fft_indices(p2)[None, :]  # (1,p2)
-    R = np.sqrt(kx**2 + ky**2)
-
-    # Radial Gaussian ring (real, even -> already Hermitian when phases are 0)
-    mag = np.exp(-0.5 * ((R - r0) / max(sigma, 1e-6)) ** 2)
-
-    # Optional: zero DC
-    mag[0, 0] = 0.0
-
-    # Normalize to desired total power (approximate; ifft2 has 1/(p1*p2) factor)
-    power = np.sum(mag**2)
-    if power > 0:
-        mag *= np.sqrt(total_power / power)
-
-    # Real, symmetric spectrum (phase = 0 everywhere)
-    spec = mag.astype(np.complex128)
-
-    x = np.fft.ifft2(spec).real
-    return x
-
-
-def generate_gaussian_template_2d(
-    p1: int,
-    p2: int,
-    center: tuple[float, float] = None,
-    sigma: float = 2.0,
-    k_freqs: int = None,
-) -> np.ndarray:
-    """
-    Generate 2D template with a single Gaussian, optionally band-limited to top-k frequencies.
-    Args:
-        p1: height dimension
-        p2: width dimension
-        center: (cx, cy) center position, defaults to center of grid
-        sigma: standard deviation of Gaussian
-        k_freqs: if not None, keep only the top k frequencies by power (band-limit)
-    Returns:
-        template: (p1, p2) real-valued array
-    """
-    if center is None:
-        center = (p1 / 2, p2 / 2)
-    cx, cy = center
-    # Create coordinate grids
-    x = np.arange(p1)
-    y = np.arange(p2)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    # Compute Gaussian
-    template = np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * sigma**2))
-    # If k_freqs specified, band-limit to top-k frequencies
-    if k_freqs is not None:
-        # Take DFT
-        spectrum = np.fft.fft2(template)
-        # Compute power for each frequency
-        power = np.abs(spectrum) ** 2
-        power_flat = power.flatten()
-        # Get indices of all frequencies
-        kx_indices = np.arange(p1)
-        ky_indices = np.arange(p2)
-        KX, KY = np.meshgrid(kx_indices, ky_indices, indexing="ij")
-        all_indices = list(zip(KX.flatten(), KY.flatten()))
-        # Sort by power and select top-k
-        sorted_idx = np.argsort(-power_flat)
-        top_k_idx = sorted_idx[:k_freqs]
-        top_k_freqs = set([all_indices[i] for i in top_k_idx])
-        # Create mask: 1 for top-k frequencies, 0 for others
-        mask = np.zeros((p1, p2), dtype=complex)
-        for kx, ky in top_k_freqs:
-            mask[kx, ky] = 1.0
-        # Apply mask and take IDFT
-        spectrum_masked = spectrum * mask
-        template = np.fft.ifft2(spectrum_masked).real
-    return template
+    return X_tensor, Y_tensor, device

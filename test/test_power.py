@@ -1,36 +1,33 @@
-"""Tests for gagf.rnns.utils module."""
+"""Tests for src.power module."""
 
 import numpy as np
+from escnn.group import Octahedral
 
-from src.utils import (
-    get_power_1d,
-    get_power_2d_adele,
-    topk_template_freqs,
-    topk_template_freqs_1d,
-)
+import src.power as power
+import src.template as template
 
 
 class TestGetPower1D:
-    """Tests for get_power_1d function."""
+    """Tests for power.get_power_1d function."""
 
     def test_output_shape(self):
         """Test that output shape is correct."""
         p = 10
         signal = np.random.randn(p)
 
-        power, freqs = get_power_1d(signal)
+        pwr, freqs = power.get_power_1d(signal)
 
         expected_len = p // 2 + 1
-        assert power.shape == (expected_len,), f"power shape mismatch: {power.shape}"
+        assert pwr.shape == (expected_len,), f"power shape mismatch: {pwr.shape}"
         assert freqs.shape == (expected_len,), f"freqs shape mismatch: {freqs.shape}"
 
     def test_parseval_theorem(self):
-        """Test that Parseval's theorem holds (total power ≈ norm squared)."""
+        """Test that Parseval's theorem holds (total power ~ norm squared)."""
         p = 16
         signal = np.random.randn(p)
 
-        power, _ = get_power_1d(signal)
-        total_power = np.sum(power)
+        pwr, _ = power.get_power_1d(signal)
+        total_power = np.sum(pwr)
         norm_squared = np.linalg.norm(signal) ** 2
 
         np.testing.assert_allclose(
@@ -42,8 +39,8 @@ class TestGetPower1D:
         p = 15
         signal = np.random.randn(p)
 
-        power, _ = get_power_1d(signal)
-        total_power = np.sum(power)
+        pwr, _ = power.get_power_1d(signal)
+        total_power = np.sum(pwr)
         norm_squared = np.linalg.norm(signal) ** 2
 
         np.testing.assert_allclose(
@@ -59,28 +56,26 @@ class TestGetPower1D:
         constant_value = 3.0
         signal = np.full(p, constant_value)
 
-        power, freqs = get_power_1d(signal)
+        pwr, freqs = power.get_power_1d(signal)
 
-        # DC component should contain all the power for constant signal
         expected_dc_power = constant_value**2 * p
-        np.testing.assert_allclose(power[0], expected_dc_power, rtol=1e-6)
+        np.testing.assert_allclose(pwr[0], expected_dc_power, rtol=1e-6)
 
-        # All other components should be zero
-        assert np.allclose(power[1:], 0, atol=1e-10)
+        assert np.allclose(pwr[1:], 0, atol=1e-10)
 
 
-class TestGetPower2DAdele:
-    """Tests for get_power_2d_adele function."""
+class TestGetPower2D:
+    """Tests for power.get_power_2d function."""
 
     def test_output_shape(self):
         """Test that output shape is correct."""
         M, N = 8, 10
         signal = np.random.randn(M, N)
 
-        freqs_u, freqs_v, power = get_power_2d_adele(signal)
+        freqs_u, freqs_v, pwr = power.get_power_2d(signal)
 
         expected_power_shape = (M, N // 2 + 1)
-        assert power.shape == expected_power_shape, f"power shape mismatch: {power.shape}"
+        assert pwr.shape == expected_power_shape, f"power shape mismatch: {pwr.shape}"
         assert freqs_u.shape == (M,), f"freqs_u shape mismatch: {freqs_u.shape}"
         assert freqs_v.shape == (N // 2 + 1,), f"freqs_v shape mismatch: {freqs_v.shape}"
 
@@ -89,9 +84,8 @@ class TestGetPower2DAdele:
         M, N = 8, 10
         signal = np.random.randn(M, N)
 
-        result = get_power_2d_adele(signal, no_freq=True)
+        result = power.get_power_2d(signal, no_freq=True)
 
-        # Should only return power
         expected_shape = (M, N // 2 + 1)
         assert result.shape == expected_shape
 
@@ -100,8 +94,8 @@ class TestGetPower2DAdele:
         M, N = 12, 12
         signal = np.random.randn(M, N)
 
-        power = get_power_2d_adele(signal, no_freq=True)
-        total_power = np.sum(power)
+        pwr = power.get_power_2d(signal, no_freq=True)
+        total_power = np.sum(pwr)
         norm_squared = np.linalg.norm(signal) ** 2
 
         np.testing.assert_allclose(
@@ -110,11 +104,11 @@ class TestGetPower2DAdele:
 
     def test_parseval_theorem_rectangular(self):
         """Test Parseval's theorem for rectangular arrays."""
-        M, N = 7, 11  # Both odd
+        M, N = 7, 11
         signal = np.random.randn(M, N)
 
-        power = get_power_2d_adele(signal, no_freq=True)
-        total_power = np.sum(power)
+        pwr = power.get_power_2d(signal, no_freq=True)
+        total_power = np.sum(pwr)
         norm_squared = np.linalg.norm(signal) ** 2
 
         np.testing.assert_allclose(
@@ -126,15 +120,15 @@ class TestGetPower2DAdele:
 
 
 class TestTopkTemplateFreqs1D:
-    """Tests for topk_template_freqs_1d function."""
+    """Tests for power.topk_template_freqs_1d function."""
 
     def test_returns_top_k(self):
         """Test that function returns exactly K frequencies."""
         p = 16
         K = 3
-        template = np.random.randn(p)
+        tpl = np.random.randn(p)
 
-        top_freqs = topk_template_freqs_1d(template, K)
+        top_freqs = power.topk_template_freqs_1d(tpl, K)
 
         assert len(top_freqs) == K, f"Expected {K} frequencies, got {len(top_freqs)}"
 
@@ -142,48 +136,45 @@ class TestTopkTemplateFreqs1D:
         """Test that frequencies are sorted by descending power."""
         p = 16
         K = 5
-        template = np.random.randn(p)
+        tpl = np.random.randn(p)
 
-        top_freqs = topk_template_freqs_1d(template, K)
-        power, _ = get_power_1d(template)
+        top_freqs = power.topk_template_freqs_1d(tpl, K)
+        pwr, _ = power.get_power_1d(tpl)
 
-        # Get powers for returned frequencies
-        returned_powers = [power[f] for f in top_freqs]
+        returned_powers = [pwr[f] for f in top_freqs]
 
-        # Should be in descending order
         assert returned_powers == sorted(returned_powers, reverse=True)
 
     def test_empty_for_zero_signal(self):
         """Test that zero signal with high min_power returns empty list."""
         p = 8
-        template = np.zeros(p)
+        tpl = np.zeros(p)
 
-        top_freqs = topk_template_freqs_1d(template, K=3, min_power=1e-10)
+        top_freqs = power.topk_template_freqs_1d(tpl, K=3, min_power=1e-10)
 
         assert top_freqs == []
 
     def test_handles_k_larger_than_freqs(self):
         """Test behavior when K is larger than available frequencies."""
         p = 6
-        K = 10  # More than available frequencies
-        template = np.random.randn(p)
+        K = 10
+        tpl = np.random.randn(p)
 
-        top_freqs = topk_template_freqs_1d(template, K)
+        top_freqs = power.topk_template_freqs_1d(tpl, K)
 
-        # Should return at most p//2 + 1 frequencies
         assert len(top_freqs) <= p // 2 + 1
 
 
 class TestTopkTemplateFreqs:
-    """Tests for topk_template_freqs function (2D)."""
+    """Tests for power.topk_template_freqs function (2D)."""
 
     def test_returns_top_k(self):
         """Test that function returns exactly K frequency pairs."""
         p1, p2 = 8, 8
         K = 3
-        template = np.random.randn(p1, p2)
+        tpl = np.random.randn(p1, p2)
 
-        top_freqs = topk_template_freqs(template, K)
+        top_freqs = power.topk_template_freqs(tpl, K)
 
         assert len(top_freqs) == K, f"Expected {K} frequency pairs, got {len(top_freqs)}"
 
@@ -191,9 +182,9 @@ class TestTopkTemplateFreqs:
         """Test that returned values are (kx, ky) tuples."""
         p1, p2 = 8, 8
         K = 3
-        template = np.random.randn(p1, p2)
+        tpl = np.random.randn(p1, p2)
 
-        top_freqs = topk_template_freqs(template, K)
+        top_freqs = power.topk_template_freqs(tpl, K)
 
         for freq in top_freqs:
             assert isinstance(freq, tuple), f"Expected tuple, got {type(freq)}"
@@ -202,8 +193,45 @@ class TestTopkTemplateFreqs:
     def test_empty_for_zero_signal(self):
         """Test that zero signal returns empty list."""
         p1, p2 = 6, 6
-        template = np.zeros((p1, p2))
+        tpl = np.zeros((p1, p2))
 
-        top_freqs = topk_template_freqs(template, K=3, min_power=1e-10)
+        top_freqs = power.topk_template_freqs(tpl, K=3, min_power=1e-10)
 
         assert top_freqs == []
+
+
+class TestGroupPower:
+    """Tests for power.GroupPower class."""
+
+    def test_group_power_spectrum(self):
+        """Test that power.GroupPower computes correct power spectrum."""
+        group = Octahedral()
+        irrep_sizes = [irrep.size for irrep in group.irreps()]
+        powers = [0.0, 20.0, 20.0, 100.0, 0.0]
+        fourier_coef_diag_values = [
+            np.sqrt(group.order() * p / dim**2) for p, dim in zip(powers, irrep_sizes)
+        ]
+        tpl = template.fixed_group(group, fourier_coef_diag_values=fourier_coef_diag_values)
+
+        gp = power.GroupPower(tpl, group)
+
+        assert np.allclose(gp.power, powers), f"Power spectrum mismatch: {gp.power} vs {powers}"
+
+
+class TestGroupPowerSpectrum:
+    """Tests for standalone power.group_power_spectrum function."""
+
+    def test_matches_class_method(self):
+        """Test that standalone function matches GroupPower class result."""
+        group = Octahedral()
+        irrep_sizes = [irrep.size for irrep in group.irreps()]
+        powers = [0.0, 20.0, 20.0, 100.0, 0.0]
+        fourier_coef_diag_values = [
+            np.sqrt(group.order() * p / dim**2) for p, dim in zip(powers, irrep_sizes)
+        ]
+        tpl = template.fixed_group(group, fourier_coef_diag_values=fourier_coef_diag_values)
+
+        spectrum = power.group_power_spectrum(group, tpl)
+        gp = power.GroupPower(tpl, group)
+
+        np.testing.assert_allclose(spectrum, gp.power, atol=1e-10)
