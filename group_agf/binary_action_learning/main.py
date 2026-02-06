@@ -17,7 +17,7 @@ import group_agf.binary_action_learning.models as models
 import group_agf.binary_action_learning.plot as plot
 import group_agf.binary_action_learning.power as power
 import group_agf.binary_action_learning.train as train
-from group_agf.binary_action_learning.optimizer import PerNeuronScaledSGD
+from src.optimizers import PerNeuronScaledSGD
 
 today = datetime.date.today()
 

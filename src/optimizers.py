@@ -12,25 +12,36 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         - theta_i comprises all parameters associated with neuron i
         - degree is the degree of homogeneity of the model
 
-    For SequentialMLP with sequence length k:
+    Supported models:
+
+    1. SequentialMLP (from src.model):
         - theta_i = (W_in[i, :], W_out[:, i])
         - degree = k+1 (activation is x^k, one more layer for W_out = x^(k+1))
+
+    2. TwoLayerNet (from group_agf.binary_action_learning.models):
+        - theta_i = (U[i,:], V[i,:], W[i,:])
+        - degree = k (default 2 for square nonlinearity)
 
     The scaling exploits the homogeneity property: if we scale all parameters of
     neuron i by α, the output scales by α^(2-degree).
     """
 
-    def __init__(self, model, lr=1.0, degree=None) -> None:
+    def __init__(self, model, lr=1.0, degree=None, k=None) -> None:
         """
         Args:
-            model: SequentialMLP or compatible model
+            model: SequentialMLP, TwoLayerNet, or compatible model
             lr: base learning rate
             degree: degree of homogeneity (exponent for norm-based scaling)
                    If None, inferred from model:
                    - SequentialMLP: uses k+1 where k is sequence length
-                     (k-th power activation + 1 output layer = k+1 total)
-                   - Default: 2 (default back to SGD)
+                   - TwoLayerNet: uses k (default 2 for square nonlinearity)
+                   - Default: 2
+            k: (deprecated) alias for degree, kept for backward compatibility
         """
+        # Handle backward compatibility: k parameter from old BAL optimizer
+        if k is not None and degree is None:
+            degree = k
+
         # Infer degree of homogeneity from model if not provided
         if degree is None:
             if hasattr(model, "k"):
@@ -38,7 +49,7 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
                 # (k from activation power, +1 from output layer)
                 degree = model.k + 1
             else:
-                # Default back to SGD
+                # Default (e.g., for TwoLayerNet with square nonlinearity)
                 degree = 2
 
         # Get model parameters
@@ -83,8 +94,40 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
             # SGD update
             W_in.add_(g_in, alpha=-lr)
             W_out.add_(g_out, alpha=-lr)
+
+        elif model_type == "TwoLayerNet":
+            # TwoLayerNet: U (hidden_size, group_size), V (hidden_size, group_size),
+            #              W (hidden_size, group_size)
+            U, V, W = model.U, model.V, model.W
+            g_U, g_V, g_W = U.grad, V.grad, W.grad
+
+            if g_U is None or g_V is None or g_W is None:
+                return
+
+            # Per-neuron norms: theta_i = (U[i,:], V[i,:], W[i,:])
+            u2 = (U**2).sum(dim=1)  # (hidden_size,)
+            v2 = (V**2).sum(dim=1)  # (hidden_size,)
+            w2 = (W**2).sum(dim=1)  # (hidden_size,)
+            theta_norm = torch.sqrt(u2 + v2 + w2 + 1e-12)  # (hidden_size,)
+
+            # Scale = ||theta_i||^(1-degree) for TwoLayerNet (original formula)
+            # Note: Original BAL used (1-k), we use (2-degree) for consistency
+            # but TwoLayerNet expects (1-k) behavior, so we use (1-degree)
+            scale = theta_norm.pow(1 - degree)
+
+            # Scale each neuron's gradients
+            g_U.mul_(scale.view(-1, 1))
+            g_V.mul_(scale.view(-1, 1))
+            g_W.mul_(scale.view(-1, 1))
+
+            # SGD update
+            U.add_(g_U, alpha=-lr)
+            V.add_(g_V, alpha=-lr)
+            W.add_(g_W, alpha=-lr)
+
         else:
-            raise ValueError(f"PerNeuronScaledSGD: Unsupported model structure with {model_type}")
+            raise ValueError(f"PerNeuronScaledSGD: Unsupported model type '{model_type}'")
+
         return None
 
 
