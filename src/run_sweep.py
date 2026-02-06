@@ -270,7 +270,7 @@ def run_single_seed(
 
     try:
         # Import here to avoid circular dependency
-        from gagf.rnns.main import train_single_run
+        from src.main import train_single_run
 
         # Run training
         result = train_single_run(seed_config, run_dir=seed_dir)

@@ -45,7 +45,7 @@ SKIP_NOTEBOOKS = {
     # These notebooks require pre-trained model files or external data
     "paper_figures": "Requires pre-trained model .pkl files not included in repo",
     # These notebooks have import/code issues that need separate debugging
-    "2D": "Missing function: cannot import 'get_power_2d' from gagf.rnns.utils",
+    "2D": "Missing function: cannot import 'get_power_2d' from src.utils",
     "znz_znz": "Missing function: datasets.choose_template() does not exist",
     "seq_mlp": "Plotting error: Invalid vmin/vmax values during visualization",
     # These notebooks have visualization code with hardcoded indices that fail with reduced p

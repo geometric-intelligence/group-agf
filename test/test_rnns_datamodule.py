@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from gagf.rnns.datamodule import (
+from src.datamodule import (
     OnlineModularAdditionDataset1D,
     OnlineModularAdditionDataset2D,
     build_modular_addition_sequence_dataset_1d,

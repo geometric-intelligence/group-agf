@@ -3,7 +3,7 @@ from skimage.transform import resize
 from sklearn.datasets import fetch_openml
 from sklearn.utils import shuffle
 
-from group_agf.binary_action_learning.group_fourier_transform import (
+from src.group_fourier_transform import (
     compute_group_inverse_fourier_transform,
 )
 

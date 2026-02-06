@@ -1,26 +1,29 @@
-# Minimal test configuration for src/main.py
-# Used by test_rnns_main.py for fast testing
-
+# Minimal test config: Dihedral Group D3
 data:
-  group_name: cn
-  p: 5
+  group_name: dihedral
+  group_n: 3
   k: 2
-  batch_size: 32
+  batch_size: 2
   seed: 42
-  template_type: onehot
+  template_type: custom_fourier
   mode: sampled
-  num_samples: 100
+  num_samples: 5
+  dataset_fraction: 0.5
+  powers: [0.0, 5.0, 7.0]
 
 model:
-  model_type: SequentialMLP
+  model_type: TwoLayerNet
   hidden_dim: 10
-  init_scale: 0.01
+  init_scale: 0.000001
+  nonlinearity: square
+  output_scale: 1.0
   return_all_outputs: false
   transform_type: quadratic
 
 training:
   mode: offline
   epochs: 2
+  num_steps: 2
   optimizer: adam
   learning_rate: 0.001
   betas: [0.9, 0.999]

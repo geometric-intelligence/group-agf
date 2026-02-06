@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-import group_agf.binary_action_learning.templates as templates
+import src.templates as templates
 
 
 def load_dataset(config):

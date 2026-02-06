@@ -1,9 +1,9 @@
-"""Tests for group_agf.binary_action_learning.templates module."""
+"""Tests for src.templates module."""
 
 import numpy as np
 import pytest
 
-from group_agf.binary_action_learning.templates import (
+from src.templates import (
     fixed_cn_template,
     fixed_cnxcn_template,
     fixed_group_template,

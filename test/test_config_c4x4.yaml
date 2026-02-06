@@ -1,15 +1,15 @@
-# Minimal test configuration for src/main.py
-# Used by test_rnns_main.py for fast testing
-
+# Minimal test config: Product Group C_4 x C_4
 data:
-  group_name: cn
-  p: 5
+  group_name: cnxcn
+  p1: 4
+  p2: 4
   k: 2
-  batch_size: 32
+  batch_size: 2
   seed: 42
-  template_type: onehot
+  template_type: fourier
+  n_freqs: 1
   mode: sampled
-  num_samples: 100
+  num_samples: 5
 
 model:
   model_type: SequentialMLP
@@ -21,6 +21,7 @@ model:
 training:
   mode: offline
   epochs: 2
+  num_steps: 2
   optimizer: adam
   learning_rate: 0.001
   betas: [0.9, 0.999]

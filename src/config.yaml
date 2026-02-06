@@ -1,13 +1,16 @@
 # ============================================================================
 # Base Configuration File
 # ============================================================================
-# This config supports both 1D and 2D modular addition tasks with either
-# QuadraticRNN or SequentialMLP models.
+# This config supports various group tasks with either QuadraticRNN or
+# SequentialMLP models.
 #
 # Quick Setup Guide:
 # ------------------
-# 1D Task (C_p):           Set dimension=1, specify p
-# 2D Task (C_p1 x C_p2):   Set dimension=2, specify p1 and p2
+# Cyclic group C_p:        Set group_name='cn', specify p
+# Product group C_p1xC_p2: Set group_name='cnxcn', specify p1 and p2
+# Dihedral group D_n:      Set group_name='dihedral', specify group_n
+# Octahedral group:        Set group_name='octahedral'
+# Icosahedral (A5):        Set group_name='A5'
 # QuadraticRNN:            Set model_type='QuadraticRNN'
 # SequentialMLP:           Set model_type='SequentialMLP'
 # ============================================================================
@@ -15,14 +18,18 @@
 # Data Configuration
 # ------------------
 data:
-  # Dimension: 1 for C_p (cyclic group), 2 for C_p1 x C_p2 (product group), 'D3' for Dihedral D3
-  dimension: D3  # 1 | 2 | 'D3'
+  # Group name: 'cn' | 'cnxcn' | 'dihedral' | 'octahedral' | 'A5'
+  group_name: dihedral
+
+  # Group order parameter (for parameterized groups)
+  # For dihedral: n in D_n (e.g., 3 for D3, 4 for D4)
+  group_n: 3
 
   # Group Parameters
-  # For dimension=1: only 'p' is used
-  # For dimension=2: 'p1' and 'p2' are used
-  # For dimension='D3': none of p, p1, p2 are used
-  p: 10        # Cyclic group dimension (1D only)
+  # For group_name='cn': only 'p' is used
+  # For group_name='cnxcn': 'p1' and 'p2' are used
+  # For group_name='dihedral'/'octahedral'/'A5': p, p1, p2 are not used
+  p: 10        # Cyclic group dimension (cn only)
 
   p1: 4 #10       # Height/rows dimension (2D only)
   p2: 4        # Width/cols dimension (2D only)
@@ -32,14 +39,14 @@ data:
   seed: 5
 
   # Template Generation
-  # For dimension=1,2: 'mnist' | 'fourier' | 'gaussian' | 'onehot'
-  # For dimension='D3': 'onehot' | 'custom_fourier'
+  # For group_name='cn','cnxcn': 'mnist' | 'fourier' | 'gaussian' | 'onehot'
+  # For group_name='dihedral','octahedral','A5': 'onehot' | 'custom_fourier'
   template_type: onehot
   mnist_label: 4            # MNIST digit (0-9), only if template_type='mnist'
   n_freqs: 1               # Number of Fourier modes, only if template_type='fourier'
 
-  # D3 custom_fourier template: powers for each irrep's Fourier coefficient
-  # D3 has 3 irreps with dimensions [1, 1, 2], so powers should have 3 values
+  # custom_fourier template: powers for each irrep's Fourier coefficient
+  # Example for D3: 3 irreps with dimensions [1, 1, 2], so powers should have 3 values
   # Large ratio between powers = clearer staircase steps
   powers:
   - 0.0
@@ -86,7 +93,7 @@ training:
   learning_rate: 0.00008        # Base learning rate
                               # Recommended settings:
                               #   - adam: 1e-3 to 1e-4
-                              #   - per_neuron (SequentialMLP): 1.0 (or 0.01 for D3)
+                              #   - per_neuron (SequentialMLP): 1.0 (or 0.01 for dihedral)
                               #   - hybrid: see scaling_factor
 
   betas:

@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from gagf.rnns.model import QuadraticRNN, SequentialMLP
-from gagf.rnns.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
+from src.model import QuadraticRNN, SequentialMLP
+from src.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
 
 
 class TestPerNeuronScaledSGD:
