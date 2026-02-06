@@ -18,7 +18,7 @@ class PerNeuronScaledSGD(torch.optim.Optimizer):
         - theta_i = (W_in[i, :], W_out[:, i])
         - degree = k+1 (activation is x^k, one more layer for W_out = x^(k+1))
 
-    2. TwoLayerNet (from group_agf.binary_action_learning.models):
+    2. TwoLayerNet (from src.model):
         - theta_i = (U[i,:], V[i,:], W[i,:])
         - degree = k (default 2 for square nonlinearity)
 

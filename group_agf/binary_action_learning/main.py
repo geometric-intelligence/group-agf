@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader, TensorDataset
 
 import default_config
 import group_agf.binary_action_learning.datasets as datasets
-import group_agf.binary_action_learning.models as models
 import group_agf.binary_action_learning.plot as plot
 import group_agf.binary_action_learning.power as power
 import group_agf.binary_action_learning.train as train
+import src.model as models
 from src.optimizers import PerNeuronScaledSGD
 
 today = datetime.date.today()
