@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <b>Giovanni Luca Marchetti &middot; Daniel Kunin &middot; Adele Myers &middot; Francisco Acosta &middot; Nina Miolane</b>
+  <b>Giovanni Luca Marchetti* &middot; Daniel Kunin* &middot; Adele Myers &middot; Francisco Acosta &middot; Nina Miolane</b>
 </p>
 
 ---
