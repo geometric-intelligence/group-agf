@@ -23,9 +23,7 @@ def compute_group_fourier_coef(group, template, irrep):
     _ : np.ndarray, shape=[irrep.size, irrep.size]
         The (matrix) Fourier coefficient of template x at irrep rho.
     """
-    return sum(
-        [template[i_g] * irrep(g).conj().T for i_g, g in enumerate(group.elements)]
-    )
+    return sum([template[i_g] * irrep(g).conj().T for i_g, g in enumerate(group.elements)])
 
 
 def compute_group_fourier_transform(group, template):
@@ -81,10 +79,7 @@ def compute_group_inverse_fourier_element(group, fourier_transform, g):
         / group.order()
         * sum(
             [
-                irrep.size
-                * np.trace(
-                    irrep(g) @ fourier_transform[i]
-                ) 
+                irrep.size * np.trace(irrep(g) @ fourier_transform[i])
                 for i, irrep in enumerate(irreps)
             ]
         )
@@ -109,10 +104,7 @@ def compute_group_inverse_fourier_transform(group, fourier_coefs):
         The inverse Fourier transform: a signal over the group.
     """
     return np.array(
-        [
-            compute_group_inverse_fourier_element(group, fourier_coefs, g)
-            for g in group.elements
-        ]
+        [compute_group_inverse_fourier_element(group, fourier_coefs, g) for g in group.elements]
     )
 
 
@@ -141,8 +133,6 @@ def group_power_spectrum(group, template):
     power_spectrum = np.zeros(len(irreps))
     for i, irrep in enumerate(irreps):
         fourier_coef = compute_group_fourier_coef(group, template, irrep)
-        power_spectrum[i] = irrep.size * np.trace(
-            fourier_coef.conj().T @ fourier_coef
-        ) 
+        power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
     power_spectrum = power_spectrum / group.order()
     return np.array(power_spectrum)

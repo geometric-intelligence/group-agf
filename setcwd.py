@@ -39,7 +39,3 @@ def get_root_dir():
     return subprocess.check_output(
         ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
     ).strip()
-    
-
-
-

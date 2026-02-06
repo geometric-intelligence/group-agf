@@ -40,4 +40,3 @@ experiments:
       training:
         optimizer: 'hybrid'
         scaling_factor: -4
-

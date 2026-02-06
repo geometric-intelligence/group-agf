@@ -1,6 +1,7 @@
+import collections
+
 import matplotlib.pyplot as plt
 import numpy as np
-import collections
 import torch
 
 import group_agf.binary_action_learning.power as power
@@ -8,9 +9,7 @@ import group_agf.binary_action_learning.power as power
 FONT_SIZES = {"title": 30, "axes_label": 30, "tick_label": 30, "legend": 15}
 
 
-def plot_loss_curve(
-    loss_history, template_power, save_path=None, show=False, freq_colors=None
-):
+def plot_loss_curve(loss_history, template_power, save_path=None, show=False, freq_colors=None):
     """Plot loss curve over epochs.
 
     Parameters
@@ -24,7 +23,7 @@ def plot_loss_curve(
     show : bool, optional
         Whether to display the plot.
     freq_colors : list of str, optional
-        List of colors (in format "C0, C1, etc.") to use for different frequency intervals. 
+        List of colors (in format "C0, C1, etc.") to use for different frequency intervals.
         If None, a single color is used for the entire loss curve.
     """
     fig = plt.figure(figsize=(6, 6))
@@ -59,9 +58,7 @@ def plot_loss_curve(
                 grouped_epochs[-1].append(epoch)
                 grouped_losses[-1].append(loss)
 
-        print(
-            f"Freq colors: {freq_colors}, number of alpha intervals: {num_alpha_intervals}"
-        )
+        print(f"Freq colors: {freq_colors}, number of alpha intervals: {num_alpha_intervals}")
         for ai in range(num_alpha_intervals + 1):
             color = freq_colors[ai] if ai < len(freq_colors) else freq_colors[-1]
             if ai < num_alpha_intervals:
@@ -148,21 +145,17 @@ def plot_training_power_over_time(
     show : bool, optional
         Whether to display the plot.
     return_freq_colors : bool, optional
-        Whether to return the frequency colors used in the plot 
+        Whether to return the frequency colors used in the plot
         (to optionally coordinate with loss curve).
     """
     if group_name == "cnxcn":
         escnn_group = None
         row_freqs, column_freqs = (
-                template_power_object.x_freqs,
-                template_power_object.y_freqs,
-            )
+            template_power_object.x_freqs,
+            template_power_object.y_freqs,
+        )
         freq = np.array(
-            [
-                (row_freq, column_freq)
-                for row_freq in row_freqs
-                for column_freq in column_freqs
-            ]
+            [(row_freq, column_freq) for row_freq in row_freqs for column_freq in column_freqs]
         )
     elif group_name == "cn":
         escnn_group = None
@@ -175,7 +168,6 @@ def plot_training_power_over_time(
     template_power = np.where(template_power < 1e-20, 0, template_power)
     flattened_template_power = template_power.flatten()
 
-    
     power_idx = np.argsort(flattened_template_power)[-5:][::-1]
     model_powers_over_time, steps = power.model_power_over_time(
         group_name=group_name,
@@ -184,7 +176,7 @@ def plot_training_power_over_time(
         param_history=param_history,
         model_inputs=X_tensor,
     )
-        
+
     fig = plt.figure(figsize=(6, 7))
 
     for i in power_idx:
@@ -281,7 +273,7 @@ def plot_neuron_weights(
         Path to save the plot. If None, the plot is not saved.
     show : bool, optional
         If True, display the plot window.
-    """        
+    """
     # Get the last linear layer's weights
     last_layer = None
     modules = list(model.modules())
@@ -299,7 +291,6 @@ def plot_neuron_weights(
             raise ValueError(
                 "No suitable weights found in model (neither nn.Linear nor custom nn.Parameter 'U')."
             )
-
 
     # Select neurons
     if neuron_indices is None:
@@ -323,7 +314,7 @@ def plot_neuron_weights(
             raise ValueError(
                 f"Expected weight size group_size={config['group_size']}, got {weights.shape[0]}"
             )
-        if config["group_name"] is "cnxcn":  # 2D irreps
+        if config["group_name"] == "cnxcn":  # 2D irreps
             img_len = int(np.sqrt(config["group_size"]))
             w_img = w.reshape(img_len, img_len)
             axs[i].imshow(w_img, cmap="viridis")
@@ -436,9 +427,7 @@ def plot_model_outputs(
                 n_samples, 4, figsize=(15, 3 * n_samples), sharey=True, squeeze=False
             )
 
-            for row, (x_item, output_item, y_item) in enumerate(
-                zip(x_np, output_np, y_np)
-            ):
+            for row, (x_item, output_item, y_item) in enumerate(zip(x_np, output_np, y_np)):
                 # Flatten and squeeze to expected shapes
                 x_item = np.squeeze(x_item)
                 y_item = np.squeeze(y_item)
@@ -454,14 +443,10 @@ def plot_model_outputs(
                 )
                 axs[row, 1].set_title("Input 2")
 
-                axs[row, 2].imshow(
-                    output_item.reshape(image_size, image_size), cmap="viridis"
-                )
+                axs[row, 2].imshow(output_item.reshape(image_size, image_size), cmap="viridis")
                 axs[row, 2].set_title("Output")
 
-                axs[row, 3].imshow(
-                    y_item.reshape(image_size, image_size), cmap="viridis"
-                )
+                axs[row, 3].imshow(y_item.reshape(image_size, image_size), cmap="viridis")
                 axs[row, 3].set_title("Target")
                 for col in range(4):
                     axs[row, col].axis("off")
@@ -534,13 +519,9 @@ def plot_irreps(group, show=False):
 
         if matrices.ndim == 1 or (matrices.ndim == 2 and matrices.shape[1] == 1):
             # 1D irrep: plot as real line (vs. group element index)
-            axs[i].plot(
-                range(len(group_elements)), matrices.real, marker="o", label="Re"
-            )
+            axs[i].plot(range(len(group_elements)), matrices.real, marker="o", label="Re")
             if np.any(np.abs(matrices.imag) > 1e-10):
-                axs[i].plot(
-                    range(len(group_elements)), matrices.imag, marker="x", label="Im"
-                )
+                axs[i].plot(range(len(group_elements)), matrices.imag, marker="x", label="Im")
             axs[i].set_title(f"Irrep {i}: {str(irrep)} (dim=1)")
             axs[i].set_xlabel("Group element idx")
             axs[i].set_ylabel("Irrep value")
@@ -549,9 +530,7 @@ def plot_irreps(group, show=False):
             d = matrices.shape[1]
             num_group_elements = len(group_elements)
             num_irrep_entries = d * d
-            irrep_matrix_entries = matrices.real.reshape(
-                num_group_elements, num_irrep_entries
-            )
+            irrep_matrix_entries = matrices.real.reshape(num_group_elements, num_irrep_entries)
             im = axs[i].imshow(irrep_matrix_entries, aspect="auto", cmap="viridis")
             axs[i].set_title(f"Irrep {i}: {str(irrep)} (size={d}x{d})")
             axs[i].set_xlabel("Flattened Irreps")

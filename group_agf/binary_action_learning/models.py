@@ -12,7 +12,7 @@ class TwoLayerNet(nn.Module):
         init_scale=1.0,
         output_scale=1.0,
     ):
-        super(TwoLayerNet, self).__init__()
+        super().__init__()
         self.group_size = group_size
         if hidden_size is None:
             # hidden_size = 6 * group_size
@@ -34,9 +34,7 @@ class TwoLayerNet(nn.Module):
             / np.sqrt(2 * self.group_size)
         )
         self.W = nn.Parameter(
-            self.init_scale
-            * torch.randn(hidden_size, self.group_size)
-            / np.sqrt(self.group_size)
+            self.init_scale * torch.randn(hidden_size, self.group_size) / np.sqrt(self.group_size)
         )  # Second layer weights
 
     def forward(self, x):

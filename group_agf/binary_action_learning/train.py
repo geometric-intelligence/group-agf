@@ -1,5 +1,6 @@
 import os
 import pickle
+
 import torch
 
 
@@ -11,12 +12,8 @@ def test_accuracy(model, dataloader):
         for batch_idx, (inputs, labels) in enumerate(dataloader):
             inputs = inputs.view(inputs.shape[0], -1)  # Flatten input for FC layers
             outputs = model(inputs)
-            _, predicted = torch.max(
-                outputs, 1
-            )  # Get the index of the largest value (class)
-            _, true_labels = torch.max(
-                labels, 1
-            )  # Get the true class from the one-hot encoding
+            _, predicted = torch.max(outputs, 1)  # Get the index of the largest value (class)
+            _, true_labels = torch.max(labels, 1)  # Get the true class from the one-hot encoding
             correct += (predicted == true_labels).sum().item()
             total += labels.size(0)
 
@@ -50,6 +47,7 @@ def save_param_history(param_history_path, param_history):
         f"Parameter history saved to {param_history_path} "
         f"(size: {os.path.getsize(param_history_path) / (1024**3):.2f} GB)"
     )
+
 
 def load_param_history(param_history_path):
     """Load param_history separately for analysis (can be very large)."""
@@ -103,9 +101,7 @@ def save_checkpoint(
         if "No space left on device" in str(e) or "unexpected pos" in str(e):
             print(f"ERROR: Failed to save checkpoint due to disk space issues: {e}")
             print(f"Checkpoint path: {checkpoint_path}")
-            print(
-                "Consider cleaning up old checkpoints or using a different save location."
-            )
+            print("Consider cleaning up old checkpoints or using a different save location.")
             raise
         else:
             raise
@@ -118,9 +114,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, map_location="cpu"):
         checkpoint = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
     except Exception as e:
         # Fallback to pickle for old checkpoints
-        print(
-            f"Warning: torch.load failed, trying pickle.load for backward compatibility: {e}"
-        )
+        print(f"Warning: torch.load failed, trying pickle.load for backward compatibility: {e}")
 
         with open(checkpoint_path, "rb") as f:
             checkpoint = pickle.load(f)
@@ -130,10 +124,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, map_location="cpu"):
         # For PerNeuronScaledSGD, we need to restore the model reference in param_groups
         optimizer_state = checkpoint["optimizer_state_dict"]
         # Restore model reference in param_groups if it was removed during save
-        if (
-            "param_groups" in optimizer_state
-            and len(optimizer_state["param_groups"]) > 0
-        ):
+        if "param_groups" in optimizer_state and len(optimizer_state["param_groups"]) > 0:
             # Check if optimizer expects a model reference (e.g., PerNeuronScaledSGD)
             if hasattr(optimizer, "param_groups") and len(optimizer.param_groups) > 0:
                 if "model" in optimizer.param_groups[0]:
@@ -145,9 +136,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, map_location="cpu"):
         except Exception as e:
             print(f"Warning: Could not fully load optimizer state: {e}")
             print("Optimizer will continue with current configuration.")
-    print(
-        f"Loaded checkpoint from {checkpoint_path} (epoch {checkpoint.get('epoch', -1)})"
-    )
+    print(f"Loaded checkpoint from {checkpoint_path} (epoch {checkpoint.get('epoch', -1)})")
     return checkpoint
 
 
@@ -195,17 +184,21 @@ def train(
     ):
         print(f"Resuming from checkpoint at {config['checkpoint_path']}.")
         checkpoint = load_checkpoint(config["checkpoint_path"], model, optimizer)
-        param_history = load_param_history(config["checkpoint_path"].replace(".pt", "_param_history.pt"))
+        param_history = load_param_history(
+            config["checkpoint_path"].replace(".pt", "_param_history.pt")
+        )
         start_epoch = checkpoint.get("epoch", 0) + 1
         loss_history = checkpoint.get("loss_history", [])
         accuracy_history = checkpoint.get("accuracy_history", [])
         print(f"Resuming training from epoch {start_epoch}")
     else:
-        print(f"Starting training from scratch (no checkpoint to resume). Checkpoint path was: {config['checkpoint_path']}")
+        print(
+            f"Starting training from scratch (no checkpoint to resume). Checkpoint path was: {config['checkpoint_path']}"
+        )
 
     for epoch in range(start_epoch, config["epochs"]):
         running_loss = 0.0
-        for (inputs, labels) in dataloader:
+        for inputs, labels in dataloader:
             inputs = inputs.view(inputs.shape[0], -1)  # Flatten input for FC layers
 
             optimizer.zero_grad()
@@ -246,12 +239,8 @@ def train(
             )
 
         # Save checkpoint if at checkpoint interval or at the end of the training
-        if (epoch + 1) % config["checkpoint_interval"] == 0 or (epoch + 1) == config[
-            "epochs"
-        ]:
-            checkpoint_path = get_model_save_path(
-                config, checkpoint_epoch=(epoch + 1)
-            )
+        if (epoch + 1) % config["checkpoint_interval"] == 0 or (epoch + 1) == config["epochs"]:
+            checkpoint_path = get_model_save_path(config, checkpoint_epoch=(epoch + 1))
             # Only save param_history in the final checkpoint to save disk space
             # (param_history can be very large as it stores all parameters for every epoch)
             is_final_checkpoint = (epoch + 1) == config["epochs"]
@@ -265,7 +254,7 @@ def train(
                 param_history,
                 save_param_history=is_final_checkpoint,
             )
-            
+
             # Save param_history separately only at the end of training (it can be very large)
             if (epoch + 1) == config["epochs"]:
                 param_history_path = checkpoint_path.replace(".pt", "_param_history.pt")

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+
 import group_agf.binary_action_learning.group_fourier_transform as gft
 
 
@@ -24,26 +25,31 @@ class CyclicPower:
             self.group_size = len(template)
             self.freqs, self.power = self.cn_power_spectrum(return_freqs=True)
 
-
     def cn_power_spectrum(self, return_freqs=False):
         """Compute the 1D power spectrum of 1D FT."""
         num_coefficients = (self.group_size // 2) + 1
-        
+
         # Perform FFT and calculate power spectrum
-        ft = np.fft.fft(self.template) # Could consider using np.fft.rfft which is designed for real valued input.
-        power = np.abs(ft[:num_coefficients])**2 / self.group_size
-        
+        ft = np.fft.fft(
+            self.template
+        )  # Could consider using np.fft.rfft which is designed for real valued input.
+        power = np.abs(ft[:num_coefficients]) ** 2 / self.group_size
+
         # Double power for frequencies strictly between 0 and Nyquist (Nyquist is not doubled if p is even)
-        if self.group_size % 2 == 0:  # group size is even, Nyquist frequency at index num_coefficients - 1
-            power[1:num_coefficients - 1] *= 2
+        if (
+            self.group_size % 2 == 0
+        ):  # group size is even, Nyquist frequency at index num_coefficients - 1
+            power[1 : num_coefficients - 1] *= 2
         else:  # p is odd, no Nyquist frequency
             power[1:] *= 2
 
         # Confirm the power sum approximates the squared norm of points
         total_power = np.sum(power)
-        norm_squared = np.linalg.norm(self.template)**2
+        norm_squared = np.linalg.norm(self.template) ** 2
         if not np.isclose(total_power, norm_squared, rtol=1e-3):
-            print(f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}")
+            print(
+                f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}"
+            )
 
         if return_freqs:
             freqs = np.fft.rfftfreq(self.group_size)
@@ -133,9 +139,7 @@ class CyclicPower:
 
         nonzero_power_mask = power > 1e-20
         power = power[nonzero_power_mask]
-        i_power_descending_order = np.argsort(power)[
-            ::-1
-        ] 
+        i_power_descending_order = np.argsort(power)[::-1]
         power = power[i_power_descending_order]
 
         plateau_predictions = [np.sum(power[k:]) for k in range(len(power))]
@@ -185,15 +189,9 @@ class GroupPower:
 
         power_spectrum = np.zeros(len(irreps))
         for i, irrep in enumerate(irreps):
-            fourier_coef = gft.compute_group_fourier_coef(
-                self.group, self.template, irrep
-            )
-            power_spectrum[i] = irrep.size * np.trace(
-                fourier_coef.conj().T @ fourier_coef
-            )  
-        power_spectrum = (
-            power_spectrum / self.group.order()
-        ) 
+            fourier_coef = gft.compute_group_fourier_coef(self.group, self.template, irrep)
+            power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
+        power_spectrum = power_spectrum / self.group.order()
 
         return np.array(power_spectrum)
 
@@ -267,9 +265,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     X_tensor = model_inputs[
         :num_inputs_to_compute_power
     ]  # Added by Nina to speed up computation with octahedral.
-    steps = np.unique(
-        np.logspace(1, np.log10(len(param_history) - 1), num_points, dtype=int)
-    )
+    steps = np.unique(np.logspace(1, np.log10(len(param_history) - 1), num_points, dtype=int))
     steps = steps[steps > 50]
     steps = np.hstack([np.linspace(1, 50, 5).astype(int), steps])
     powers_over_time = np.zeros([len(steps), template_power_length])
@@ -283,9 +279,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
             print("outputs dtype", outputs.dtype)
             outputs_arr = outputs.detach().cpu().numpy().reshape(reshape_dims)
 
-            print(
-                "Computing power at step", step, "with output shape", outputs_arr.shape
-            )
+            print("Computing power at step", step, "with output shape", outputs_arr.shape)
 
             powers = []
             for out in outputs_arr:
@@ -302,7 +296,7 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
                 powers.append(one_power_flat)
             powers = np.array(powers)
 
-            average_power = np.mean(powers, axis=0) # shape: (num_samples, template_power_length)
+            average_power = np.mean(powers, axis=0)  # shape: (num_samples, template_power_length)
             powers_over_time[i_step, :] = average_power
 
     powers_over_time = np.array(powers_over_time)  # shape: (steps, num_freqs)

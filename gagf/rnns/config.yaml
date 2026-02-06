@@ -17,27 +17,27 @@
 data:
   # Dimension: 1 for C_p (cyclic group), 2 for C_p1 x C_p2 (product group), 'D3' for Dihedral D3
   dimension: D3  # 1 | 2 | 'D3'
-  
+
   # Group Parameters
   # For dimension=1: only 'p' is used
   # For dimension=2: 'p1' and 'p2' are used
   # For dimension='D3': none of p, p1, p2 are used
   p: 10        # Cyclic group dimension (1D only)
-  
+
   p1: 4 #10       # Height/rows dimension (2D only)
   p2: 4        # Width/cols dimension (2D only)
-  
+
   k: 5          # Sequence length
   batch_size: 1000
   seed: 5
-  
+
   # Template Generation
   # For dimension=1,2: 'mnist' | 'fourier' | 'gaussian' | 'onehot'
   # For dimension='D3': 'onehot' | 'custom_fourier'
   template_type: onehot
   mnist_label: 4            # MNIST digit (0-9), only if template_type='mnist'
   n_freqs: 1               # Number of Fourier modes, only if template_type='fourier'
-  
+
   # D3 custom_fourier template: powers for each irrep's Fourier coefficient
   # D3 has 3 irreps with dimensions [1, 1, 2], so powers should have 3 values
   # Large ratio between powers = clearer staircase steps
@@ -45,7 +45,7 @@ data:
   - 0.0
   - 2000.0
   - 400.0
-  
+
   # Dataset Mode (offline training only)
   mode: exhaustive             # 'sampled' | 'exhaustive'
   num_samples: 1000
@@ -54,16 +54,16 @@ data:
 # -------------------
 model:
   model_type: SequentialMLP  # 'QuadraticRNN' | 'SequentialMLP'
-  
+
   hidden_dim: 600              # Hidden layer size
                               # Note: SequentialMLP may need larger values (e.g., 600)
-  
+
   init_scale: 4.5e-3          # Weight initialization scale
                               # Larger k may need larger init_scale
-  
+
   return_all_outputs: false   # true = seq-to-seq guidance (for QuadraticRNN only)
-                              # false = seq-to-one (final output only) 
-  
+                              # false = seq-to-one (final output only)
+
   transform_type: quadratic # 'quadratic' | 'multiplicative'
                               # Only used for QuadraticRNN
 
@@ -71,42 +71,42 @@ model:
 # ----------------------
 training:
   mode: offline              # 'online' | 'offline'
-  
+
   # Steps/Epochs
   epochs: 10000                  # Used when mode='offline'
   num_steps: 100                # Used when mode='online'
-  
+
   # Optimizer
   optimizer: adam       # 'auto' | 'adam' | 'hybrid' | 'per_neuron'
                               # 'auto' selects optimizer based on model:
                               #   - SequentialMLP → 'per_neuron' (recommended)
                               #   - QuadraticRNN → 'adam'
                               # 'hybrid' is QuadraticRNN-specific only
-  
+
   learning_rate: 0.00008        # Base learning rate
                               # Recommended settings:
                               #   - adam: 1e-3 to 1e-4
                               #   - per_neuron (SequentialMLP): 1.0 (or 0.01 for D3)
                               #   - hybrid: see scaling_factor
-  
+
   betas:
   - 0.9
   - 0.999         # Adam/hybrid beta parameters
   weight_decay: 0.0
-  
+
   # Homogeneity-based scaling parameters
   scaling_factor: -3          # For 'hybrid' optimizer only (QuadraticRNN)
   degree: null                # For 'per_neuron' optimizer: degree of homogeneity
                               # If null (default), auto-inferred from model:
                               #   - SequentialMLP: uses k+1 (k = sequence length)
                               #   - Other models: defaults to 2
-  
+
   # Training Dynamics
   grad_clip: 0.1
   verbose_interval: 1000
   save_param_interval: 10      # Save params every N steps/epochs
                               # Set to null to only save initial & final (memory efficient for sweeps)
-  
+
   # Early Stopping (optional)
   # -------------------------
   # Stop training early when loss reduction reaches a threshold.

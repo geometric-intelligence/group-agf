@@ -1,15 +1,14 @@
 """Tests for gagf.rnns.datamodule module."""
 
-import pytest
 import numpy as np
-import torch
+import pytest
 
 from gagf.rnns.datamodule import (
+    OnlineModularAdditionDataset1D,
+    OnlineModularAdditionDataset2D,
     build_modular_addition_sequence_dataset_1d,
     build_modular_addition_sequence_dataset_2d,
     build_modular_addition_sequence_dataset_D3,
-    OnlineModularAdditionDataset1D,
-    OnlineModularAdditionDataset2D,
 )
 
 
@@ -28,11 +27,11 @@ class TestBuildModularAdditionSequenceDataset1D:
         p = len(template_1d)
         k = 3
         num_samples = 100
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_1d(
             p=p, template=template_1d, k=k, mode="sampled", num_samples=num_samples
         )
-        
+
         assert X.shape == (num_samples, k, p), f"X shape mismatch: {X.shape}"
         assert Y.shape == (num_samples, p), f"Y shape mismatch: {Y.shape}"
         assert sequence.shape == (num_samples, k), f"sequence shape mismatch: {sequence.shape}"
@@ -41,12 +40,12 @@ class TestBuildModularAdditionSequenceDataset1D:
         """Test output shapes in exhaustive mode."""
         p = len(template_1d)
         k = 2
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_1d(
             p=p, template=template_1d, k=k, mode="exhaustive"
         )
-        
-        expected_n = p ** k
+
+        expected_n = p**k
         assert X.shape == (expected_n, k, p)
         assert Y.shape == (expected_n, p)
         assert sequence.shape == (expected_n, k)
@@ -56,12 +55,16 @@ class TestBuildModularAdditionSequenceDataset1D:
         p = len(template_1d)
         k = 4
         num_samples = 50
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_1d(
-            p=p, template=template_1d, k=k, mode="sampled",
-            num_samples=num_samples, return_all_outputs=True
+            p=p,
+            template=template_1d,
+            k=k,
+            mode="sampled",
+            num_samples=num_samples,
+            return_all_outputs=True,
         )
-        
+
         # Y should have k-1 outputs (one after each pair of tokens)
         assert X.shape == (num_samples, k, p)
         assert Y.shape == (num_samples, k - 1, p)
@@ -71,11 +74,11 @@ class TestBuildModularAdditionSequenceDataset1D:
         """Test that X values are rolled versions of template."""
         p = len(template_1d)
         k = 2
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_1d(
             p=p, template=template_1d, k=k, mode="exhaustive"
         )
-        
+
         # Check first sample
         shift_0 = int(sequence[0, 0])
         expected_x0 = np.roll(template_1d, shift_0)
@@ -97,27 +100,30 @@ class TestBuildModularAdditionSequenceDataset2D:
         p1, p2 = template_2d.shape
         k = 3
         num_samples = 100
-        
+
         X, Y, sequence_xy = build_modular_addition_sequence_dataset_2d(
-            p1=p1, p2=p2, template=template_2d, k=k,
-            mode="sampled", num_samples=num_samples
+            p1=p1, p2=p2, template=template_2d, k=k, mode="sampled", num_samples=num_samples
         )
-        
+
         p_flat = p1 * p2
         assert X.shape == (num_samples, k, p_flat), f"X shape mismatch: {X.shape}"
         assert Y.shape == (num_samples, p_flat), f"Y shape mismatch: {Y.shape}"
-        assert sequence_xy.shape == (num_samples, k, 2), f"sequence_xy shape mismatch: {sequence_xy.shape}"
+        assert sequence_xy.shape == (
+            num_samples,
+            k,
+            2,
+        ), f"sequence_xy shape mismatch: {sequence_xy.shape}"
 
     def test_output_shape_exhaustive(self, template_2d):
         """Test output shapes in exhaustive mode."""
         p1, p2 = 3, 3  # Use small dimensions for exhaustive
         template = np.random.randn(p1, p2).astype(np.float32)
         k = 2
-        
+
         X, Y, sequence_xy = build_modular_addition_sequence_dataset_2d(
             p1=p1, p2=p2, template=template, k=k, mode="exhaustive"
         )
-        
+
         expected_n = (p1 * p2) ** k
         p_flat = p1 * p2
         assert X.shape == (expected_n, k, p_flat)
@@ -140,11 +146,11 @@ class TestBuildModularAdditionSequenceDatasetD3:
         k = 3
         num_samples = 100
         group_order = len(template_d3)
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_D3(
             template=template_d3, k=k, mode="sampled", num_samples=num_samples
         )
-        
+
         assert X.shape == (num_samples, k, group_order), f"X shape mismatch: {X.shape}"
         assert Y.shape == (num_samples, group_order), f"Y shape mismatch: {Y.shape}"
         assert sequence.shape == (num_samples, k), f"sequence shape mismatch: {sequence.shape}"
@@ -154,12 +160,12 @@ class TestBuildModularAdditionSequenceDatasetD3:
         k = 2
         group_order = len(template_d3)
         n_elements = group_order  # D3 has 6 elements
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_D3(
             template=template_d3, k=k, mode="exhaustive"
         )
-        
-        expected_n = n_elements ** k
+
+        expected_n = n_elements**k
         assert X.shape == (expected_n, k, group_order)
         assert Y.shape == (expected_n, group_order)
         assert sequence.shape == (expected_n, k)
@@ -169,12 +175,15 @@ class TestBuildModularAdditionSequenceDatasetD3:
         k = 4
         num_samples = 50
         group_order = len(template_d3)
-        
+
         X, Y, sequence = build_modular_addition_sequence_dataset_D3(
-            template=template_d3, k=k, mode="sampled",
-            num_samples=num_samples, return_all_outputs=True
+            template=template_d3,
+            k=k,
+            mode="sampled",
+            num_samples=num_samples,
+            return_all_outputs=True,
         )
-        
+
         assert X.shape == (num_samples, k, group_order)
         assert Y.shape == (num_samples, k - 1, group_order)
         assert sequence.shape == (num_samples, k)
@@ -189,15 +198,15 @@ class TestOnlineModularAdditionDataset1D:
         k = 3
         batch_size = 16
         template = np.random.randn(p).astype(np.float32)
-        
+
         dataset = OnlineModularAdditionDataset1D(
             p=p, template=template, k=k, batch_size=batch_size, device="cpu"
         )
-        
+
         # Get first batch
         iterator = iter(dataset)
         X, Y = next(iterator)
-        
+
         assert X.shape == (batch_size, k, p), f"X shape mismatch: {X.shape}"
         assert Y.shape == (batch_size, p), f"Y shape mismatch: {Y.shape}"
 
@@ -207,15 +216,19 @@ class TestOnlineModularAdditionDataset1D:
         k = 4
         batch_size = 16
         template = np.random.randn(p).astype(np.float32)
-        
+
         dataset = OnlineModularAdditionDataset1D(
-            p=p, template=template, k=k, batch_size=batch_size,
-            device="cpu", return_all_outputs=True
+            p=p,
+            template=template,
+            k=k,
+            batch_size=batch_size,
+            device="cpu",
+            return_all_outputs=True,
         )
-        
+
         iterator = iter(dataset)
         X, Y = next(iterator)
-        
+
         assert X.shape == (batch_size, k, p)
         assert Y.shape == (batch_size, k - 1, p)
 
@@ -229,15 +242,14 @@ class TestOnlineModularAdditionDataset2D:
         k = 3
         batch_size = 16
         template = np.random.randn(p1, p2).astype(np.float32)
-        
+
         dataset = OnlineModularAdditionDataset2D(
-            p1=p1, p2=p2, template=template, k=k,
-            batch_size=batch_size, device="cpu"
+            p1=p1, p2=p2, template=template, k=k, batch_size=batch_size, device="cpu"
         )
-        
+
         iterator = iter(dataset)
         X, Y = next(iterator)
-        
+
         p_flat = p1 * p2
         assert X.shape == (batch_size, k, p_flat), f"X shape mismatch: {X.shape}"
         assert Y.shape == (batch_size, p_flat), f"Y shape mismatch: {Y.shape}"
@@ -248,15 +260,20 @@ class TestOnlineModularAdditionDataset2D:
         k = 4
         batch_size = 16
         template = np.random.randn(p1, p2).astype(np.float32)
-        
+
         dataset = OnlineModularAdditionDataset2D(
-            p1=p1, p2=p2, template=template, k=k,
-            batch_size=batch_size, device="cpu", return_all_outputs=True
+            p1=p1,
+            p2=p2,
+            template=template,
+            k=k,
+            batch_size=batch_size,
+            device="cpu",
+            return_all_outputs=True,
         )
-        
+
         iterator = iter(dataset)
         X, Y = next(iterator)
-        
+
         p_flat = p1 * p2
         assert X.shape == (batch_size, k, p_flat)
         assert Y.shape == (batch_size, k - 1, p_flat)
