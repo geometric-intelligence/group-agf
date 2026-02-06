@@ -19,7 +19,7 @@ sudo apt install -y gfortran
 
 # Create and activate the conda environment
 conda env create -f conda.yaml
-conda activate gagf
+conda activate group-agf
 
 # Install all Python dependencies (pinned versions from poetry.lock)
 poetry install

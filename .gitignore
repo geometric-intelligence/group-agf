@@ -2,16 +2,12 @@
 __pycache__/
 *.py[codz]
 *$py.class
-poetry.lock
 loss-without-lines.pdf
 training_history.pkl
 fourier_power_only.pdf
 notebooks/figs/
 notebooks/figs_temp/
-gagf/fourier_power_only.png
 notebooks/saved_models/
-gagf/group_learning/wandb/*
-gagf/group_learning/saved_datasets/
 notebooks/checkpoint*
 notebooks/W-weights.pdf
 notebooks/predictions.pdf
@@ -225,4 +221,3 @@ __marimo__/
 
 #wandb
 wandb/
-gagf/group_learning/wandb

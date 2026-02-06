@@ -2,7 +2,7 @@
 # Explores different group sizes (p), hidden dimensions, and sequence lengths
 # Total: 20 × 20 × 3 = 1200 experiments
 
-base_config: "gagf/rnns/config.yaml"
+base_config: "src/config.yaml"
 n_seeds: 1
 
 # Fixed parameters applied to all experiments

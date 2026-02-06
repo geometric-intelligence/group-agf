@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "gagf"
+name = "group-agf"
 version = "0.1.0"
 description = "Learning"
 authors = ["John Smith <john@example.com>"]

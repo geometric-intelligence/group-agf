@@ -1,7 +1,7 @@
 # Learning rate sweep configuration
 # Compares different learning rates and optimizers
 
-base_config: "gagf/rnns/config.yaml"
+base_config: "src/config.yaml"
 n_seeds: 5
 
 experiments:
