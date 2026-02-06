@@ -50,14 +50,14 @@ def mock_all_plots():
     with (
         patch("src.main.produce_plots_1d") as mock_1d,
         patch("src.main.produce_plots_2d") as mock_2d,
-        patch("src.main.produce_plots_D3") as mock_d3,
+        patch("src.main.produce_plots_group") as mock_group,
         patch("matplotlib.pyplot.savefig") as mock_savefig,
         patch("matplotlib.pyplot.close") as mock_close,
     ):
         yield {
             "produce_plots_1d": mock_1d,
             "produce_plots_2d": mock_2d,
-            "produce_plots_D3": mock_d3,
+            "produce_plots_group": mock_group,
             "savefig": mock_savefig,
             "close": mock_close,
         }
@@ -122,10 +122,10 @@ def test_main_c4x4(temp_run_dir, mock_all_plots):
 def test_main_d3(temp_run_dir, mock_savefig):
     """Test main() with D3 dihedral group config.
 
-    Full integration test: does NOT mock produce_plots_D3 so the entire
+    Full integration test: does NOT mock produce_plots_group so the entire
     plotting pipeline (TwoLayerNet eval data via group_dataset, power spectrum)
     is exercised. D3 (order 6) is the smallest group so this stays fast.
-    This validates the TwoLayerNet-compatible eval data path in produce_plots_D3,
+    This validates the TwoLayerNet-compatible eval data path in produce_plots_group,
     which is shared by octahedral and A5 (mocked in their tests for speed).
     """
     from src.main import load_config, train_single_run
@@ -142,7 +142,7 @@ def test_main_d3(temp_run_dir, mock_savefig):
 def test_main_octahedral(temp_run_dir, mock_all_plots):
     """Test main() with octahedral group config.
 
-    Mocks produce_plots_D3 for speed (octahedral order=24, plotting is expensive).
+    Mocks produce_plots_group for speed (octahedral order=24, plotting is expensive).
     Training + data pipeline still fully exercised.
     """
     from src.main import load_config, train_single_run
@@ -153,14 +153,14 @@ def test_main_octahedral(temp_run_dir, mock_all_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_all_plots["produce_plots_D3"].assert_called_once()
+    mock_all_plots["produce_plots_group"].assert_called_once()
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
 def test_main_a5(temp_run_dir, mock_all_plots):
     """Test main() with A5 (icosahedral) group config.
 
-    Mocks produce_plots_D3 for speed (A5 order=60, plotting is expensive).
+    Mocks produce_plots_group for speed (A5 order=60, plotting is expensive).
     Training + data pipeline still fully exercised.
     """
     from src.main import load_config, train_single_run
@@ -171,7 +171,7 @@ def test_main_a5(temp_run_dir, mock_all_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_all_plots["produce_plots_D3"].assert_called_once()
+    mock_all_plots["produce_plots_group"].assert_called_once()
 
 
 if __name__ == "__main__":

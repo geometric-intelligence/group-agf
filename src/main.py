@@ -478,7 +478,7 @@ def produce_plots_1d(
     print("\n✓ All 1D plots generated successfully!")
 
 
-def plot_model_predictions_over_time_D3(
+def plot_model_predictions_over_time_group(
     model,
     param_hist,
     X_eval,
@@ -555,23 +555,24 @@ def plot_model_predictions_over_time_D3(
     plt.close()
 
 
-def plot_power_spectrum_over_time_D3(
+def plot_power_spectrum_over_time_group(
     model,
     param_hist,
     param_save_indices,
     X_eval,
     template: np.ndarray,
-    D3,
+    group,
     k: int,
     optimizer: str,
     init_scale: float,
     save_path: str = None,
-    num_samples_for_power: int = 100,
-    num_checkpoints_to_sample: int = 50,
     group_label: str = "Group",
 ):
     """
     Plot power spectrum of model outputs vs template power spectrum over training.
+
+    Uses GroupPower from src/power.py for template power and model_power_over_time
+    for model output power over training checkpoints.
 
     Args:
         model: Trained model
@@ -579,67 +580,30 @@ def plot_power_spectrum_over_time_D3(
         param_save_indices: List mapping param_hist index to epoch number
         X_eval: Input evaluation tensor
         template: Template array (group_order,)
-        D3: escnn group object (DihedralGroup, Octahedral, Icosahedral, etc.)
+        group: escnn group object
         k: Sequence length
         optimizer: Optimizer name (e.g., 'per_neuron', 'adam')
         init_scale: Initialization scale
         save_path: Path to save the plot
-        num_samples_for_power: Number of samples to average power over
-        num_checkpoints_to_sample: Number of checkpoints to sample for the evolution plot
         group_label: Human-readable label for the group (used in plot titles)
     """
-    from src.group_fourier_transform import compute_group_fourier_coef
+    from src.power import GroupPower, model_power_over_time
 
-    group_order = D3.order()
-    irreps = D3.irreps()
+    group_name = "group"  # generic group for model_power_over_time dispatch
+    irreps = group.irreps()
     n_irreps = len(irreps)
 
-    # Compute template power spectrum
-    template_power = np.zeros(n_irreps)
-    for i, irrep in enumerate(irreps):
-        fourier_coef = compute_group_fourier_coef(D3, template, irrep)
-        template_power[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
-    template_power = template_power / group_order
+    # Compute template power spectrum using GroupPower
+    template_power_obj = GroupPower(template, group=group)
+    template_power = template_power_obj.power
 
     print(f"  Template power spectrum: {template_power}")
     print("  (These are dim^2 * diag_value^2 / |G| for each irrep)")
 
-    # Sample checkpoints uniformly for evolution plot
-    total_checkpoints = len(param_hist)
-    if total_checkpoints <= num_checkpoints_to_sample:
-        sampled_ckpt_indices = list(range(total_checkpoints))
-    else:
-        sampled_ckpt_indices = np.linspace(
-            0, total_checkpoints - 1, num_checkpoints_to_sample, dtype=int
-        ).tolist()
-
-    # Get corresponding epoch numbers
-    epoch_numbers = [param_save_indices[i] for i in sampled_ckpt_indices]
-
-    # Compute model output power at each sampled checkpoint
-    n_sampled = len(sampled_ckpt_indices)
-    model_powers = np.zeros((n_sampled, n_irreps))
-
-    X_subset = X_eval[:num_samples_for_power]
-
-    for i, ckpt_idx in enumerate(sampled_ckpt_indices):
-        model.load_state_dict(param_hist[ckpt_idx])
-        model.eval()
-
-        with torch.no_grad():
-            outputs = model(X_subset)
-            outputs_np = outputs.cpu().numpy()
-
-        # Average power over all samples
-        powers = np.zeros((len(outputs_np), n_irreps))
-        for sample_i, output in enumerate(outputs_np):
-            for irrep_i, irrep in enumerate(irreps):
-                fourier_coef = compute_group_fourier_coef(D3, output, irrep)
-                powers[sample_i, irrep_i] = irrep.size * np.trace(
-                    fourier_coef.conj().T @ fourier_coef
-                )
-        powers = powers / group_order
-        model_powers[i] = np.mean(powers, axis=0)
+    # Compute model output power over training using model_power_over_time
+    model_powers, steps = model_power_over_time(group_name, model, param_hist, X_eval, group=group)
+    # Map step indices to epoch numbers
+    epoch_numbers = [param_save_indices[min(s, len(param_save_indices) - 1)] for s in steps]
 
     # Create 3 subplots: linear, log-x, log-log
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -732,14 +696,14 @@ def plot_power_spectrum_over_time_D3(
     plt.close()
 
 
-def produce_plots_D3(
+def produce_plots_group(
     run_dir: Path,
     config: dict,
     model,
     param_hist,
     param_save_indices,
     train_loss_hist,
-    template_D3: np.ndarray,
+    template: np.ndarray,
     device: str = "cpu",
     group=None,
 ):
@@ -749,33 +713,28 @@ def produce_plots_D3(
     Args:
         run_dir: Directory to save plots
         config: Configuration dictionary
-        model: Trained model (QuadraticRNN or SequentialMLP)
+        model: Trained model
         param_hist: List of parameter snapshots
         param_save_indices: Indices where params were saved
         train_loss_hist: Training loss history
-        template_D3: 1D template array of shape (group_order,)
+        template: 1D template array of shape (group_order,)
         device: Device string ('cpu' or 'cuda')
-        group: escnn group object. If None, defaults to DihedralGroup(N=3) for backward compat.
+        group: escnn group object (required)
     """
     group_name = config["data"]["group_name"]
 
     # Build a human-readable label for plot titles
     if group_name == "dihedral":
         n = config["data"].get("group_n", 3)
-        group_label = f"D{n} (Dihedral, order {group.order() if group else 2 * n})"
+        group_label = f"D{n} (Dihedral, order {group.order()})"
     elif group_name == "octahedral":
-        group_label = f"Octahedral (order {group.order() if group else 24})"
+        group_label = f"Octahedral (order {group.order()})"
     elif group_name == "A5":
-        group_label = f"A5 / Icosahedral (order {group.order() if group else 60})"
+        group_label = f"A5 / Icosahedral (order {group.order()})"
     else:
         group_label = group_name
 
     print(f"\n=== Generating Analysis Plots ({group_label}) ===")
-
-    if group is None:
-        from escnn.group import DihedralGroup
-
-        group = DihedralGroup(N=3)
 
     group_order = group.order()
 
@@ -822,7 +781,7 @@ def produce_plots_D3(
         # TwoLayerNet expects flattened binary pair input: (N, 2*group_size)
         from src.datasets import group_dataset, move_dataset_to_device_and_flatten
 
-        X_raw, Y_raw = group_dataset(group, template_D3)
+        X_raw, Y_raw = group_dataset(group, template)
         X_eval_t, Y_eval_t, device = move_dataset_to_device_and_flatten(X_raw, Y_raw, device=device)
         # Optionally subsample for visualization
         n_eval = min(len(X_eval_t), 1000)
@@ -835,7 +794,7 @@ def produce_plots_D3(
         from src.datamodule import build_modular_addition_sequence_dataset_generic
 
         X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_generic(
-            template_D3,
+            template,
             k,
             group=group,
             mode="sampled",
@@ -883,7 +842,7 @@ def produce_plots_D3(
 
     ### ----- PLOT MODEL PREDICTIONS OVER TIME ----- ###
     print("\nPlotting model predictions over time...")
-    plot_model_predictions_over_time_D3(
+    plot_model_predictions_over_time_group(
         model=model,
         param_hist=param_hist,
         X_eval=X_eval_t,
@@ -899,13 +858,13 @@ def produce_plots_D3(
     print("\nPlotting power spectrum over time...")
     optimizer = config["training"]["optimizer"]
     init_scale = config["model"]["init_scale"]
-    plot_power_spectrum_over_time_D3(
+    plot_power_spectrum_over_time_group(
         model=model,
         param_hist=param_hist,
         param_save_indices=param_save_indices,
         X_eval=X_eval_t,
-        template=template_D3,
-        D3=group,
+        template=template,
+        group=group,
         k=k,
         optimizer=optimizer,
         init_scale=init_scale,
@@ -1008,119 +967,45 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         fig, ax = plot_2d_signal(template_2d, title="Template", cmap="gray")
         fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
         print("  ✓ Saved template")
-    elif group_name == "dihedral":
-        from escnn.group import DihedralGroup
-
+    elif group_name in ("dihedral", "octahedral", "A5"):
         from src.group_fourier_transform import (
             compute_group_inverse_fourier_transform,
         )
 
-        # Use group_n from config (default to 3 for D3)
-        n = group_n if group_n is not None else 3
-        dihedral_group = DihedralGroup(N=n)
-        group_order = dihedral_group.order()  # = 2*n
-        p_flat = group_order  # For dihedral, the "p" is the group order
+        # Construct the escnn group object
+        if group_name == "dihedral":
+            from escnn.group import DihedralGroup
 
-        print(f"Dihedral D{n} group order: {group_order}")
-        print(
-            f"Dihedral D{n} irreps: {[irrep.size for irrep in dihedral_group.irreps()]} (dimensions)"
-        )
+            n = group_n if group_n is not None else 3
+            group = DihedralGroup(N=n)
+            group_label = f"Dihedral D{n}"
+        elif group_name == "octahedral":
+            from escnn.group import Octahedral
 
-        if template_type == "onehot":
-            # Generate one-hot template of length group_order
-            # This creates a template with a spike at position 1
-            template_dihedral = np.zeros(group_order, dtype=np.float32)
-            template_dihedral[1] = 10.0
-            template_dihedral = template_dihedral - np.mean(template_dihedral)
-            print("Template type: onehot")
+            group = Octahedral()
+            group_label = "Octahedral"
+        elif group_name == "A5":
+            from escnn.group import Icosahedral
 
-        elif template_type == "custom_fourier":
-            # Generate template from Fourier coefficients for each irrep
-            # powers specifies the DESIRED POWER SPECTRUM values (not diagonal values)
-            # We convert powers to Fourier coefficient diagonal values using:
-            #   diag_value = sqrt(group_size * power / dim^2)
-            # This is because: power = dim^2 * diag_value^2 / group_size
-            powers = config["data"]["powers"]
-            irreps = dihedral_group.irreps()
-            irrep_dims = [ir.size for ir in irreps]
+            group = Icosahedral()
+            group_label = "Icosahedral (A5)"
 
-            assert len(powers) == len(irreps), (
-                f"powers must have {len(irreps)} values (one per irrep), got {len(powers)}"
-            )
-
-            # Convert powers to Fourier coefficient diagonal values
-            fourier_coef_diag_values = [
-                np.sqrt(group_order * p / dim**2) if p > 0 else 0.0
-                for p, dim in zip(powers, irrep_dims)
-            ]
-
-            print("Template type: custom_fourier")
-            print(f"Desired powers (per irrep): {powers}")
-            print(f"Fourier coef diagonal values: {fourier_coef_diag_values}")
-
-            # Build spectrum: list of diagonal matrices, one per irrep
-            spectrum = []
-            for i, irrep in enumerate(irreps):
-                diag_val = fourier_coef_diag_values[i]
-                diag_values = np.full(irrep.size, diag_val, dtype=float)
-                mat = np.zeros((irrep.size, irrep.size), dtype=float)
-                np.fill_diagonal(mat, diag_values)
-                print(
-                    f"  Irrep {i} (dim={irrep.size}): diag_value = {diag_val:.4f} -> power = {powers[i]}"
-                )
-                spectrum.append(mat)
-
-            # Generate template via inverse group Fourier transform
-            template_dihedral = compute_group_inverse_fourier_transform(dihedral_group, spectrum)
-            template_dihedral = template_dihedral - np.mean(template_dihedral)
-            template_dihedral = template_dihedral.astype(np.float32)
-        else:
-            raise ValueError(
-                f"Unknown template_type for dihedral: {template_type}. Must be 'onehot' or 'custom_fourier'"
-            )
-
-        template = template_dihedral  # For consistency in code below
-        print(f"Template shape: {template.shape}")
-
-        # Visualize dihedral template
-        print("Visualizing template...")
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.bar(range(group_order), template_dihedral)
-        ax.set_xlabel("Group element index")
-        ax.set_ylabel("Value")
-        title = f"Dihedral D{n} Template (order={group_order}, type={template_type})"
-        if template_type == "custom_fourier":
-            title += f"\npowers={powers}"
-        ax.set_title(title)
-        ax.set_xticks(range(group_order))
-        fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
-        plt.close(fig)
-        print("  ✓ Saved template")
-    elif group_name == "octahedral":
-        from escnn.group import Octahedral
-
-        from src.group_fourier_transform import (
-            compute_group_inverse_fourier_transform,
-        )
-
-        octahedral_group = Octahedral()
-        group_order = octahedral_group.order()  # = 24
+        group_order = group.order()
         p_flat = group_order
 
-        print(f"Octahedral group order: {group_order}")
-        print(
-            f"Octahedral irreps: {[irrep.size for irrep in octahedral_group.irreps()]} (dimensions)"
-        )
+        print(f"{group_label} group order: {group_order}")
+        print(f"{group_label} irreps: {[irrep.size for irrep in group.irreps()]} (dimensions)")
 
+        # Generate template
         if template_type == "onehot":
-            template_octahedral = np.zeros(group_order, dtype=np.float32)
-            template_octahedral[1] = 10.0
-            template_octahedral = template_octahedral - np.mean(template_octahedral)
+            template = np.zeros(group_order, dtype=np.float32)
+            template[1] = 10.0
+            template = template - np.mean(template)
             print("Template type: onehot")
 
         elif template_type == "custom_fourier":
             powers = config["data"]["powers"]
-            irreps = octahedral_group.irreps()
+            irreps = group.irreps()
             irrep_dims = [ir.size for ir in irreps]
 
             assert len(powers) == len(irreps), (
@@ -1147,103 +1032,29 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 )
                 spectrum.append(mat)
 
-            template_octahedral = compute_group_inverse_fourier_transform(
-                octahedral_group, spectrum
-            )
-            template_octahedral = template_octahedral - np.mean(template_octahedral)
-            template_octahedral = template_octahedral.astype(np.float32)
+            template = compute_group_inverse_fourier_transform(group, spectrum)
+            template = template - np.mean(template)
+            template = template.astype(np.float32)
         else:
             raise ValueError(
-                f"Unknown template_type for octahedral: {template_type}. Must be 'onehot' or 'custom_fourier'"
+                f"Unknown template_type for {group_name}: {template_type}. "
+                "Must be 'onehot' or 'custom_fourier'"
             )
 
-        template = template_octahedral
         print(f"Template shape: {template.shape}")
 
+        # Visualize template
         print("Visualizing template...")
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.bar(range(group_order), template_octahedral)
+        fig, ax = plt.subplots(figsize=(max(8, group_order // 5), 4))
+        ax.bar(range(group_order), template)
         ax.set_xlabel("Group element index")
         ax.set_ylabel("Value")
-        title = f"Octahedral Template (order={group_order}, type={template_type})"
+        title = f"{group_label} Template (order={group_order}, type={template_type})"
         if template_type == "custom_fourier":
             title += f"\npowers={powers}"
         ax.set_title(title)
-        ax.set_xticks(range(group_order))
-        fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
-        plt.close(fig)
-        print("  ✓ Saved template")
-    elif group_name == "A5":
-        from escnn.group import Icosahedral
-
-        from src.group_fourier_transform import (
-            compute_group_inverse_fourier_transform,
-        )
-
-        icosahedral_group = Icosahedral()
-        group_order = icosahedral_group.order()  # = 60
-        p_flat = group_order
-
-        print(f"Icosahedral (A5) group order: {group_order}")
-        print(
-            f"Icosahedral irreps: {[irrep.size for irrep in icosahedral_group.irreps()]} (dimensions)"
-        )
-
-        if template_type == "onehot":
-            template_A5 = np.zeros(group_order, dtype=np.float32)
-            template_A5[1] = 10.0
-            template_A5 = template_A5 - np.mean(template_A5)
-            print("Template type: onehot")
-
-        elif template_type == "custom_fourier":
-            powers = config["data"]["powers"]
-            irreps = icosahedral_group.irreps()
-            irrep_dims = [ir.size for ir in irreps]
-
-            assert len(powers) == len(irreps), (
-                f"powers must have {len(irreps)} values (one per irrep), got {len(powers)}"
-            )
-
-            fourier_coef_diag_values = [
-                np.sqrt(group_order * p / dim**2) if p > 0 else 0.0
-                for p, dim in zip(powers, irrep_dims)
-            ]
-
-            print("Template type: custom_fourier")
-            print(f"Desired powers (per irrep): {powers}")
-            print(f"Fourier coef diagonal values: {fourier_coef_diag_values}")
-
-            spectrum = []
-            for i, irrep in enumerate(irreps):
-                diag_val = fourier_coef_diag_values[i]
-                diag_values = np.full(irrep.size, diag_val, dtype=float)
-                mat = np.zeros((irrep.size, irrep.size), dtype=float)
-                np.fill_diagonal(mat, diag_values)
-                print(
-                    f"  Irrep {i} (dim={irrep.size}): diag_value = {diag_val:.4f} -> power = {powers[i]}"
-                )
-                spectrum.append(mat)
-
-            template_A5 = compute_group_inverse_fourier_transform(icosahedral_group, spectrum)
-            template_A5 = template_A5 - np.mean(template_A5)
-            template_A5 = template_A5.astype(np.float32)
-        else:
-            raise ValueError(
-                f"Unknown template_type for A5: {template_type}. Must be 'onehot' or 'custom_fourier'"
-            )
-
-        template = template_A5
-        print(f"Template shape: {template.shape}")
-
-        print("Visualizing template...")
-        fig, ax = plt.subplots(figsize=(12, 4))
-        ax.bar(range(group_order), template_A5)
-        ax.set_xlabel("Group element index")
-        ax.set_ylabel("Value")
-        title = f"Icosahedral (A5) Template (order={group_order}, type={template_type})"
-        if template_type == "custom_fourier":
-            title += f"\npowers={powers}"
-        ax.set_title(title)
+        if group_order <= 30:
+            ax.set_xticks(range(group_order))
         fig.savefig(os.path.join(run_dir, "template.pdf"), bbox_inches="tight", dpi=150)
         plt.close(fig)
         print("  ✓ Saved template")
@@ -1440,12 +1251,8 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 X_raw, Y_raw = cn_dataset(template)
             elif group_name == "cnxcn":
                 X_raw, Y_raw = cnxcn_dataset(template)
-            elif group_name == "dihedral":
-                X_raw, Y_raw = group_dataset(dihedral_group, template)
-            elif group_name == "octahedral":
-                X_raw, Y_raw = group_dataset(octahedral_group, template)
-            elif group_name == "A5":
-                X_raw, Y_raw = group_dataset(icosahedral_group, template)
+            elif group_name in ("dihedral", "octahedral", "A5"):
+                X_raw, Y_raw = group_dataset(group, template)
             else:
                 raise ValueError(f"Unsupported group_name for TwoLayerNet: {group_name}")
 
@@ -1518,34 +1325,13 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                     num_samples=val_samples,
                     return_all_outputs=config["model"]["return_all_outputs"],
                 )
-            elif group_name == "dihedral":
-                from src.datamodule import build_modular_addition_sequence_dataset_D3
-
-                X_train, Y_train, _ = build_modular_addition_sequence_dataset_D3(
-                    template_dihedral,
-                    config["data"]["k"],
-                    mode=config["data"]["mode"],
-                    num_samples=config["data"]["num_samples"],
-                    return_all_outputs=config["model"]["return_all_outputs"],
-                    dihedral_n=n,
-                )
-
-                val_samples = max(1000, config["data"]["num_samples"] // 10)
-                X_val, Y_val, _ = build_modular_addition_sequence_dataset_D3(
-                    template_dihedral,
-                    config["data"]["k"],
-                    mode="sampled",
-                    num_samples=val_samples,
-                    return_all_outputs=config["model"]["return_all_outputs"],
-                    dihedral_n=n,
-                )
-            elif group_name == "octahedral":
+            elif group_name in ("dihedral", "octahedral", "A5"):
                 from src.datamodule import build_modular_addition_sequence_dataset_generic
 
                 X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
-                    template_octahedral,
+                    template,
                     config["data"]["k"],
-                    group=octahedral_group,
+                    group=group,
                     mode=config["data"]["mode"],
                     num_samples=config["data"]["num_samples"],
                     return_all_outputs=config["model"]["return_all_outputs"],
@@ -1553,30 +1339,9 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
 
                 val_samples = max(1000, config["data"]["num_samples"] // 10)
                 X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
-                    template_octahedral,
+                    template,
                     config["data"]["k"],
-                    group=octahedral_group,
-                    mode="sampled",
-                    num_samples=val_samples,
-                    return_all_outputs=config["model"]["return_all_outputs"],
-                )
-            elif group_name == "A5":
-                from src.datamodule import build_modular_addition_sequence_dataset_generic
-
-                X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
-                    template_A5,
-                    config["data"]["k"],
-                    group=icosahedral_group,
-                    mode=config["data"]["mode"],
-                    num_samples=config["data"]["num_samples"],
-                    return_all_outputs=config["model"]["return_all_outputs"],
-                )
-
-                val_samples = max(1000, config["data"]["num_samples"] // 10)
-                X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
-                    template_A5,
-                    config["data"]["k"],
-                    group=icosahedral_group,
+                    group=group,
                     mode="sampled",
                     num_samples=val_samples,
                     return_all_outputs=config["model"]["return_all_outputs"],
@@ -1600,7 +1365,9 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         val_loader = DataLoader(val_dataset, batch_size=config["data"]["batch_size"], shuffle=False)
 
         epochs = config["training"]["epochs"]
-        print(f"  Training for {epochs} epochs with {len(train_dataset)} samples")
+        print(
+            f"  Training for {epochs} epochs with {len(train_dataset)} samples (leaving {len(val_dataset)} samples for validation)"
+        )
 
     else:
         raise ValueError(f"Invalid training mode: {training_mode}. Must be 'online' or 'offline'")
@@ -1698,42 +1465,17 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             training_mode=training_mode,
             device=device,
         )
-    elif group_name == "dihedral":
-        # Produce plots for dihedral group
-        produce_plots_D3(
+    elif group_name in ("dihedral", "octahedral", "A5"):
+        produce_plots_group(
             run_dir=run_dir,
             config=config,
             model=rnn_2d,
             param_hist=param_hist,
             param_save_indices=param_save_indices,
             train_loss_hist=train_loss_hist,
-            template_D3=template_dihedral,
+            template=template,
             device=device,
-            group=dihedral_group,
-        )
-    elif group_name == "octahedral":
-        produce_plots_D3(
-            run_dir=run_dir,
-            config=config,
-            model=rnn_2d,
-            param_hist=param_hist,
-            param_save_indices=param_save_indices,
-            train_loss_hist=train_loss_hist,
-            template_D3=template_octahedral,
-            device=device,
-            group=octahedral_group,
-        )
-    elif group_name == "A5":
-        produce_plots_D3(
-            run_dir=run_dir,
-            config=config,
-            model=rnn_2d,
-            param_hist=param_hist,
-            param_save_indices=param_save_indices,
-            train_loss_hist=train_loss_hist,
-            template_D3=template_A5,
-            device=device,
-            group=icosahedral_group,
+            group=group,
         )
     else:
         raise ValueError(

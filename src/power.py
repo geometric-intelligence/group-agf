@@ -261,13 +261,21 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
         reshape_dims = (-1, p1)
 
     num_points = 200
+    max_step = len(param_history) - 1
     num_inputs_to_compute_power = max(1, len(model_inputs) // 50)  # Ensure at least 1 input
     X_tensor = model_inputs[
         :num_inputs_to_compute_power
     ]  # Added by Nina to speed up computation with octahedral.
-    steps = np.unique(np.logspace(1, np.log10(len(param_history) - 1), num_points, dtype=int))
-    steps = steps[steps > 50]
-    steps = np.hstack([np.linspace(1, 50, 5).astype(int), steps])
+    if max_step <= 1:
+        # Very short training: just use all available checkpoints
+        steps = np.arange(max_step + 1)
+    else:
+        steps = np.unique(np.logspace(1, np.log10(max_step), num_points, dtype=int))
+        steps = steps[steps > 50]
+        steps = np.hstack([np.linspace(1, min(50, max_step), 5).astype(int), steps])
+    # Ensure all indices are within bounds
+    steps = np.unique(steps)
+    steps = steps[steps <= max_step]
     powers_over_time = np.zeros([len(steps), template_power_length])
 
     for i_step, step in enumerate(steps):
@@ -276,10 +284,10 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
         model.eval()
         with torch.no_grad():
             outputs = model(X_tensor)
-            print("outputs dtype", outputs.dtype)
             outputs_arr = outputs.detach().cpu().numpy().reshape(reshape_dims)
 
-            print("Computing power at step", step, "with output shape", outputs_arr.shape)
+            if i_step % 10 == 0:
+                print("Computing power at step", step, "with output shape", outputs_arr.shape)
 
             powers = []
             for out in outputs_arr:
