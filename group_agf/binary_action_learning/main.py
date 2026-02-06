@@ -3,9 +3,6 @@ import itertools
 import logging
 import time
 
-from seaborn._core.typing import default
-
-import default_config
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,6 +11,7 @@ import wandb
 from escnn.group import *
 from torch.utils.data import DataLoader, TensorDataset
 
+import default_config
 import group_agf.binary_action_learning.datasets as datasets
 import group_agf.binary_action_learning.models as models
 import group_agf.binary_action_learning.plot as plot
@@ -45,9 +43,7 @@ def main_run(config):
 
         print("Generating dataset...")
         X, Y, template = datasets.load_dataset(config)
-        assert (
-            len(template) == config["group_size"]
-        ), "Template size does not match group size."
+        assert len(template) == config["group_size"], "Template size does not match group size."
 
         if config["group_name"] == "cnxcn":
             template_power = power.CyclicPower(template, template_dim=2)
@@ -92,9 +88,7 @@ def main_run(config):
                 model.parameters(), lr=config["lr"], betas=(config["mom"], 0.999)
             )
         elif config["optimizer_name"] == "SGD":
-            optimizer = optim.SGD(
-                model.parameters(), lr=config["lr"], momentum=config["mom"]
-            )
+            optimizer = optim.SGD(model.parameters(), lr=config["lr"], momentum=config["mom"])
         elif config["optimizer_name"] == "PerNeuronScaledSGD":
             optimizer = PerNeuronScaledSGD(model, lr=config["lr"])
         else:
@@ -127,8 +121,7 @@ def main_run(config):
             param_history,
             X,
             config["group_name"],
-            save_path=config["model_save_dir"]
-            + f"power_over_training_plot_{run_name}.svg",
+            save_path=config["model_save_dir"] + f"power_over_training_plot_{run_name}.svg",
             show=False,
             logscale=config["power_logscale"],
         )
@@ -158,9 +151,7 @@ def main_run(config):
 
         print("Plots generated and logged to wandb.")
         if config["group_name"] not in ("cnxcn", "cn"):
-            print(
-                f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}"
-            )
+            print(f"With irreps' sizes:\n {[irrep.size for irrep in config['group'].irreps()]}")
 
         wandb_config.update({"full_run": full_run})
         wandb.finish()
@@ -213,7 +204,6 @@ def main():
             "batch_size": batch_size,
             "epochs": epochs,
             "verbose_interval": default_config.verbose_interval,
-            "run_start_time": run_start_time,
             "model_save_dir": default_config.model_save_dir,
             "powers": powers,
             "dataset_fraction": default_config.dataset_fraction[group_name],
@@ -225,31 +215,21 @@ def main():
         }
 
         if group_name == "cnxcn":
-            for (
-                image_length,
-            ) in itertools.product(
+            for (image_length,) in itertools.product(
                 default_config.image_length,
             ):
                 group_size = image_length * image_length
                 main_config["group_size"] = group_size
                 main_config["image_length"] = image_length
-                main_config["dataset_fraction"] = default_config.dataset_fraction[
-                    "cnxcn"
-                ]
+                main_config["dataset_fraction"] = default_config.dataset_fraction["cnxcn"]
                 main_config["fourier_coef_diag_values"] = main_config["powers"]
                 main_run(main_config)
 
         elif group_name == "cn":
-            for (
-                group_n,
-            ) in itertools.product(
-                default_config.group_n
-            ):
+            for (group_n,) in itertools.product(default_config.group_n):
                 main_config["group_size"] = group_n
                 main_config["group_n"] = group_n
-                main_config["dataset_fraction"] = default_config.dataset_fraction[
-                    "cn"
-                ]
+                main_config["dataset_fraction"] = default_config.dataset_fraction["cn"]
                 main_config["fourier_coef_diag_values"] = main_config["powers"]
                 main_run(main_config)
 
@@ -282,11 +262,7 @@ def main():
             main_run(main_config)
 
         else:
-            for (
-                group_n,
-            ) in itertools.product(
-                default_config.group_n
-            ):
+            for (group_n,) in itertools.product(default_config.group_n):
                 if group_name == "dihedral":
                     group = DihedralGroup(group_n)
                 else:
@@ -301,9 +277,7 @@ def main():
                 main_config["group"] = group
                 main_config["group_size"] = group_size
                 main_config["group_n"] = group_n
-                main_config["dataset_fraction"] = default_config.dataset_fraction[
-                    group_name
-                ]
+                main_config["dataset_fraction"] = default_config.dataset_fraction[group_name]
                 main_config["fourier_coef_diag_values"] = [
                     np.sqrt(group_size * p / dim**2)
                     for p, dim in zip(main_config["powers"], irrep_dims)

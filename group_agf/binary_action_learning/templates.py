@@ -3,8 +3,9 @@ from skimage.transform import resize
 from sklearn.datasets import fetch_openml
 from sklearn.utils import shuffle
 
-from group_agf.binary_action_learning.group_fourier_transform import \
-    compute_group_inverse_fourier_transform
+from group_agf.binary_action_learning.group_fourier_transform import (
+    compute_group_inverse_fourier_transform,
+)
 
 
 def one_hot(p):
@@ -71,7 +72,7 @@ def fixed_cnxcn_template(image_length, fourier_coef_mags):
         (0,0), (1,0), (0,1), (1,1), (2,0), (0,2), (2,2), (3,0), (0,3), (3,3), ...
         (and then their negative counterparts to ensure a real-valued template)
         where (i,j) represents the frequency mode with frequency i in the first dimension
-    
+
     Returns
     -------
     template : np.ndarray
@@ -85,7 +86,7 @@ def fixed_cnxcn_template(image_length, fourier_coef_mags):
     fourier_coef_mags = fourier_coef_mags[1:]  # Exclude zeroth frequency
 
     def mode_selector(i_mag):
-        i_mode = 1 + i_mag // 3 
+        i_mode = 1 + i_mag // 3
         mode_type = i_mag % 3
         if mode_type == 0:
             return (i_mode, 0)
@@ -96,7 +97,7 @@ def fixed_cnxcn_template(image_length, fourier_coef_mags):
 
     i_mag = 0
     while i_mag < len(fourier_coef_mags):
-        mode = mode_selector(i_mag)   
+        mode = mode_selector(i_mag)
 
         spectrum[mode[0], mode[1]] = fourier_coef_mags[i_mag]
         spectrum[-mode[0], -mode[1]] = np.conj(fourier_coef_mags[i_mag])
@@ -131,9 +132,9 @@ def fixed_group_template(group, fourier_coef_diag_values):
         The mean centered template.
     """
     spectrum = []
-    assert len(fourier_coef_diag_values) == len(
-        group.irreps()
-    ), f"Number of Fourier coef. magnitudes on the diagonal {len(fourier_coef_diag_values)} must match number of irreps {len(group.irreps())}"
+    assert len(fourier_coef_diag_values) == len(group.irreps()), (
+        f"Number of Fourier coef. magnitudes on the diagonal {len(fourier_coef_diag_values)} must match number of irreps {len(group.irreps())}"
+    )
     for i, irrep in enumerate(group.irreps()):
         diag_values = np.full(irrep.size, fourier_coef_diag_values[i], dtype=float)
         mat = np.zeros((irrep.size, irrep.size), dtype=float)

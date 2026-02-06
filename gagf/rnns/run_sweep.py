@@ -6,23 +6,24 @@ Takes an experiment configuration file and runs all parameter combinations
 with multiple seeds for uncertainty quantification.
 """
 
+import argparse
+import copy
+import datetime
+import multiprocessing
 import os
 import sys
-import yaml
-import argparse
-import datetime
-import copy
-from typing import List, Dict, Any, Tuple, Optional
-from pathlib import Path
+import traceback
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import product
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 import torch
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import traceback
-import multiprocessing
+import yaml
 
 
-def deep_merge_dict(base: Dict, override: Dict) -> Dict:
+def deep_merge_dict(base: dict, override: dict) -> dict:
     """Deep merge override dictionary into base dictionary."""
     result = copy.deepcopy(base)
     for key, value in override.items():
@@ -33,12 +34,12 @@ def deep_merge_dict(base: Dict, override: Dict) -> Dict:
     return result
 
 
-def load_sweep_config(sweep_file: str) -> Dict:
+def load_sweep_config(sweep_file: str) -> dict:
     """Load sweep configuration with base config and experiments."""
     if not os.path.exists(sweep_file):
         raise FileNotFoundError(f"Sweep file not found: {sweep_file}")
 
-    with open(sweep_file, "r") as f:
+    with open(sweep_file) as f:
         sweep_config = yaml.safe_load(f)
 
     # Load base configuration
@@ -46,27 +47,28 @@ def load_sweep_config(sweep_file: str) -> Dict:
     if not os.path.exists(base_config_path):
         raise FileNotFoundError(f"Base config file not found: {base_config_path}")
 
-    with open(base_config_path, "r") as f:
+    with open(base_config_path) as f:
         base_config = yaml.safe_load(f)
 
     sweep_config["_base_config"] = base_config
     return sweep_config
 
 
-def expand_parameter_grid(parameter_grid: Dict) -> List[Dict]:
+def expand_parameter_grid(parameter_grid: dict) -> list[dict]:
     """
     Expand a parameter grid specification into a list of parameter combinations.
-    
+
     Args:
         parameter_grid: Nested dict with lists as leaf values.
-                       Example: {'data': {'p': [5, 10], 'k': [2, 3]}, 
+                       Example: {'data': {'p': [5, 10], 'k': [2, 3]},
                                 'model': {'hidden_dim': [64, 128]}}
-    
+
     Returns:
         List of override dicts, one per combination.
         Example: [{'data': {'p': 5, 'k': 2}, 'model': {'hidden_dim': 64}}, ...]
     """
-    def flatten_dict(d, parent_key=''):
+
+    def flatten_dict(d, parent_key=""):
         """Flatten nested dict to dot-notation keys."""
         items = []
         for k, v in d.items():
@@ -76,12 +78,12 @@ def expand_parameter_grid(parameter_grid: Dict) -> List[Dict]:
             else:
                 items.append((new_key, v))
         return dict(items)
-    
+
     def unflatten_dict(d):
         """Convert dot-notation keys back to nested dict."""
         result = {}
         for key, value in d.items():
-            parts = key.split('.')
+            parts = key.split(".")
             current = result
             for part in parts[:-1]:
                 if part not in current:
@@ -89,46 +91,47 @@ def expand_parameter_grid(parameter_grid: Dict) -> List[Dict]:
                 current = current[part]
             current[parts[-1]] = value
         return result
-    
+
     # Flatten to get all parameter paths
     flat = flatten_dict(parameter_grid)
-    
+
     # Get parameter names and their value lists
     param_names = list(flat.keys())
-    param_values = [flat[name] if isinstance(flat[name], list) else [flat[name]] 
-                    for name in param_names]
-    
+    param_values = [
+        flat[name] if isinstance(flat[name], list) else [flat[name]] for name in param_names
+    ]
+
     # Generate all combinations
     combinations = []
     for values in product(*param_values):
         combo = dict(zip(param_names, values))
         combinations.append(unflatten_dict(combo))
-    
+
     return combinations
 
 
-def generate_experiment_name(overrides: Dict) -> str:
+def generate_experiment_name(overrides: dict) -> str:
     """
     Generate a concise experiment name from parameter overrides.
-    
+
     Example: {'data': {'p': 10, 'k': 2}, 'model': {'hidden_dim': 64}}
              -> "p10_k2_h64"
     """
     name_parts = []
-    
+
     # Common parameter abbreviations
     abbrev = {
-        'p': 'p',
-        'p1': 'p1', 
-        'p2': 'p2',
-        'k': 'k',
-        'hidden_dim': 'h',
-        'n_freqs': 'f',
-        'learning_rate': 'lr',
-        'batch_size': 'bs',
+        "p": "p",
+        "p1": "p1",
+        "p2": "p2",
+        "k": "k",
+        "hidden_dim": "h",
+        "n_freqs": "f",
+        "learning_rate": "lr",
+        "batch_size": "bs",
     }
-    
-    def extract_params(d, prefix=''):
+
+    def extract_params(d, prefix=""):
         """Recursively extract parameters."""
         for key, value in sorted(d.items()):
             if isinstance(value, dict):
@@ -136,56 +139,56 @@ def generate_experiment_name(overrides: Dict) -> str:
             else:
                 param_name = abbrev.get(key, key)
                 name_parts.append(f"{param_name}{value}")
-    
+
     extract_params(overrides)
     return "_".join(name_parts)
 
 
-def generate_experiment_configs(sweep_config: Dict) -> List[Tuple[str, Dict]]:
+def generate_experiment_configs(sweep_config: dict) -> list[tuple[str, dict]]:
     """
     Generate all individual experiment configurations from sweep.
-    
+
     Supports two modes:
     1. Explicit experiments list (original behavior)
     2. Parameter grid (cartesian product of parameter lists)
     """
     base_config = sweep_config["_base_config"]
     global_overrides = sweep_config.get("global_overrides", {})
-    
+
     # Check if using parameter grid or explicit experiments
     if "parameter_grid" in sweep_config:
         # Generate experiments from parameter grid
         print("Generating experiments from parameter grid...")
         param_combinations = expand_parameter_grid(sweep_config["parameter_grid"])
-        
+
         experiment_configs = []
         for overrides in param_combinations:
             exp_name = generate_experiment_name(overrides)
-            
+
             # Merge: base -> global_overrides -> specific overrides
             config = deep_merge_dict(base_config, global_overrides)
             merged_config = deep_merge_dict(config, overrides)
             experiment_configs.append((exp_name, merged_config))
-        
+
         print(f"Generated {len(experiment_configs)} experiments from parameter grid")
-        
+
     elif "experiments" in sweep_config:
         # Use explicit experiments list (original behavior)
         experiments = sweep_config["experiments"]
-        
+
         experiment_configs = []
         for exp in experiments:
             exp_name = exp["name"]
             overrides = exp.get("overrides", {})
-            
+
             # Merge: base -> global_overrides -> specific overrides
             config = deep_merge_dict(base_config, global_overrides)
             merged_config = deep_merge_dict(config, overrides)
             experiment_configs.append((exp_name, merged_config))
-    
+
     else:
         raise ValueError("Sweep config must contain either 'experiments' or 'parameter_grid'")
-    
+
     # Validate: Check for duplicate experiment names
     exp_names = [name for name, _ in experiment_configs]
     if len(exp_names) != len(set(exp_names)):
@@ -195,15 +198,15 @@ def generate_experiment_configs(sweep_config: Dict) -> List[Tuple[str, Dict]]:
             "Each experiment must have a unique name. "
             "If using parameter_grid, ensure parameter combinations produce unique names."
         )
-    
+
     return experiment_configs
 
 
 def save_sweep_metadata(
-    sweep_dir: Path, sweep_config: Dict, experiment_configs: List[Tuple[str, Dict]]
+    sweep_dir: Path, sweep_config: dict, experiment_configs: list[tuple[str, dict]]
 ) -> None:
     """Save sweep metadata and configurations."""
-    
+
     # Save sweep metadata
     sweep_metadata = {
         "sweep_name": sweep_dir.name,
@@ -232,17 +235,17 @@ def save_sweep_metadata(
 
 
 def run_single_seed(
-    exp_name: str, config: Dict, seed: int, sweep_dir: Path, gpu_id: Optional[int] = None
-) -> Dict[str, Any]:
+    exp_name: str, config: dict, seed: int, sweep_dir: Path, gpu_id: int | None = None
+) -> dict[str, Any]:
     """Run a single experiment seed (for multiprocessing).
-    
+
     Args:
         exp_name: Name of the experiment
         config: Configuration dictionary
         seed: Random seed to use
         sweep_dir: Directory to save sweep results
         gpu_id: Optional GPU ID to use (overrides config device)
-    
+
     Returns:
         Dictionary with run results
     """
@@ -251,15 +254,15 @@ def run_single_seed(
     project_root = Path(__file__).resolve().parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-    
+
     # Create seed config
     seed_config = copy.deepcopy(config)
     seed_config["data"]["seed"] = seed
-    
+
     # Override device if GPU ID specified
     if gpu_id is not None:
         seed_config["device"] = f"cuda:{gpu_id}"
-    
+
     # Create seed-specific run directory
     exp_dir = sweep_dir / exp_name
     seed_dir = exp_dir / f"seed_{seed}"
@@ -268,10 +271,10 @@ def run_single_seed(
     try:
         # Import here to avoid circular dependency
         from gagf.rnns.main import train_single_run
-        
+
         # Run training
         result = train_single_run(seed_config, run_dir=seed_dir)
-        
+
         # Save run summary
         run_summary = {
             "experiment_name": exp_name,
@@ -283,23 +286,23 @@ def run_single_seed(
             "training_time": result.get("training_time", None),
             "completed_at": datetime.datetime.now().isoformat(),
         }
-        
+
         summary_path = seed_dir / "run_summary.yaml"
         with open(summary_path, "w") as f:
             yaml.dump(run_summary, f, default_flow_style=False, indent=2)
-        
+
         print(f"✓ {exp_name} seed {seed} completed successfully (GPU: {gpu_id})")
-        if run_summary['final_train_loss'] is not None:
+        if run_summary["final_train_loss"] is not None:
             print(f"  Train loss: {run_summary['final_train_loss']:.6f}")
-        if run_summary['final_val_loss'] is not None:
+        if run_summary["final_val_loss"] is not None:
             print(f"  Val loss: {run_summary['final_val_loss']:.6f}")
-        
+
         return run_summary
-        
+
     except Exception as e:
         print(f"✗ {exp_name} seed {seed} failed with error: {str(e)} (GPU: {gpu_id})")
         traceback.print_exc()
-        
+
         error_summary = {
             "experiment_name": exp_name,
             "seed": seed,
@@ -307,22 +310,22 @@ def run_single_seed(
             "error": str(e),
             "failed_at": datetime.datetime.now().isoformat(),
         }
-        
+
         error_path = seed_dir / "error_summary.yaml"
         with open(error_path, "w") as f:
             yaml.dump(error_summary, f, default_flow_style=False, indent=2)
-        
+
         return error_summary
 
 
 def run_experiment(
-    exp_name: str, config: Dict, seeds: List[int], sweep_dir: Path, gpu_id: int = None
-) -> List[Dict[str, Any]]:
+    exp_name: str, config: dict, seeds: list[int], sweep_dir: Path, gpu_id: int = None
+) -> list[dict[str, Any]]:
     """Run a single experiment configuration with multiple seeds.
-    
+
     This function is kept for backward compatibility. For multi-GPU sweeps,
     use run_parameter_sweep with gpu_ids parameter instead.
-    
+
     Args:
         exp_name: Name of the experiment
         config: Configuration dictionary
@@ -331,12 +334,12 @@ def run_experiment(
         gpu_id: Optional GPU ID to use (overrides config device)
     """
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"RUNNING EXPERIMENT: {exp_name}")
     print(f"Seeds: {seeds}")
     if gpu_id is not None:
         print(f"GPU: cuda:{gpu_id}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # Create experiment directory
     exp_dir = sweep_dir / exp_name
@@ -345,9 +348,9 @@ def run_experiment(
     # Run each seed sequentially
     run_results = []
     for seed_idx, seed in enumerate(seeds):
-        print(f"\n{'-'*60}")
+        print(f"\n{'-' * 60}")
         print(f"EXPERIMENT {exp_name} - SEED {seed_idx + 1}/{len(seeds)}: seed={seed}")
-        print(f"{'-'*60}")
+        print(f"{'-' * 60}")
 
         result = run_single_seed(exp_name, config, seed, sweep_dir, gpu_id)
         run_results.append(result)
@@ -355,14 +358,10 @@ def run_experiment(
     # Generate experiment summary
     successful_runs = [r for r in run_results if r["status"] == "completed"]
     train_losses = [
-        r["final_train_loss"]
-        for r in successful_runs
-        if r.get("final_train_loss") is not None
+        r["final_train_loss"] for r in successful_runs if r.get("final_train_loss") is not None
     ]
     val_losses = [
-        r["final_val_loss"]
-        for r in successful_runs
-        if r.get("final_val_loss") is not None
+        r["final_val_loss"] for r in successful_runs if r.get("final_val_loss") is not None
     ]
 
     exp_summary = {
@@ -413,16 +412,13 @@ def run_experiment(
     return run_results
 
 
-def generate_sweep_summary(
-    sweep_dir: Path, all_results: Dict[str, List[Dict[str, Any]]]
-) -> None:
+def generate_sweep_summary(sweep_dir: Path, all_results: dict[str, list[dict[str, Any]]]) -> None:
     """Generate overall sweep summary."""
 
     # Aggregate statistics across all experiments
     total_runs = sum(len(results) for results in all_results.values())
     total_successful = sum(
-        len([r for r in results if r["status"] == "completed"])
-        for results in all_results.values()
+        len([r for r in results if r["status"] == "completed"]) for results in all_results.values()
     )
 
     # Per-experiment statistics
@@ -430,14 +426,10 @@ def generate_sweep_summary(
     for exp_name, results in all_results.items():
         successful = [r for r in results if r["status"] == "completed"]
         train_losses = [
-            r["final_train_loss"]
-            for r in successful
-            if r.get("final_train_loss") is not None
+            r["final_train_loss"] for r in successful if r.get("final_train_loss") is not None
         ]
         val_losses = [
-            r["final_val_loss"]
-            for r in successful
-            if r.get("final_val_loss") is not None
+            r["final_val_loss"] for r in successful if r.get("final_val_loss") is not None
         ]
 
         stats = {
@@ -483,9 +475,9 @@ def generate_sweep_summary(
     with open(summary_path, "w") as f:
         yaml.dump(sweep_summary, f, default_flow_style=False, indent=2)
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("PARAMETER SWEEP COMPLETE")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"Total experiments: {len(all_results)}")
     print(f"Total runs: {total_runs}")
     print(f"Successful runs: {total_successful}/{total_runs}")
@@ -508,9 +500,11 @@ def generate_sweep_summary(
             print()
 
 
-def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gpu_id: Optional[int] = None):
+def run_parameter_sweep(
+    sweep_file: str, gpu_ids: list[int] | None = None, gpu_id: int | None = None
+):
     """Run full parameter sweep experiment.
-    
+
     Args:
         sweep_file: Path to sweep configuration file
         gpu_ids: List of GPU IDs to use for parallel execution (e.g., [0,1,2,3,4,5,6,7]).
@@ -566,16 +560,18 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
 
     if use_parallel:
         # Parallel execution: distribute tasks across GPUs
-        print(f"\n{'='*80}")
-        print(f"PARALLEL EXECUTION MODE: Distributing {len(experiment_configs) * n_seeds} tasks across {len(gpu_ids)} GPUs")
-        print(f"{'='*80}")
-        
+        print(f"\n{'=' * 80}")
+        print(
+            f"PARALLEL EXECUTION MODE: Distributing {len(experiment_configs) * n_seeds} tasks across {len(gpu_ids)} GPUs"
+        )
+        print(f"{'=' * 80}")
+
         # Flatten experiments with seeds into individual tasks
         tasks = []
         for exp_name, config in experiment_configs:
             for seed in seeds:
                 tasks.append((exp_name, config, seed, sweep_dir))
-        
+
         # Distribute tasks across GPUs using round-robin
         all_results = {}
         with ProcessPoolExecutor(max_workers=len(gpu_ids)) as executor:
@@ -586,7 +582,7 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
                 gpu_id = gpu_ids[task_idx % len(gpu_ids)]  # Round-robin assignment
                 future = executor.submit(run_single_seed, exp_name, config, seed, sweep_dir, gpu_id)
                 future_to_task[future] = (exp_name, seed, gpu_id)
-            
+
             # Collect results as they complete
             completed = 0
             for future in as_completed(future_to_task):
@@ -597,35 +593,43 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
                     if exp_name not in all_results:
                         all_results[exp_name] = []
                     all_results[exp_name].append(result)
-                    print(f"[{completed}/{len(tasks)}] Completed: {exp_name} seed {seed} (GPU {assigned_gpu})")
+                    print(
+                        f"[{completed}/{len(tasks)}] Completed: {exp_name} seed {seed} (GPU {assigned_gpu})"
+                    )
                 except Exception as e:
                     # This catch handles exceptions during result retrieval/serialization
                     # (run_single_seed already catches training exceptions and returns error dict)
-                    print(f"[{completed}/{len(tasks)}] Failed: {exp_name} seed {seed} (GPU {assigned_gpu}): {e}")
+                    print(
+                        f"[{completed}/{len(tasks)}] Failed: {exp_name} seed {seed} (GPU {assigned_gpu}): {e}"
+                    )
                     if exp_name not in all_results:
                         all_results[exp_name] = []
-                    all_results[exp_name].append({
-                        "experiment_name": exp_name,
-                        "seed": seed,
-                        "status": "failed",
-                        "error": str(e)
-                    })
-        
+                    all_results[exp_name].append(
+                        {
+                            "experiment_name": exp_name,
+                            "seed": seed,
+                            "status": "failed",
+                            "error": str(e),
+                        }
+                    )
+
         # Verify all tasks completed
         total_expected = len(experiment_configs) * len(seeds)
         total_completed = sum(len(results) for results in all_results.values())
         if total_completed != total_expected:
-            print(f"\n⚠️  WARNING: Expected {total_expected} runs, but collected {total_completed} results")
+            print(
+                f"\n⚠️  WARNING: Expected {total_expected} runs, but collected {total_completed} results"
+            )
             print("This may indicate some tasks failed silently or were not properly tracked.")
-        
+
         # Generate experiment summaries for each experiment
         for exp_name in all_results.keys():
             exp_dir = sweep_dir / exp_name
             run_results = all_results[exp_name]
-            
+
             # Sort results by seed for consistent ordering
-            run_results.sort(key=lambda x: x.get('seed', 0))
-            
+            run_results.sort(key=lambda x: x.get("seed", 0))
+
             successful_runs = [r for r in run_results if r["status"] == "completed"]
             train_losses = [
                 r["final_train_loss"]
@@ -633,9 +637,7 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
                 if r.get("final_train_loss") is not None
             ]
             val_losses = [
-                r["final_val_loss"]
-                for r in successful_runs
-                if r.get("final_val_loss") is not None
+                r["final_val_loss"] for r in successful_runs if r.get("final_val_loss") is not None
             ]
 
             exp_summary = {
@@ -673,10 +675,12 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
                 yaml.dump(exp_summary, f, default_flow_style=False, indent=2)
     else:
         # Sequential execution: run experiments one at a time (original behavior)
-        print(f"\n{'='*80}")
-        print(f"SEQUENTIAL EXECUTION MODE: Running on GPU {gpu_ids[0] if gpu_ids[0] is not None else 'CPU'}")
-        print(f"{'='*80}")
-        
+        print(f"\n{'=' * 80}")
+        print(
+            f"SEQUENTIAL EXECUTION MODE: Running on GPU {gpu_ids[0] if gpu_ids[0] is not None else 'CPU'}"
+        )
+        print(f"{'=' * 80}")
+
         all_results = {}
         for exp_name, config in experiment_configs:
             results = run_experiment(exp_name, config, seeds, sweep_dir, gpu_id=gpu_ids[0])
@@ -687,21 +691,25 @@ def run_parameter_sweep(sweep_file: str, gpu_ids: Optional[List[int]] = None, gp
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run parameter sweep experiment for QuadraticRNN or SequentialMLP")
+    parser = argparse.ArgumentParser(
+        description="Run parameter sweep experiment for QuadraticRNN or SequentialMLP"
+    )
+    parser.add_argument("--sweep", type=str, required=True, help="Path to sweep configuration file")
     parser.add_argument(
-        "--sweep", type=str, required=True, help="Path to sweep configuration file"
+        "--gpu",
+        type=int,
+        default=None,
+        help="Single GPU ID to use (e.g., 0 or 1). Overrides device in config. Deprecated: use --gpus instead.",
     )
     parser.add_argument(
-        "--gpu", type=int, default=None, 
-        help="Single GPU ID to use (e.g., 0 or 1). Overrides device in config. Deprecated: use --gpus instead."
-    )
-    parser.add_argument(
-        "--gpus", type=str, default=None,
+        "--gpus",
+        type=str,
+        default=None,
         help="Comma-separated GPU IDs (e.g., '0,1,2,3,4,5,6,7') or 'auto' to use all available GPUs. "
-             "If not specified, uses --gpu or config default. Parallel execution enabled when multiple GPUs specified."
+        "If not specified, uses --gpu or config default. Parallel execution enabled when multiple GPUs specified.",
     )
     args = parser.parse_args()
-    
+
     # Parse GPU IDs
     gpu_ids = None
     if args.gpus:
@@ -728,10 +736,9 @@ if __name__ == "__main__":
     # This is required because CUDA cannot be re-initialized in forked subprocesses
     # Must be set before any ProcessPoolExecutor is created
     try:
-        multiprocessing.set_start_method('spawn', force=True)
+        multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError:
         # Start method already set, which is fine
         pass
-    
-    main()
 
+    main()

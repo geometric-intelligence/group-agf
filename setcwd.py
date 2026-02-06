@@ -3,8 +3,7 @@
 It uses root of github directory to make sure everyone's code runs from
 the same directory, called current working directory cwd.
 
-It adds the python code in the parent directory of the working directory
-in the list of paths.
+It adds the repo root to sys.path so imports work correctly.
 
 Usage:
 
@@ -25,41 +24,18 @@ def main():
 
     gitroot_path = subprocess.check_output(
         ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
-    )
+    ).strip()
 
-    print("Git root path: ", gitroot_path) # /home/adele/code/gagf-agf/
+    os.chdir(gitroot_path)
+    print("Working directory: ", os.getcwd())
 
-    os.chdir(os.path.join(gitroot_path[:-1], "gagf"))
-    print("Working directory: ", os.getcwd()) # /home/adele/code/group-agf/
-
-    sys_dir = os.path.dirname(os.getcwd())
-    sys.path.append(sys_dir) # /home/adele/code/group-agf
-    print("Directory added to path: ", sys_dir) 
-    group_learning_dir = os.path.join(sys_dir, "gagf", "group_learning")
-    sys.path.append(group_learning_dir)
-    print("Directory added to path: ", group_learning_dir)
-    saved_datasets_dir = os.path.join(group_learning_dir, "saved_datasets")
-    sys.path.append(saved_datasets_dir)
-    print("Directory added to path: ", saved_datasets_dir)
-    notebook_dir = os.path.join(os.getcwd(), "notebooks")
-    sys.path.append(notebook_dir)
-    print("Directory added to path: ", notebook_dir)
-    saved_models_dir = os.path.join(notebook_dir, "saved_models")
-    sys.path.append(saved_models_dir)
-    print("Directory added to path: ", saved_models_dir)
-
-    model_save_dir = "/tmp/adele/"
-    sys.path.append(model_save_dir)
-    print("Directory added to path: ", model_save_dir)
+    if gitroot_path not in sys.path:
+        sys.path.insert(0, gitroot_path)
+    print("Directory added to path: ", gitroot_path)
 
 
 def get_root_dir():
     """Return the root directory of the git repository."""
-    gitroot_path = subprocess.check_output(
+    return subprocess.check_output(
         ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
-    )
-    return gitroot_path[:-1]  # Remove trailing newline
-    
-
-
-
+    ).strip()

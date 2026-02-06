@@ -31,7 +31,7 @@ SGD with per-neuron learning rate scaling that exploits model homogeneity.
 - Learning rate: typically 1.0 for SequentialMLP
 - Exploits the property: scaling all parameters of neuron i by α scales output by α^degree
 
-### Hybrid (`'hybrid'`)  
+### Hybrid (`'hybrid'`)
 Combines per-neuron scaled SGD (for W_in, W_drive, W_out) with Adam (for W_mix).
 - **Only for QuadraticRNN**
 - Best for exploiting both MLP-like and recurrent structure
@@ -48,13 +48,14 @@ Automatically selects the recommended optimizer:
 To train a model on modular addition tasks:
 - **1D**: $(C_p)^k$ - Cyclic group of order $p$
 - **2D**: $(C_{p1} \times C_{p2})^k$ - Product of two cyclic groups
+- **Dihedral D3**: $D_3$ - Dihedral group of order 3
 
 **Steps:**
 
 1. Edit `gagf/rnns/config.yaml` to specify your experiment.
 
    **Key configuration parameters:**
-   
+
    | Parameter | Options | Description |
    |-----------|---------|-------------|
    | `data.dimension` | `1` or `2` | Use 1D cyclic group or 2D product group |
@@ -69,7 +70,7 @@ To train a model on modular addition tasks:
    | `training.learning_rate` | float | Base learning rate |
 
    **Example configurations:**
-   
+
    ```yaml
    # 1D task with QuadraticRNN
    data:
@@ -81,7 +82,7 @@ To train a model on modular addition tasks:
      model_type: 'QuadraticRNN'
      hidden_dim: 200
    ```
-   
+
    ```yaml
    # 2D task with SequentialMLP
    data:
@@ -122,7 +123,7 @@ experiments:
     overrides:
       model:
         hidden_dim: 32
-  
+
   - name: "hidden_dim_64"
     overrides:
       model:

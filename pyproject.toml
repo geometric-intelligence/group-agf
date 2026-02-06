@@ -33,3 +33,43 @@ escnn = "^1.0.11"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+exclude = [
+    ".git",
+    "__pycache__",
+    "*.ipynb",
+    ".venv",
+    "build",
+    "dist",
+    "wandb",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "B905",  # zip without strict
+    "F403",  # star imports (used intentionally for escnn.group)
+    "F405",  # may be undefined from star imports
+    "F841",  # local variable assigned but never used (common in notebooks/experiments)
+    "B007",  # loop control variable not used (common pattern)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gagf", "group_agf", "default_config"]
+known-third-party = ["wandb"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]

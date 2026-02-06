@@ -1,21 +1,21 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
-import torch.nn as nn
-
-
 from torch.utils.data import IterableDataset
+
 
 class OnlineModularAdditionDataset2D(IterableDataset):
     """
     Online dataset that generates 2D modular addition samples on-the-fly.
     Fully GPU-accelerated for maximum throughput.
     """
+
     def __init__(
-        self, 
+        self,
         p1: int,
-        p2: int, 
+        p2: int,
         template: np.ndarray,
         k: int,
         batch_size: int,
@@ -30,24 +30,24 @@ class OnlineModularAdditionDataset2D(IterableDataset):
         self.p_flat = p1 * p2
         self.device = device
         self.return_all_outputs = return_all_outputs
-        
+
         # Store template on GPU for fast rolling
         self.template_gpu = torch.tensor(template, device=device, dtype=torch.float32)
-        
+
         # Pre-compute coordinate grids on GPU for efficient rolling
         x_coords = torch.arange(p1, device=device)
         y_coords = torch.arange(p2, device=device)
-        self.x_grid, self.y_grid = torch.meshgrid(x_coords, y_coords, indexing='ij')
-        
+        self.x_grid, self.y_grid = torch.meshgrid(x_coords, y_coords, indexing="ij")
+
     def _roll_2d_batch(self, shifts_x, shifts_y):
         """
         Roll the template by different amounts for each sample in a batch.
         Fully vectorized on GPU.
-        
+
         Args:
             shifts_x: (batch_size,) or (batch_size, k) tensor of row shifts
             shifts_y: (batch_size,) or (batch_size, k) tensor of col shifts
-        
+
         Returns:
             Rolled templates: (batch_size, p1, p2) or (batch_size, k, p1, p2)
         """
@@ -68,41 +68,43 @@ class OnlineModularAdditionDataset2D(IterableDataset):
             y_grid = self.y_grid.unsqueeze(0).unsqueeze(0)  # (1, 1, p1, p2)
             shifts_x = shifts_x.view(batch_size, k, 1, 1)  # (batch_size, k, 1, 1)
             shifts_y = shifts_y.view(batch_size, k, 1, 1)  # (batch_size, k, 1, 1)
-        
+
         # Compute shifted coordinates with modular arithmetic
         x_shifted = (x_grid - shifts_x) % self.p1
         y_shifted = (y_grid - shifts_y) % self.p2
-        
+
         # Index into template using advanced indexing
         rolled = self.template_gpu[x_shifted.long(), y_shifted.long()]
-        
+
         return rolled
-        
+
     def __iter__(self):
         """Generate batches indefinitely on GPU."""
         while True:
             # Generate random shifts on GPU: (batch_size, k)
-            shifts_x = torch.randint(0, self.p1, (self.batch_size, self.k), 
-                                    device=self.device, dtype=torch.long)
-            shifts_y = torch.randint(0, self.p2, (self.batch_size, self.k), 
-                                    device=self.device, dtype=torch.long)
-            
+            shifts_x = torch.randint(
+                0, self.p1, (self.batch_size, self.k), device=self.device, dtype=torch.long
+            )
+            shifts_y = torch.randint(
+                0, self.p2, (self.batch_size, self.k), device=self.device, dtype=torch.long
+            )
+
             # Generate X: roll template for each time step
             # Shape: (batch_size, k, p1, p2)
             X_rolled = self._roll_2d_batch(shifts_x, shifts_y)
-            
+
             # Reshape to (batch_size, k, p_flat)
             X = X_rolled.reshape(self.batch_size, self.k, self.p_flat)
-            
+
             if self.return_all_outputs:
                 # Generate Y for ALL cumulative sums (intermediate targets)
                 # Compute cumulative sum at each timestep
                 sx_cumsum = torch.cumsum(shifts_x, dim=1) % self.p1  # (batch_size, k)
                 sy_cumsum = torch.cumsum(shifts_y, dim=1) % self.p2  # (batch_size, k)
-                
+
                 # Roll by all cumulative sums: (batch_size, k, p1, p2)
                 Y_rolled = self._roll_2d_batch(sx_cumsum, sy_cumsum)
-                
+
                 # Reshape to (batch_size, k, p_flat)
                 Y = Y_rolled.reshape(self.batch_size, self.k, self.p_flat)
                 Y = Y[:, 1:, :]
@@ -111,13 +113,13 @@ class OnlineModularAdditionDataset2D(IterableDataset):
                 # Generate Y: only final cumulative sum (current behavior)
                 sx_cumsum = shifts_x.sum(dim=1) % self.p1  # (batch_size,)
                 sy_cumsum = shifts_y.sum(dim=1) % self.p2  # (batch_size,)
-                
+
                 # Shape: (batch_size, p1, p2)
                 Y_rolled = self._roll_2d_batch(sx_cumsum, sy_cumsum)
-                
+
                 # Reshape to (batch_size, p_flat)
                 Y = Y_rolled.reshape(self.batch_size, self.p_flat)
-                
+
             yield X, Y
 
 
@@ -126,8 +128,9 @@ class OnlineModularAdditionDataset1D(IterableDataset):
     Online dataset that generates 1D modular addition samples on-the-fly.
     Fully GPU-accelerated for maximum throughput.
     """
+
     def __init__(
-        self, 
+        self,
         p: int,
         template: np.ndarray,
         k: int,
@@ -141,18 +144,18 @@ class OnlineModularAdditionDataset1D(IterableDataset):
         self.batch_size = batch_size
         self.device = device
         self.return_all_outputs = return_all_outputs
-        
+
         # Store template on GPU for fast rolling
         self.template_gpu = torch.tensor(template, device=device, dtype=torch.float32)
-        
+
     def _roll_1d_batch(self, shifts):
         """
         Roll the 1D template by different amounts for each sample in a batch.
         Fully vectorized on GPU.
-        
+
         Args:
             shifts: (batch_size,) or (batch_size, k) tensor of shifts
-        
+
         Returns:
             Rolled templates: (batch_size, p) or (batch_size, k, p)
         """
@@ -160,42 +163,47 @@ class OnlineModularAdditionDataset1D(IterableDataset):
             # Single roll per sample: (batch_size,)
             batch_size = shifts.shape[0]
             # Use advanced indexing
-            indices = (torch.arange(self.p, device=self.device).unsqueeze(0) - shifts.unsqueeze(1)) % self.p
+            indices = (
+                torch.arange(self.p, device=self.device).unsqueeze(0) - shifts.unsqueeze(1)
+            ) % self.p
             rolled = self.template_gpu[indices.long()]
         else:
             # Multiple rolls per sample: (batch_size, k)
             batch_size, k = shifts.shape
-            indices = (torch.arange(self.p, device=self.device).unsqueeze(0).unsqueeze(0) - 
-                      shifts.unsqueeze(2)) % self.p
+            indices = (
+                torch.arange(self.p, device=self.device).unsqueeze(0).unsqueeze(0)
+                - shifts.unsqueeze(2)
+            ) % self.p
             rolled = self.template_gpu[indices.long()]
-        
+
         return rolled
-        
+
     def __iter__(self):
         """Generate batches indefinitely on GPU."""
         while True:
             # Generate random shifts on GPU: (batch_size, k)
-            shifts = torch.randint(0, self.p, (self.batch_size, self.k), 
-                                  device=self.device, dtype=torch.long)
-            
+            shifts = torch.randint(
+                0, self.p, (self.batch_size, self.k), device=self.device, dtype=torch.long
+            )
+
             # Generate X: roll template for each time step
             # Shape: (batch_size, k, p)
             X = self._roll_1d_batch(shifts)
-            
+
             if self.return_all_outputs:
                 # Generate Y for ALL cumulative sums (intermediate targets)
                 shifts_cumsum = torch.cumsum(shifts, dim=1) % self.p  # (batch_size, k)
-                
+
                 # Roll by all cumulative sums: (batch_size, k, p)
                 Y = self._roll_1d_batch(shifts_cumsum)
                 Y = Y[:, 1:, :]  # Remove first timestep
             else:
                 # Generate Y: only final cumulative sum
                 shifts_cumsum = shifts.sum(dim=1) % self.p  # (batch_size,)
-                
+
                 # Shape: (batch_size, p)
                 Y = self._roll_1d_batch(shifts_cumsum)
-            
+
             yield X, Y
 
 
@@ -209,7 +217,7 @@ def build_modular_addition_sequence_dataset_1d(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Build 1D modular addition dataset for cyclic group C_p.
-    
+
     Args:
         p: dimension of cyclic group
         template: (p,) template array
@@ -217,30 +225,30 @@ def build_modular_addition_sequence_dataset_1d(
         mode: "sampled" or "exhaustive"
         num_samples: number of samples for "sampled" mode
         return_all_outputs: if True, return intermediate outputs
-    
+
     Returns:
         X: (N, k, p) where token t is template rolled by shift_t
         Y: (N, p) or (N, k-1, p) target rolled by cumulative sum
         sequence: (N, k) integer group elements (shifts) per token
     """
     assert template.shape == (p,), f"template must be ({p},), got {template.shape}"
-    
+
     if mode == "exhaustive":
-        total = p ** k
+        total = p**k
         if total > 1_000_000:
             raise ValueError(f"p^k = {total} is huge; use mode='sampled' instead.")
         N = total
         sequence = np.zeros((N, k), dtype=np.int64)
         for idx in range(N):
             for t in range(k):
-                sequence[idx, t] = (idx // (p ** t)) % p
+                sequence[idx, t] = (idx // (p**t)) % p
     else:
         N = int(num_samples)
         sequence = np.random.randint(0, p, size=(N, k), dtype=np.int64)
-    
+
     X = np.zeros((N, k, p), dtype=np.float32)
     Y = np.zeros((N, k, p), dtype=np.float32)
-    
+
     for i in range(N):
         cumsum = 0
         for t in range(k):
@@ -248,12 +256,12 @@ def build_modular_addition_sequence_dataset_1d(
             X[i, t, :] = np.roll(template, shift)
             cumsum = (cumsum + shift) % p
             Y[i, t, :] = np.roll(template, cumsum)
-    
+
     if not return_all_outputs:
         Y = Y[:, -1, :]
     else:
         Y = Y[:, 1:, :]  # Remove first timestep for consistency with 2D
-    
+
     return X, Y, sequence
 
 
@@ -297,9 +305,9 @@ def build_modular_addition_sequence_dataset_2d(
         sequence_xy = np.zeros((N, k, 2), dtype=np.int64)
         for idx in range(N):
             for t in range(k):
-                flat_idx = (idx // (p_flat ** t)) % p_flat
+                flat_idx = (idx // (p_flat**t)) % p_flat
                 ax = flat_idx // p2  # rows
-                ay = flat_idx %  p2  # cols
+                ay = flat_idx % p2  # cols
                 sequence_xy[idx, t, 0] = ax
                 sequence_xy[idx, t, 1] = ay
     else:
@@ -320,11 +328,108 @@ def build_modular_addition_sequence_dataset_2d(
             sx = (sx + ax) % p1
             sy = (sy + ay) % p2
             Y[i, t, :] = np.roll(np.roll(template, shift=sx, axis=0), shift=sy, axis=1).ravel()
-    
+
     if not return_all_outputs:
         Y = Y[:, -1, :]
 
     return X, Y, sequence_xy
+
+
+def build_modular_addition_sequence_dataset_D3(
+    template: np.ndarray,
+    k: int,
+    mode: str = "sampled",
+    num_samples: int = 65536,
+    return_all_outputs: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build D3 (dihedral group) composition dataset for sequence length k.
+
+    Uses the regular representation of D3 to transform the template.
+    For a sequence of k group elements (g1, g2, ..., gk), we compute:
+    - X[i, t, :] = regular_rep(g_t) @ template  (template transformed by g_t)
+    - Y[i, :] = regular_rep(g1 * g2 * ... * gk) @ template  (template transformed by composition)
+
+    Args:
+        template: (group_order,) template array, where group_order = 6 for D3
+        k: sequence length (number of group elements to compose)
+        mode: "sampled" or "exhaustive"
+        num_samples: number of samples for "sampled" mode
+        return_all_outputs: if True, return intermediate outputs after each composition
+
+    Returns:
+        X: (N, k, group_order) input sequences
+        Y: (N, group_order) or (N, k-1, group_order) target outputs
+        sequence: (N, k) integer indices of group elements per token
+    """
+    from escnn.group import DihedralGroup
+
+    # Create D3 group (dihedral group of order 6)
+    D3 = DihedralGroup(N=3)
+    group_order = D3.order()  # = 6
+
+    assert template.shape == (group_order,), (
+        f"template must be ({group_order},), got {template.shape}"
+    )
+
+    # Get regular representation and list of elements
+    regular_rep = D3.representations["regular"]
+    elements = list(D3.elements)
+    n_elements = len(elements)  # = 6
+
+    # Pre-compute representation matrices for all elements
+    rep_matrices = np.array([regular_rep(g) for g in elements])  # (6, 6, 6)
+
+    if mode == "exhaustive":
+        # Total number of sequences: n_elements^k
+        total = n_elements**k
+        if total > 1_000_000:
+            raise ValueError(f"n_elements^k = {total} is huge; use mode='sampled' instead.")
+        N = total
+
+        # Generate all possible sequences of k element indices
+        sequence = np.zeros((N, k), dtype=np.int64)
+        for idx in range(N):
+            for t in range(k):
+                sequence[idx, t] = (idx // (n_elements**t)) % n_elements
+        # print(f"sequence: {sequence}") Looking good.
+    else:
+        # Sampled mode: randomly sample sequences
+        N = int(num_samples)
+        sequence = np.random.randint(0, n_elements, size=(N, k), dtype=np.int64)
+
+    # Initialize output arrays
+    X = np.zeros((N, k, group_order), dtype=np.float32)
+    Y = np.zeros((N, k, group_order), dtype=np.float32)
+
+    for i in range(N):
+        # Compute cumulative composition of group elements
+        cumulative_rep = np.eye(group_order)  # Identity matrix (identity element)
+
+        for t in range(k):
+            elem_idx = sequence[i, t]  # Take the index of the t-th element of the i-th sequence.
+            g_rep = rep_matrices[
+                elem_idx
+            ]  # Regular representation, a 6x6 matrix representing the group element.
+
+            # X[i, t] = template transformed by g_t
+            X[i, t, :] = g_rep @ template
+
+            # Update cumulative composition: g1 * g2 * ... * g_t
+            # cumulative_rep = cumulative_rep @ g_rep
+            cumulative_rep = g_rep @ cumulative_rep
+
+            # Y[i, t] = template transformed by cumulative composition
+            Y[i, t, :] = cumulative_rep @ template
+
+    if not return_all_outputs:
+        # Only return final output
+        Y = Y[:, -1, :]  # (N, group_order)
+    else:
+        # Return all intermediate outputs (skip first since it's just g1, not a composition)
+        Y = Y[:, 1:, :]  # (N, k-1, group_order)
+
+    return X, Y, sequence
 
 
 def sequence_to_paths_xy(sequence_xy: np.ndarray, p1: int, p2: int) -> np.ndarray:
@@ -348,32 +453,35 @@ def sequence_to_paths_xy(sequence_xy: np.ndarray, p1: int, p2: int) -> np.ndarra
     paths_xy[:, :, 1] = np.mod(np.cumsum(seq[:, :, 1], axis=1, dtype=np.int64), p2)
     return paths_xy
 
+
 def mnist_template_1d(p: int, label: int, root: str = "data", axis: int = 0):
     """
     Return a (p,) 1D template from a random MNIST image by taking a slice or projection.
     Values are float32 in [0, 1].
-    
+
     Args:
         p: dimension of the cyclic group
         label: MNIST digit class (0-9)
         root: MNIST data directory
         axis: 0 for row average, 1 for column average, 2 for diagonal
-    
+
     Returns:
         template: (p,) array
     """
     if not (0 <= int(label) <= 9):
         raise ValueError("label must be an integer in [0, 9].")
-    
-    ds = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=transforms.ToTensor())
+
+    ds = torchvision.datasets.MNIST(
+        root=root, train=True, download=True, transform=transforms.ToTensor()
+    )
     cls_idxs = (ds.targets == int(label)).nonzero(as_tuple=True)[0]
     if cls_idxs.numel() == 0:
         raise ValueError(f"No samples for label {label}.")
-    
+
     idx = cls_idxs[torch.randint(len(cls_idxs), (1,)).item()].item()
     img, _ = ds[idx]  # img: (1, 28, 28) in [0,1]
     img = img[0].numpy()  # (28, 28)
-    
+
     # Get 1D signal from 2D image
     if axis == 0:
         # Average over columns (vertical projection)
@@ -386,14 +494,15 @@ def mnist_template_1d(p: int, label: int, root: str = "data", axis: int = 0):
         signal = np.diag(img)  # (28,)
     else:
         raise ValueError("axis must be 0, 1, or 2")
-    
+
     # Interpolate to desired size p
     from scipy.interpolate import interp1d
+
     x_old = np.linspace(0, 1, len(signal))
     x_new = np.linspace(0, 1, p)
-    f = interp1d(x_old, signal, kind='cubic')
+    f = interp1d(x_old, signal, kind="cubic")
     template = f(x_new)
-    
+
     return template.astype(np.float32)
 
 
@@ -405,14 +514,18 @@ def mnist_template_2d(p1: int, p2: int, label: int, root: str = "data"):
     if not (0 <= int(label) <= 9):
         raise ValueError("label must be an integer in [0, 9].")
 
-    ds = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=transforms.ToTensor())
+    ds = torchvision.datasets.MNIST(
+        root=root, train=True, download=True, transform=transforms.ToTensor()
+    )
     cls_idxs = (ds.targets == int(label)).nonzero(as_tuple=True)[0]
     if cls_idxs.numel() == 0:
         raise ValueError(f"No samples for label {label}.")
 
     idx = cls_idxs[torch.randint(len(cls_idxs), (1,)).item()].item()
     img, _ = ds[idx]  # img: (1, 28, 28) in [0,1]
-    img = nn.functional.interpolate(img.unsqueeze(0), size=(p1, p2), mode="bilinear", align_corners=False)[0, 0]
+    img = nn.functional.interpolate(
+        img.unsqueeze(0), size=(p1, p2), mode="bilinear", align_corners=False
+    )[0, 0]
     return img.numpy().astype(np.float32)  # (p1, p2)
 
 
@@ -420,92 +533,101 @@ def mnist_template_2d(p1: int, p2: int, label: int, root: str = "data"):
 
 ### 1D Templates ###
 
-def generate_fourier_template_1d(p: int, n_freqs: int, amp_max: float = 100, amp_min: float = 10, seed=None):
+
+def generate_fourier_template_1d(
+    p: int, n_freqs: int, amp_max: float = 100, amp_min: float = 10, seed=None
+):
     """
     Generate 1D template from random Fourier modes.
-    
+
     Args:
         p: dimension of cyclic group
         n_freqs: number of frequency components to include
         amp_max: maximum amplitude
         amp_min: minimum amplitude
         seed: random seed
-    
+
     Returns:
         template: (p,) real-valued array
     """
     rng = np.random.default_rng(seed)
     spectrum = np.zeros(p, dtype=np.complex128)
-    
+
     # Select frequencies (skip DC)
     available_freqs = list(range(1, p // 2 + 1))
     if len(available_freqs) < n_freqs:
-        raise ValueError(f"Only {len(available_freqs)} non-DC frequencies available for p={p}, requested {n_freqs}")
-    
-    chosen_freqs = rng.choice(available_freqs, size=min(n_freqs, len(available_freqs)), replace=False)
-    
+        raise ValueError(
+            f"Only {len(available_freqs)} non-DC frequencies available for p={p}, requested {n_freqs}"
+        )
+
+    chosen_freqs = rng.choice(
+        available_freqs, size=min(n_freqs, len(available_freqs)), replace=False
+    )
+
     # Amplitudes decreasing with frequency index
     amps = np.sqrt(np.linspace(amp_max, amp_min, len(chosen_freqs)))
     phases = rng.uniform(0.0, 2 * np.pi, size=len(chosen_freqs))
-    
+
     for freq, amp, phi in zip(chosen_freqs, amps, phases):
         v = amp * np.exp(1j * phi)
         spectrum[freq] = v
         spectrum[-freq] = np.conj(v)  # Hermitian symmetry for real signal
-    
+
     template = np.fft.ifft(spectrum).real
     template -= template.mean()
     s = template.std()
     if s > 1e-12:
         template /= s
-    
+
     return template.astype(np.float32)
 
 
-def generate_gaussian_template_1d(p: int, n_gaussians: int = 3, sigma_range: tuple = (0.5, 2.0), seed=None):
+def generate_gaussian_template_1d(
+    p: int, n_gaussians: int = 3, sigma_range: tuple = (0.5, 2.0), seed=None
+):
     """
     Generate 1D template as sum of Gaussians.
-    
+
     Args:
         p: dimension of cyclic group
         n_gaussians: number of Gaussian bumps
         sigma_range: (min_sigma, max_sigma) for Gaussian widths
         seed: random seed
-    
+
     Returns:
         template: (p,) real-valued array
     """
     rng = np.random.default_rng(seed)
     x = np.arange(p)
     template = np.zeros(p, dtype=np.float32)
-    
+
     for _ in range(n_gaussians):
         center = rng.uniform(0, p)
         sigma = rng.uniform(*sigma_range)
         amplitude = rng.uniform(0.5, 1.0)
-        
+
         # Periodic distance
         dist = np.minimum(np.abs(x - center), p - np.abs(x - center))
-        template += amplitude * np.exp(-(dist ** 2) / (2 * sigma ** 2))
-    
+        template += amplitude * np.exp(-(dist**2) / (2 * sigma**2))
+
     template -= template.mean()
     s = template.std()
     if s > 1e-12:
         template /= s
-    
+
     return template.astype(np.float32)
 
 
 def generate_onehot_template_1d(p: int):
     """
     Generate 1D one-hot template for cyclic group C_p.
-    
+
     This creates a template with a single 1 at position 0 and 0s everywhere else.
     When rolled, this one-hot encoding uniquely identifies each group element.
-    
+
     Args:
         p: dimension of cyclic group
-    
+
     Returns:
         template: (p,) array with template[0] = 1, all others = 0
     """
@@ -516,17 +638,19 @@ def generate_onehot_template_1d(p: int):
 
 ### 2D Templates ###
 
+
 def gaussian_mixture_template(
-    p1=20, 
-    p2=20, 
-    n_blobs=8, 
+    p1=20,
+    p2=20,
+    n_blobs=8,
     frac_broad=0.7,
-    sigma_broad=(3.5, 6.0), 
+    sigma_broad=(3.5, 6.0),
     sigma_narrow=(1.0, 2.0),
-    amp_broad=1.0, 
+    amp_broad=1.0,
     amp_narrow=0.5,
-    seed=None, 
-    normalize=True):
+    seed=None,
+    normalize=True,
+):
     """
     Build a (p1 x p2) template as a periodic mixture of Gaussians.
     Broad Gaussians (low-frequency) get higher weight; a few narrow ones add detail.
@@ -549,8 +673,8 @@ def gaussian_mixture_template(
         return out
 
     template = (
-        add_blobs(k_broad, sigma_broad, amp_broad) +   # broad, low-freq power
-        add_blobs(k_narrow, sigma_narrow, amp_narrow)  # a bit of high-freq detail
+        add_blobs(k_broad, sigma_broad, amp_broad)  # broad, low-freq power
+        + add_blobs(k_narrow, sigma_narrow, amp_narrow)  # a bit of high-freq detail
     )
 
     if normalize:
@@ -559,6 +683,7 @@ def gaussian_mixture_template(
         if s > 1e-12:
             template /= s
     return template.astype(np.float32)
+
 
 def generate_template_unique_freqs(p1, p2, n_freqs, amp_max=100, amp_min=10, seed=None):
     """
@@ -596,7 +721,7 @@ def generate_template_unique_freqs(p1, p2, n_freqs, amp_max=100, amp_min=10, see
                 continue  # DC
             if is_self_conj(ky, kx):
                 continue  # exclude singletons
-            r2 = (s ** 2) + (kx ** 2)
+            r2 = (s**2) + (kx**2)
             cand.append((r2, ky, kx))
     cand.sort(key=lambda t: (t[0], abs(ky_signed(t[1])), t[2]))
 
@@ -620,12 +745,14 @@ def generate_template_unique_freqs(p1, p2, n_freqs, amp_max=100, amp_min=10, see
             chosen.append((ky, kx))
 
     if len(chosen) < n_freqs:
-        raise ValueError(f"Could only find {len(chosen)} unique non-conjugate bins; "
-                         f"requested {n_freqs}. Increase grid size or reduce n_freqs.")
+        raise ValueError(
+            f"Could only find {len(chosen)} unique non-conjugate bins; "
+            f"requested {n_freqs}. Increase grid size or reduce n_freqs."
+        )
 
     # Amplitudes + random phases, then place each bin + its conjugate
     amps = np.sqrt(np.linspace(amp_max, amp_min, n_freqs, dtype=float))
-    phases = rng.uniform(0.0, 2*np.pi, size=n_freqs)
+    phases = rng.uniform(0.0, 2 * np.pi, size=n_freqs)
 
     for (ky, kx), a, phi in zip(chosen, amps, phases):
         kyc, kxc = (-ky) % p1, (-kx) % p2
@@ -644,28 +771,28 @@ def generate_template_unique_freqs(p1, p2, n_freqs, amp_max=100, amp_min=10, see
 def generate_fixed_template_2d(p1: int, p2: int) -> np.ndarray:
     """
     Generate 2D template array from Fourier spectrum.
-    
+
     Args:
         p1: height dimension
         p2: width dimension
-    
+
     Returns:
         template: (p1, p2) real-valued array
     """
     # Generate template array from 2D Fourier spectrum
     spectrum = np.zeros((p1, p2), dtype=complex)
-    
+
     assert p1 > 5 and p2 > 5, "p1 and p2 must be greater than 5"
-    
+
     # Set 2D frequency components with specific amplitudes
     # Format: spectrum[kx, ky] where kx is "vertical freq", ky is "horizontal freq"
-    
+
     # Axis-aligned frequencies
-    spectrum[1, 0] = 10.0      # vertical frequency 1
-    spectrum[-1, 0] = 10.0     # conjugate
-    # spectrum[0, 1] = 10.0      # horizontal frequency 1  
+    spectrum[1, 0] = 10.0  # vertical frequency 1
+    spectrum[-1, 0] = 10.0  # conjugate
+    # spectrum[0, 1] = 10.0      # horizontal frequency 1
     # spectrum[0, -1] = 10.0     # conjugate
-    
+
     # Higher frequency components
     # spectrum[3, 0] = 7.5
     # spectrum[-3, 0] = 7.5
@@ -674,18 +801,18 @@ def generate_fixed_template_2d(p1: int, p2: int) -> np.ndarray:
 
     # Diagonal/mixed frequencies
     spectrum[2, 1] = 5.0
-    spectrum[-2, -1] = 5.0    # conjugate
+    spectrum[-2, -1] = 5.0  # conjugate
     # spectrum[1, 2] = 5.0
     # spectrum[-1, -2] = 5.0    # conjugate
-    
+
     # Generate signal from spectrum
     template = np.fft.ifft2(spectrum).real
-    
+
     return template
 
 
-
 # Spherically Symmetric Templates
+
 
 def _fft_indices(n):
     """
@@ -695,16 +822,17 @@ def _fft_indices(n):
     k = np.fft.fftfreq(n) * n
     return k.astype(int)
 
+
 def generate_hexagon_tie_template_2d(p1: int, p2: int, k0: float = 6.0, amp: float = 1.0):
     """
     Real template whose 2D Fourier spectrum has equal maxima at six directions
     (0°, 60°, 120°, 180°, 240°, 300°) with radius ~ k0 (in FFT index units).
-    
+
     Args:
         p1, p2: spatial dims (height, width). Require > 5 recommended.
         k0: desired radius (index units). Not necessarily integer; we round.
         amp: amplitude per spike (before conjugate pairing)
-        
+
     Returns:
         template: (p1, p2) real-valued array
     """
@@ -743,8 +871,8 @@ def generate_hexagon_tie_template_2d(p1: int, p2: int, k0: float = 6.0, amp: flo
         used.add((-kx, -ky))
 
         # Place equal-amplitude spikes with Hermitian symmetry
-        put(kx, ky, amp)                     # +k
-        put(-kx, -ky, np.conjugate(amp))     # -k (conjugate)
+        put(kx, ky, amp)  # +k
+        put(-kx, -ky, np.conjugate(amp))  # -k (conjugate)
 
     # Remove DC (optional) to avoid mean offset
     spec[0, 0] = 0.0
@@ -752,8 +880,11 @@ def generate_hexagon_tie_template_2d(p1: int, p2: int, k0: float = 6.0, amp: flo
     # Real template
     x = np.fft.ifft2(spec).real
     return x
-    
-def generate_ring_isotropic_template_2d(p1: int, p2: int, r0: float = 6.0, sigma: float = 0.5, total_power: float = 1.0):
+
+
+def generate_ring_isotropic_template_2d(
+    p1: int, p2: int, r0: float = 6.0, sigma: float = 0.5, total_power: float = 1.0
+):
     """
     Real template with a narrow, isotropic ring in the 2D spectrum: |X(k)| ≈ exp(- (||k||-r0)^2 / (2 sigma^2)).
     This produces a spherical (circular) symmetry -> orientation tie across the ring.
@@ -775,7 +906,7 @@ def generate_ring_isotropic_template_2d(p1: int, p2: int, r0: float = 6.0, sigma
     R = np.sqrt(kx**2 + ky**2)
 
     # Radial Gaussian ring (real, even -> already Hermitian when phases are 0)
-    mag = np.exp(-0.5 * ((R - r0) / max(sigma, 1e-6))**2)
+    mag = np.exp(-0.5 * ((R - r0) / max(sigma, 1e-6)) ** 2)
 
     # Optional: zero DC
     mag[0, 0] = 0.0
@@ -790,6 +921,7 @@ def generate_ring_isotropic_template_2d(p1: int, p2: int, r0: float = 6.0, sigma
 
     x = np.fft.ifft2(spec).real
     return x
+
 
 def generate_gaussian_template_2d(
     p1: int,
