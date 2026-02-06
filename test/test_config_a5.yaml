@@ -6,13 +6,16 @@ data:
   seed: 42
   template_type: custom_fourier
   mode: sampled
-  num_samples: 10
+  num_samples: 5
+  dataset_fraction: 0.1
   powers: [0.0, 1800.0, 0.0, 1800.0, 0.0]
 
 model:
-  model_type: SequentialMLP
+  model_type: TwoLayerNet
   hidden_dim: 10
   init_scale: 0.001
+  nonlinearity: square
+  output_scale: 1.0
   return_all_outputs: false
   transform_type: quadratic
 

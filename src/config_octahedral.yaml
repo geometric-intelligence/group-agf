@@ -17,9 +17,11 @@ data:
   powers: [0.0, 2000.0, 0.0, 0.0, 0.0]
 
 model:
-  model_type: SequentialMLP
+  model_type: TwoLayerNet
   hidden_dim: 720  # hidden_factor=30 * group_size=24
   init_scale: 0.001  # 1e-3 from default_config
+  nonlinearity: square
+  output_scale: 1.0
   return_all_outputs: false
   transform_type: quadratic
 

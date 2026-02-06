@@ -9,7 +9,7 @@ data:
   template_type: fourier
   n_freqs: 1
   mode: sampled
-  num_samples: 10
+  num_samples: 5
 
 model:
   model_type: SequentialMLP

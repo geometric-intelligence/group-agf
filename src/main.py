@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -20,7 +21,7 @@ from src.datamodule import (
     mnist_template_1d,
     mnist_template_2d,
 )
-from src.model import QuadraticRNN, SequentialMLP
+from src.model import QuadraticRNN, SequentialMLP, TwoLayerNet
 from src.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
 from src.utils import (
     plot_2d_signal,
@@ -31,6 +32,9 @@ from src.utils import (
     plot_wmix_frequency_structure,
     topk_template_freqs,
 )
+
+matplotlib.rcParams["pdf.fonttype"] = 42  # TrueType fonts for PDF viewer compatibility
+matplotlib.rcParams["ps.fonttype"] = 42
 
 
 def load_config(config_path: str) -> dict:
@@ -812,18 +816,35 @@ def produce_plots_D3(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("\nGenerating evaluation data for visualization...")
-    from src.datamodule import build_modular_addition_sequence_dataset_generic
+    model_type = config["model"]["model_type"]
 
-    X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_generic(
-        template_D3,
-        k,
-        group=group,
-        mode="sampled",
-        num_samples=min(config["data"]["num_samples"], 1000),
-        return_all_outputs=config["model"]["return_all_outputs"],
-    )
-    X_eval_t = torch.tensor(X_eval, dtype=torch.float32, device=device)
-    Y_eval_t = torch.tensor(Y_eval, dtype=torch.float32, device=device)
+    if model_type == "TwoLayerNet":
+        # TwoLayerNet expects flattened binary pair input: (N, 2*group_size)
+        from src.datasets import group_dataset, move_dataset_to_device_and_flatten
+
+        X_raw, Y_raw = group_dataset(group, template_D3)
+        X_eval_t, Y_eval_t, device = move_dataset_to_device_and_flatten(X_raw, Y_raw, device=device)
+        # Optionally subsample for visualization
+        n_eval = min(len(X_eval_t), 1000)
+        if n_eval < len(X_eval_t):
+            indices = np.random.choice(len(X_eval_t), size=n_eval, replace=False)
+            X_eval_t = X_eval_t[indices]
+            Y_eval_t = Y_eval_t[indices]
+    else:
+        # Sequence models use the generic sequence dataset
+        from src.datamodule import build_modular_addition_sequence_dataset_generic
+
+        X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_generic(
+            template_D3,
+            k,
+            group=group,
+            mode="sampled",
+            num_samples=min(config["data"]["num_samples"], 1000),
+            return_all_outputs=config["model"]["return_all_outputs"],
+        )
+        X_eval_t = torch.tensor(X_eval, dtype=torch.float32, device=device)
+        Y_eval_t = torch.tensor(Y_eval, dtype=torch.float32, device=device)
+
     print(f"  Generated {X_eval_t.shape[0]} samples for visualization")
 
     ### ----- COMPUTE CHECKPOINT INDICES ----- ###
@@ -1259,9 +1280,20 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             init_scale=config["model"]["init_scale"],
             return_all_outputs=config["model"]["return_all_outputs"],
         ).to(device)
+    elif model_type == "TwoLayerNet":
+        hidden_dim = config["model"]["hidden_dim"]
+        nonlinearity = config["model"].get("nonlinearity", "square")
+        output_scale = config["model"].get("output_scale", 1.0)
+        rnn_2d = TwoLayerNet(
+            group_size=p_flat,
+            hidden_size=hidden_dim,
+            nonlinearity=nonlinearity,
+            init_scale=config["model"]["init_scale"],
+            output_scale=output_scale,
+        ).to(device)
     else:
         raise ValueError(
-            f"Invalid model_type: {model_type}. Must be 'QuadraticRNN' or 'SequentialMLP'"
+            f"Invalid model_type: {model_type}. Must be 'QuadraticRNN', 'SequentialMLP', or 'TwoLayerNet'"
         )
 
     criterion = nn.MSELoss()
@@ -1394,132 +1426,170 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         print("Using OFFLINE pre-generated dataset...")
         from torch.utils.data import TensorDataset
 
-        if group_name == "cn":
-            from src.datamodule import build_modular_addition_sequence_dataset_1d
-
-            # Generate training dataset
-            X_train, Y_train, _ = build_modular_addition_sequence_dataset_1d(
-                config["data"]["p"],
-                template_1d,
-                config["data"]["k"],
-                mode=config["data"]["mode"],
-                num_samples=config["data"]["num_samples"],
-                return_all_outputs=config["model"]["return_all_outputs"],
+        if model_type == "TwoLayerNet":
+            # TwoLayerNet uses binary pair datasets from src/datasets.py
+            # Data shape: X=(N, 2, group_size) -> flattened to (N, 2*group_size), Y=(N, group_size)
+            from src.datasets import (
+                cn_dataset,
+                cnxcn_dataset,
+                group_dataset,
+                move_dataset_to_device_and_flatten,
             )
 
-            # Generate validation dataset
-            val_samples = max(1000, config["data"]["num_samples"] // 10)
-            X_val, Y_val, _ = build_modular_addition_sequence_dataset_1d(
-                config["data"]["p"],
-                template_1d,
-                config["data"]["k"],
-                mode="sampled",
-                num_samples=val_samples,
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
-        elif group_name == "cnxcn":
-            from src.datamodule import build_modular_addition_sequence_dataset_2d
+            if group_name == "cn":
+                X_raw, Y_raw = cn_dataset(template)
+            elif group_name == "cnxcn":
+                X_raw, Y_raw = cnxcn_dataset(template)
+            elif group_name == "dihedral":
+                X_raw, Y_raw = group_dataset(dihedral_group, template)
+            elif group_name == "octahedral":
+                X_raw, Y_raw = group_dataset(octahedral_group, template)
+            elif group_name == "A5":
+                X_raw, Y_raw = group_dataset(icosahedral_group, template)
+            else:
+                raise ValueError(f"Unsupported group_name for TwoLayerNet: {group_name}")
 
-            # Generate training dataset
-            X_train, Y_train, _ = build_modular_addition_sequence_dataset_2d(
-                config["data"]["p1"],
-                config["data"]["p2"],
-                template_2d,
-                config["data"]["k"],
-                mode=config["data"]["mode"],
-                num_samples=config["data"]["num_samples"],
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
+            # Flatten X from (N, 2, group_size) to (N, 2*group_size) and convert to tensors
+            X_all, Y_all, device = move_dataset_to_device_and_flatten(X_raw, Y_raw, device=device)
 
-            # Generate validation dataset
-            val_samples = max(1000, config["data"]["num_samples"] // 10)
-            X_val, Y_val, _ = build_modular_addition_sequence_dataset_2d(
-                config["data"]["p1"],
-                config["data"]["p2"],
-                template_2d,
-                config["data"]["k"],
-                mode="sampled",
-                num_samples=val_samples,
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
-        elif group_name == "dihedral":
-            from src.datamodule import build_modular_addition_sequence_dataset_D3
+            # Apply dataset_fraction if configured
+            dataset_fraction = config["data"].get("dataset_fraction", 1.0)
+            if dataset_fraction < 1.0:
+                N = X_all.shape[0]
+                n_sample = int(np.ceil(N * dataset_fraction))
+                indices = np.random.choice(N, size=n_sample, replace=False)
+                X_all = X_all[indices]
+                Y_all = Y_all[indices]
 
-            # Generate training dataset (using D3 dataset builder which works for any dihedral)
-            X_train, Y_train, _ = build_modular_addition_sequence_dataset_D3(
-                template_dihedral,
-                config["data"]["k"],
-                mode=config["data"]["mode"],
-                num_samples=config["data"]["num_samples"],
-                return_all_outputs=config["model"]["return_all_outputs"],
-                dihedral_n=n,
-            )
+            # Split into train/val (90/10)
+            N = X_all.shape[0]
+            n_val = max(1, N // 10)
+            n_train = N - n_val
+            X_train_t, X_val_t = X_all[:n_train], X_all[n_train:]
+            Y_train_t, Y_val_t = Y_all[:n_train], Y_all[n_train:]
 
-            # Generate validation dataset
-            val_samples = max(1000, config["data"]["num_samples"] // 10)
-            X_val, Y_val, _ = build_modular_addition_sequence_dataset_D3(
-                template_dihedral,
-                config["data"]["k"],
-                mode="sampled",
-                num_samples=val_samples,
-                return_all_outputs=config["model"]["return_all_outputs"],
-                dihedral_n=n,
-            )
-        elif group_name == "octahedral":
-            from src.datamodule import build_modular_addition_sequence_dataset_generic
-
-            # Generate training dataset
-            X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
-                template_octahedral,
-                config["data"]["k"],
-                group=octahedral_group,
-                mode=config["data"]["mode"],
-                num_samples=config["data"]["num_samples"],
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
-
-            # Generate validation dataset
-            val_samples = max(1000, config["data"]["num_samples"] // 10)
-            X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
-                template_octahedral,
-                config["data"]["k"],
-                group=octahedral_group,
-                mode="sampled",
-                num_samples=val_samples,
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
-        elif group_name == "A5":
-            from src.datamodule import build_modular_addition_sequence_dataset_generic
-
-            # Generate training dataset
-            X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
-                template_A5,
-                config["data"]["k"],
-                group=icosahedral_group,
-                mode=config["data"]["mode"],
-                num_samples=config["data"]["num_samples"],
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
-
-            # Generate validation dataset
-            val_samples = max(1000, config["data"]["num_samples"] // 10)
-            X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
-                template_A5,
-                config["data"]["k"],
-                group=icosahedral_group,
-                mode="sampled",
-                num_samples=val_samples,
-                return_all_outputs=config["model"]["return_all_outputs"],
-            )
         else:
-            raise ValueError(
-                f"group_name must be 'cn', 'cnxcn', 'dihedral', 'octahedral', or 'A5', got {group_name}"
-            )
+            # Sequence models (QuadraticRNN, SequentialMLP) use sequence datasets
+            if group_name == "cn":
+                from src.datamodule import build_modular_addition_sequence_dataset_1d
 
-        X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
-        Y_train_t = torch.tensor(Y_train, dtype=torch.float32, device=device)
-        X_val_t = torch.tensor(X_val, dtype=torch.float32, device=device)
-        Y_val_t = torch.tensor(Y_val, dtype=torch.float32, device=device)
+                # Generate training dataset
+                X_train, Y_train, _ = build_modular_addition_sequence_dataset_1d(
+                    config["data"]["p"],
+                    template_1d,
+                    config["data"]["k"],
+                    mode=config["data"]["mode"],
+                    num_samples=config["data"]["num_samples"],
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+
+                # Generate validation dataset
+                val_samples = max(1000, config["data"]["num_samples"] // 10)
+                X_val, Y_val, _ = build_modular_addition_sequence_dataset_1d(
+                    config["data"]["p"],
+                    template_1d,
+                    config["data"]["k"],
+                    mode="sampled",
+                    num_samples=val_samples,
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+            elif group_name == "cnxcn":
+                from src.datamodule import build_modular_addition_sequence_dataset_2d
+
+                # Generate training dataset
+                X_train, Y_train, _ = build_modular_addition_sequence_dataset_2d(
+                    config["data"]["p1"],
+                    config["data"]["p2"],
+                    template_2d,
+                    config["data"]["k"],
+                    mode=config["data"]["mode"],
+                    num_samples=config["data"]["num_samples"],
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+
+                # Generate validation dataset
+                val_samples = max(1000, config["data"]["num_samples"] // 10)
+                X_val, Y_val, _ = build_modular_addition_sequence_dataset_2d(
+                    config["data"]["p1"],
+                    config["data"]["p2"],
+                    template_2d,
+                    config["data"]["k"],
+                    mode="sampled",
+                    num_samples=val_samples,
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+            elif group_name == "dihedral":
+                from src.datamodule import build_modular_addition_sequence_dataset_D3
+
+                X_train, Y_train, _ = build_modular_addition_sequence_dataset_D3(
+                    template_dihedral,
+                    config["data"]["k"],
+                    mode=config["data"]["mode"],
+                    num_samples=config["data"]["num_samples"],
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                    dihedral_n=n,
+                )
+
+                val_samples = max(1000, config["data"]["num_samples"] // 10)
+                X_val, Y_val, _ = build_modular_addition_sequence_dataset_D3(
+                    template_dihedral,
+                    config["data"]["k"],
+                    mode="sampled",
+                    num_samples=val_samples,
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                    dihedral_n=n,
+                )
+            elif group_name == "octahedral":
+                from src.datamodule import build_modular_addition_sequence_dataset_generic
+
+                X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
+                    template_octahedral,
+                    config["data"]["k"],
+                    group=octahedral_group,
+                    mode=config["data"]["mode"],
+                    num_samples=config["data"]["num_samples"],
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+
+                val_samples = max(1000, config["data"]["num_samples"] // 10)
+                X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
+                    template_octahedral,
+                    config["data"]["k"],
+                    group=octahedral_group,
+                    mode="sampled",
+                    num_samples=val_samples,
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+            elif group_name == "A5":
+                from src.datamodule import build_modular_addition_sequence_dataset_generic
+
+                X_train, Y_train, _ = build_modular_addition_sequence_dataset_generic(
+                    template_A5,
+                    config["data"]["k"],
+                    group=icosahedral_group,
+                    mode=config["data"]["mode"],
+                    num_samples=config["data"]["num_samples"],
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+
+                val_samples = max(1000, config["data"]["num_samples"] // 10)
+                X_val, Y_val, _ = build_modular_addition_sequence_dataset_generic(
+                    template_A5,
+                    config["data"]["k"],
+                    group=icosahedral_group,
+                    mode="sampled",
+                    num_samples=val_samples,
+                    return_all_outputs=config["model"]["return_all_outputs"],
+                )
+            else:
+                raise ValueError(
+                    f"group_name must be 'cn', 'cnxcn', 'dihedral', 'octahedral', or 'A5', got {group_name}"
+                )
+
+            X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
+            Y_train_t = torch.tensor(Y_train, dtype=torch.float32, device=device)
+            X_val_t = torch.tensor(X_val, dtype=torch.float32, device=device)
+            Y_val_t = torch.tensor(Y_val, dtype=torch.float32, device=device)
 
         train_dataset = TensorDataset(X_train_t, Y_train_t)
         val_dataset = TensorDataset(X_val_t, Y_val_t)

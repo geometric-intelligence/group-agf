@@ -7,7 +7,7 @@ data:
   seed: 42
   template_type: onehot
   mode: sampled
-  num_samples: 10
+  num_samples: 5
 
 model:
   model_type: SequentialMLP
