@@ -16,14 +16,14 @@ import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import product
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import torch
 import yaml
 
 
-def deep_merge_dict(base: Dict, override: Dict) -> Dict:
+def deep_merge_dict(base: dict, override: dict) -> dict:
     """Deep merge override dictionary into base dictionary."""
     result = copy.deepcopy(base)
     for key, value in override.items():
@@ -34,7 +34,7 @@ def deep_merge_dict(base: Dict, override: Dict) -> Dict:
     return result
 
 
-def load_sweep_config(sweep_file: str) -> Dict:
+def load_sweep_config(sweep_file: str) -> dict:
     """Load sweep configuration with base config and experiments."""
     if not os.path.exists(sweep_file):
         raise FileNotFoundError(f"Sweep file not found: {sweep_file}")
@@ -54,7 +54,7 @@ def load_sweep_config(sweep_file: str) -> Dict:
     return sweep_config
 
 
-def expand_parameter_grid(parameter_grid: Dict) -> List[Dict]:
+def expand_parameter_grid(parameter_grid: dict) -> list[dict]:
     """
     Expand a parameter grid specification into a list of parameter combinations.
 
@@ -110,7 +110,7 @@ def expand_parameter_grid(parameter_grid: Dict) -> List[Dict]:
     return combinations
 
 
-def generate_experiment_name(overrides: Dict) -> str:
+def generate_experiment_name(overrides: dict) -> str:
     """
     Generate a concise experiment name from parameter overrides.
 
@@ -144,7 +144,7 @@ def generate_experiment_name(overrides: Dict) -> str:
     return "_".join(name_parts)
 
 
-def generate_experiment_configs(sweep_config: Dict) -> List[Tuple[str, Dict]]:
+def generate_experiment_configs(sweep_config: dict) -> list[tuple[str, dict]]:
     """
     Generate all individual experiment configurations from sweep.
 
@@ -203,7 +203,7 @@ def generate_experiment_configs(sweep_config: Dict) -> List[Tuple[str, Dict]]:
 
 
 def save_sweep_metadata(
-    sweep_dir: Path, sweep_config: Dict, experiment_configs: List[Tuple[str, Dict]]
+    sweep_dir: Path, sweep_config: dict, experiment_configs: list[tuple[str, dict]]
 ) -> None:
     """Save sweep metadata and configurations."""
 
@@ -235,8 +235,8 @@ def save_sweep_metadata(
 
 
 def run_single_seed(
-    exp_name: str, config: Dict, seed: int, sweep_dir: Path, gpu_id: Optional[int] = None
-) -> Dict[str, Any]:
+    exp_name: str, config: dict, seed: int, sweep_dir: Path, gpu_id: int | None = None
+) -> dict[str, Any]:
     """Run a single experiment seed (for multiprocessing).
 
     Args:
@@ -319,8 +319,8 @@ def run_single_seed(
 
 
 def run_experiment(
-    exp_name: str, config: Dict, seeds: List[int], sweep_dir: Path, gpu_id: int = None
-) -> List[Dict[str, Any]]:
+    exp_name: str, config: dict, seeds: list[int], sweep_dir: Path, gpu_id: int = None
+) -> list[dict[str, Any]]:
     """Run a single experiment configuration with multiple seeds.
 
     This function is kept for backward compatibility. For multi-GPU sweeps,
@@ -412,7 +412,7 @@ def run_experiment(
     return run_results
 
 
-def generate_sweep_summary(sweep_dir: Path, all_results: Dict[str, List[Dict[str, Any]]]) -> None:
+def generate_sweep_summary(sweep_dir: Path, all_results: dict[str, list[dict[str, Any]]]) -> None:
     """Generate overall sweep summary."""
 
     # Aggregate statistics across all experiments
@@ -501,7 +501,7 @@ def generate_sweep_summary(sweep_dir: Path, all_results: Dict[str, List[Dict[str
 
 
 def run_parameter_sweep(
-    sweep_file: str, gpu_ids: Optional[List[int]] = None, gpu_id: Optional[int] = None
+    sweep_file: str, gpu_ids: list[int] | None = None, gpu_id: int | None = None
 ):
     """Run full parameter sweep experiment.
 

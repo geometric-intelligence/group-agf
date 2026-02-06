@@ -1,7 +1,5 @@
 """Training function for Quadratic RNN with sequential inputs."""
 
-from typing import Optional
-
 import torch
 import torch.optim as optim
 from torch import nn
@@ -15,10 +13,10 @@ def train(
     optimizer: optim.Optimizer,
     epochs: int = 2000,
     verbose_interval: int = 100,
-    grad_clip: Optional[float] = None,
-    eval_dataloader: Optional[DataLoader] = None,
-    save_param_interval: Optional[int] = None,
-    reduction_threshold: Optional[float] = None,
+    grad_clip: float | None = None,
+    eval_dataloader: DataLoader | None = None,
+    save_param_interval: int | None = None,
+    reduction_threshold: float | None = None,
 ) -> tuple[list[float], list[float], list[dict[str, torch.Tensor]], list[int], int]:
     """
     Train a model with sequential inputs (offline/epoch-based).
@@ -146,10 +144,10 @@ def train_online(
     optimizer: optim.Optimizer,
     num_steps: int = 10000,
     verbose_interval: int = 100,
-    grad_clip: Optional[float] = None,
-    eval_dataloader: Optional[DataLoader] = None,
-    save_param_interval: Optional[int] = None,
-    reduction_threshold: Optional[float] = None,
+    grad_clip: float | None = None,
+    eval_dataloader: DataLoader | None = None,
+    save_param_interval: int | None = None,
+    reduction_threshold: float | None = None,
 ) -> tuple[list[float], list[float], list[dict[str, torch.Tensor]], list[int], int]:
     """
     Train with online data generation (step-based instead of epoch-based).
