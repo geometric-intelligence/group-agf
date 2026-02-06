@@ -65,7 +65,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gagf", "group_agf"]
+known-first-party = ["gagf", "group_agf", "default_config"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]

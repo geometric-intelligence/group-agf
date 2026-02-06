@@ -3,7 +3,6 @@ import itertools
 import logging
 import time
 
-import default_config
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,6 +10,7 @@ import torch.optim as optim
 from escnn.group import *
 from torch.utils.data import DataLoader, TensorDataset
 
+import default_config
 import group_agf.binary_action_learning.datasets as datasets
 import group_agf.binary_action_learning.models as models
 import group_agf.binary_action_learning.plot as plot
