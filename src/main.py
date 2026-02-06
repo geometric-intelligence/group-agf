@@ -250,54 +250,10 @@ def produce_plots_2d(
         show=False,
     )
 
-    # ### ----- PLOT POWER SPECTRUM ANALYSIS ----- ###
-    # print("Analyzing power spectrum of predictions over training...")
-    # plot_prediction_power_spectrum_over_time(
-    #     model,
-    #     param_hist,
-    #     X_seq_2d_t,
-    #     Y_seq_2d_t,
-    #     template_2d,
-    #     config['data']['p1'],
-    #     config['data']['p2'],
-    #     loss_history=train_loss_hist,
-    #     param_save_indices=param_save_indices,
-    #     num_freqs_to_track=10,
-    #     checkpoint_indices=checkpoint_indices,
-    #     num_samples=100,
-    #     save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
-    #     show=False
-    # )
-
     ### ----- PLOT FOURIER MODES REFERENCE ----- ###
     print("Creating Fourier modes reference...")
     tracked_freqs = topk_template_freqs(template_2d, K=10)
     colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
-
-    # plot_fourier_modes_reference(
-    #     tracked_freqs,
-    #     colors,
-    #     config['data']['p1'],
-    #     config['data']['p2'],
-    #     save_path=os.path.join(run_dir, "fourier_modes_reference.pdf"),
-    #     save_individual=True,
-    #     individual_dir=os.path.join(run_dir, "fourier_modes"),
-    #     show=False
-    # )
-
-    # ### ----- PLOT W_OUT NEURON SPECIALIZATION ----- ###
-    # print("Visualizing W_out neuron specialization...")
-    # plot_wout_neuron_specialization(
-    #     param_hist,
-    #     tracked_freqs,
-    #     colors,
-    #     config['data']['p1'],
-    #     config['data']['p2'],
-    #     steps=checkpoint_indices,
-    #     dead_thresh_l2=0.25,
-    #     save_dir=run_dir,
-    #     show=False
-    # )
 
     ### ----- PLOT W_MIX FREQUENCY STRUCTURE (QuadraticRNN only) ----- ###
     model_type = config["model"]["model_type"]
@@ -458,22 +414,6 @@ def produce_plots_1d(
         save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
         show=False,
     )
-
-    # ### ----- PLOT W_OUT NEURON SPECIALIZATION ----- ###
-    # print("Visualizing W_out neuron specialization...")
-    # tracked_freqs = topk_template_freqs_1d(template_1d, K=min(10, p // 4))
-    # colors = plt.cm.tab10(np.linspace(0, 1, len(tracked_freqs)))
-
-    # plot_wout_neuron_specialization_1d(
-    #     param_hist,
-    #     tracked_freqs,
-    #     colors,
-    #     p,
-    #     steps=checkpoint_indices,
-    #     dead_thresh_l2=0.25,
-    #     save_dir=run_dir,
-    #     show=False
-    # )
 
     print("\n✓ All 1D plots generated successfully!")
 

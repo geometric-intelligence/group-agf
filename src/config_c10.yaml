@@ -5,7 +5,7 @@
 data:
   group_name: cn
   p: 10
-  k: 5
+  k: 3
   batch_size: 128
   seed: 10
   template_type: onehot
