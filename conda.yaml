@@ -1,4 +1,4 @@
-name: gagf
+name: group-agf
 channels:
   - conda-forge
   - defaults

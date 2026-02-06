@@ -1,7 +1,7 @@
 # Model architecture and data complexity sweep
 # Explores different hidden dimensions, sequence lengths, and grid sizes
 
-base_config: "gagf/rnns/config.yaml"
+base_config: "src/config.yaml"
 n_seeds: 3
 
 experiments:
