@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from gagf.rnns.model import QuadraticRNN, SequentialMLP
+from src.model import QuadraticRNN, SequentialMLP
 
 
 class TestQuadraticRNN:

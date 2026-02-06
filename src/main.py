@@ -12,7 +12,7 @@ import yaml
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from gagf.rnns.datamodule import (
+from src.datamodule import (
     generate_fourier_template_1d,
     generate_gaussian_template_1d,
     generate_onehot_template_1d,
@@ -20,9 +20,9 @@ from gagf.rnns.datamodule import (
     mnist_template_1d,
     mnist_template_2d,
 )
-from gagf.rnns.model import QuadraticRNN, SequentialMLP
-from gagf.rnns.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
-from gagf.rnns.utils import (
+from src.model import QuadraticRNN, SequentialMLP
+from src.optimizers import HybridRNNOptimizer, PerNeuronScaledSGD
+from src.utils import (
     plot_2d_signal,
     plot_model_predictions_over_time,
     plot_model_predictions_over_time_1d,
@@ -168,7 +168,7 @@ def produce_plots_2d(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("Generating evaluation data for visualization...")
-    from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_2d
+    from src.datamodule import build_modular_addition_sequence_dataset_2d
 
     X_seq_2d, Y_seq_2d, _ = build_modular_addition_sequence_dataset_2d(
         config["data"]["p1"],
@@ -371,7 +371,7 @@ def produce_plots_1d(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("Generating evaluation data for visualization...")
-    from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_1d
+    from src.datamodule import build_modular_addition_sequence_dataset_1d
 
     X_seq_1d, Y_seq_1d, _ = build_modular_addition_sequence_dataset_1d(
         config["data"]["p"],
@@ -791,7 +791,7 @@ def produce_plots_D3(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("\nGenerating evaluation data for visualization...")
-    from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_D3
+    from src.datamodule import build_modular_addition_sequence_dataset_D3
 
     X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_D3(
         template_D3,
@@ -1147,7 +1147,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         print("Using ONLINE data generation...")
 
         if dimension == 1:
-            from gagf.rnns.datamodule import OnlineModularAdditionDataset1D
+            from src.datamodule import OnlineModularAdditionDataset1D
 
             # Training dataset
             train_dataset = OnlineModularAdditionDataset1D(
@@ -1169,7 +1169,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 return_all_outputs=config["model"]["return_all_outputs"],
             )
         elif dimension == 2:
-            from gagf.rnns.datamodule import OnlineModularAdditionDataset2D
+            from src.datamodule import OnlineModularAdditionDataset2D
 
             # Training dataset
             train_dataset = OnlineModularAdditionDataset2D(
@@ -1212,7 +1212,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
         from torch.utils.data import TensorDataset
 
         if dimension == 1:
-            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_1d
+            from src.datamodule import build_modular_addition_sequence_dataset_1d
 
             # Generate training dataset
             X_train, Y_train, _ = build_modular_addition_sequence_dataset_1d(
@@ -1235,7 +1235,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 return_all_outputs=config["model"]["return_all_outputs"],
             )
         elif dimension == 2:
-            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_2d
+            from src.datamodule import build_modular_addition_sequence_dataset_2d
 
             # Generate training dataset
             X_train, Y_train, _ = build_modular_addition_sequence_dataset_2d(
@@ -1260,7 +1260,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
                 return_all_outputs=config["model"]["return_all_outputs"],
             )
         elif dimension == "D3":
-            from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_D3
+            from src.datamodule import build_modular_addition_sequence_dataset_D3
 
             # Generate training dataset
             X_train, Y_train, _ = build_modular_addition_sequence_dataset_D3(
@@ -1313,7 +1313,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     start_time = time.time()
 
     if training_mode == "online":
-        from gagf.rnns.train import train_online
+        from src.train import train_online
 
         train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = train_online(
             rnn_2d,
@@ -1328,7 +1328,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             reduction_threshold=reduction_threshold,
         )
     else:  # offline
-        from gagf.rnns.train import train
+        from src.train import train
 
         train_loss_hist, val_loss_hist, param_hist, param_save_indices, final_step = train(
             rnn_2d,

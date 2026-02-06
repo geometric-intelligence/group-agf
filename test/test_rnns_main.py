@@ -1,5 +1,5 @@
 """
-Tests for gagf/rnns/main.py
+Tests for src/main.py
 
 This module tests that the main() entry point runs successfully with minimal
 configuration. Tests are only run when MAIN_TEST_MODE=1 environment variable
@@ -39,9 +39,9 @@ def test_config_path():
 def mock_plots():
     """Mock all plot functions to skip visualization."""
     with (
-        patch("gagf.rnns.main.produce_plots_1d") as mock_1d,
-        patch("gagf.rnns.main.produce_plots_2d") as mock_2d,
-        patch("gagf.rnns.main.produce_plots_D3") as mock_d3,
+        patch("src.main.produce_plots_1d") as mock_1d,
+        patch("src.main.produce_plots_2d") as mock_2d,
+        patch("src.main.produce_plots_D3") as mock_d3,
         patch("matplotlib.pyplot.savefig") as mock_savefig,
         patch("matplotlib.pyplot.close") as mock_close,
     ):
@@ -61,13 +61,13 @@ def test_main_with_config_file(temp_run_dir, test_config_path, mock_plots):
 
     This tests what happens when you run `python main.py --config test_rnns_config.yaml`.
     """
-    from gagf.rnns.main import load_config, main
+    from src.main import load_config, main
 
     # Load the test config
     config = load_config(str(test_config_path))
 
     # Patch the setup_run_directory to use our temp directory
-    with patch("gagf.rnns.main.setup_run_directory") as mock_setup:
+    with patch("src.main.setup_run_directory") as mock_setup:
         mock_setup.return_value = temp_run_dir
 
         # Run main
@@ -83,7 +83,7 @@ def test_train_single_run_1d(temp_run_dir, mock_plots):
     """
     Test train_single_run() directly with a minimal 1D config.
     """
-    from gagf.rnns.main import train_single_run
+    from src.main import train_single_run
 
     # Create minimal config programmatically
     config = {
@@ -140,7 +140,7 @@ def test_train_single_run_with_quadratic_rnn(temp_run_dir, mock_plots):
     """
     Test train_single_run() with QuadraticRNN model type.
     """
-    from gagf.rnns.main import train_single_run
+    from src.main import train_single_run
 
     config = {
         "data": {
@@ -189,7 +189,7 @@ def test_train_single_run_with_quadratic_rnn(temp_run_dir, mock_plots):
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
 def test_load_config(test_config_path):
     """Test that load_config correctly loads the YAML file."""
-    from gagf.rnns.main import load_config
+    from src.main import load_config
 
     config = load_config(str(test_config_path))
 

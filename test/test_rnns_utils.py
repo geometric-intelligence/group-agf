@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from gagf.rnns.utils import (
+from src.utils import (
     get_power_1d,
     get_power_2d_adele,
     topk_template_freqs,

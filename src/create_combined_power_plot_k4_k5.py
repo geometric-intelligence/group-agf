@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create a combined 4x3 plot showing power spectrum evolution for k=2,3,4,5.
+Create a combined 2x3 plot showing power spectrum evolution for k=4 and k=5.
 Each row corresponds to a k value, each column to a scale type (linear, log-x, log-log).
 """
 
@@ -13,9 +13,9 @@ import torch
 import yaml
 from escnn.group import DihedralGroup
 
-from gagf.rnns.datamodule import build_modular_addition_sequence_dataset_D3
-from gagf.rnns.model import SequentialMLP
 from group_agf.binary_action_learning.group_fourier_transform import compute_group_fourier_coef
+from src.datamodule import build_modular_addition_sequence_dataset_D3
+from src.model import SequentialMLP
 
 
 def load_run_data(run_dir):
@@ -127,11 +127,11 @@ def compute_power_evolution(run_data, num_checkpoints_to_sample=50, num_samples_
 
 
 def create_combined_plot(run_dirs_dict, save_path):
-    """Create 4x3 combined plot."""
+    """Create 2x3 combined plot."""
     # run_dirs_dict: {k: run_dir}
 
-    fig = plt.figure(figsize=(18, 20))
-    gs = fig.add_gridspec(5, 3, height_ratios=[0.15, 1, 1, 1, 1], hspace=0.3, wspace=0.3)
+    fig = plt.figure(figsize=(18, 10))
+    gs = fig.add_gridspec(3, 3, height_ratios=[0.15, 1, 1], hspace=0.3, wspace=0.3)
 
     # Top row for common parameters
     ax_title = fig.add_subplot(gs[0, :])
@@ -168,12 +168,12 @@ def create_combined_plot(run_dirs_dict, save_path):
         axes.append([fig.add_subplot(gs[1, col])])
 
     # Then create remaining rows sharing x-axis with first row in each column
-    for row in range(1, 4):
+    for row in range(1, 2):
         for col in range(3):
             axes[col].append(fig.add_subplot(gs[row + 1, col], sharex=axes[col][0]))
 
     # Convert to row-major format for easier indexing
-    axes = np.array([[axes[col][row] for col in range(3)] for row in range(4)])
+    axes = np.array([[axes[col][row] for col in range(3)] for row in range(2)])
 
     k_values = sorted(run_dirs_dict.keys())
 
@@ -234,7 +234,7 @@ def create_combined_plot(run_dirs_dict, save_path):
                 label=f"Irrep {irrep_idx} (dim={irreps[irrep_idx].size})",
             )
             ax.axhline(template_power[irrep_idx], linestyle="--", alpha=0.5, color=colors_line[i])
-        if row_idx == 3:  # Only bottom row shows xlabel
+        if row_idx == 1:  # Only bottom row shows xlabel
             ax.set_xlabel("Epoch")
         ax.set_ylabel("Power")
         if row_idx == 0:
@@ -245,7 +245,7 @@ def create_combined_plot(run_dirs_dict, save_path):
         ax.legend(loc="upper left", fontsize=7)
         ax.grid(True, alpha=0.3)
         # Hide x-axis labels for non-bottom rows (they're shared)
-        if row_idx < 3:
+        if row_idx < 1:
             ax.tick_params(labelbottom=False)
 
         # Column 2: Log x-axis
@@ -262,7 +262,7 @@ def create_combined_plot(run_dirs_dict, save_path):
             )
             ax.axhline(template_power[irrep_idx], linestyle="--", alpha=0.5, color=colors_line[i])
         ax.set_xscale("log")
-        if row_idx == 3:  # Only bottom row shows xlabel
+        if row_idx == 1:  # Only bottom row shows xlabel
             ax.set_xlabel("Epoch (log scale)")
         ax.set_ylabel("Power")
         if row_idx == 0:
@@ -273,7 +273,7 @@ def create_combined_plot(run_dirs_dict, save_path):
         ax.legend(loc="upper left", fontsize=7)
         ax.grid(True, alpha=0.3)
         # Hide x-axis labels for non-bottom rows (they're shared)
-        if row_idx < 3:
+        if row_idx < 1:
             ax.tick_params(labelbottom=False)
 
         # Column 3: Log-log scales
@@ -296,7 +296,7 @@ def create_combined_plot(run_dirs_dict, save_path):
                 )
         ax.set_xscale("log")
         ax.set_yscale("log")
-        if row_idx == 3:  # Only bottom row shows xlabel
+        if row_idx == 1:  # Only bottom row shows xlabel
             ax.set_xlabel("Epoch (log scale)")
         ax.set_ylabel("Power (log scale)")
         if row_idx == 0:
@@ -307,7 +307,7 @@ def create_combined_plot(run_dirs_dict, save_path):
         ax.legend(loc="upper left", fontsize=7)
         ax.grid(True, alpha=0.3)
         # Hide x-axis labels for non-bottom rows (they're shared)
-        if row_idx < 3:
+        if row_idx < 1:
             ax.tick_params(labelbottom=False)
 
     plt.savefig(save_path, bbox_inches="tight", dpi=150)
@@ -317,13 +317,9 @@ def create_combined_plot(run_dirs_dict, save_path):
 
 if __name__ == "__main__":
     # Map k values to run directories
-    # k=2, k=3: 10000 epochs
-    # k=4, k=5: 20000 epochs
     run_dirs_dict = {
-        2: "runs/20260114_134641",
-        3: "runs/20260114_134800",
-        4: "runs/20260114_141256",
-        5: "runs/20260114_141951",
+        4: "runs/20260114_170639",
+        5: "runs/20260114_170913",
     }
 
     # Verify all directories exist
@@ -331,5 +327,5 @@ if __name__ == "__main__":
         if not os.path.exists(run_dir):
             print(f"Warning: {run_dir} does not exist for k={k}")
 
-    save_path = "runs/combined_power_spectrum_4x3.pdf"
+    save_path = "runs/combined_power_spectrum_k4_k5_2x3.pdf"
     create_combined_plot(run_dirs_dict, save_path)
