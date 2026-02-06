@@ -43,6 +43,7 @@ exclude = [
     ".venv",
     "build",
     "dist",
+    "wandb",
 ]
 
 [tool.ruff.lint]
@@ -66,6 +67,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["gagf", "group_agf", "default_config"]
+known-third-party = ["wandb"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]

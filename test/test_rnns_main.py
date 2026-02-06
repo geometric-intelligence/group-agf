@@ -38,11 +38,13 @@ def test_config_path():
 @pytest.fixture
 def mock_plots():
     """Mock all plot functions to skip visualization."""
-    with patch("gagf.rnns.main.produce_plots_1d") as mock_1d, patch(
-        "gagf.rnns.main.produce_plots_2d"
-    ) as mock_2d, patch("gagf.rnns.main.produce_plots_D3") as mock_d3, patch(
-        "matplotlib.pyplot.savefig"
-    ) as mock_savefig, patch("matplotlib.pyplot.close") as mock_close:
+    with (
+        patch("gagf.rnns.main.produce_plots_1d") as mock_1d,
+        patch("gagf.rnns.main.produce_plots_2d") as mock_2d,
+        patch("gagf.rnns.main.produce_plots_D3") as mock_d3,
+        patch("matplotlib.pyplot.savefig") as mock_savefig,
+        patch("matplotlib.pyplot.close") as mock_close,
+    ):
         yield {
             "produce_plots_1d": mock_1d,
             "produce_plots_2d": mock_2d,

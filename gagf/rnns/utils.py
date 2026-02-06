@@ -1254,7 +1254,7 @@ def plot_wout_neuron_specialization(
     # Get dimensions
     W0 = param_history[steps[0]]["W_out"].detach().cpu().numpy().T  # (H, D)
     H, D = W0.shape
-    assert p1 * p2 == D, f"p1*p2 ({p1*p2}) must equal D ({D})."
+    assert p1 * p2 == D, f"p1*p2 ({p1 * p2}) must equal D ({D})."
 
     # Compute global color limits across all steps
     vmin, vmax = np.inf, -np.inf

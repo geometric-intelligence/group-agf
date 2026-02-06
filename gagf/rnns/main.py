@@ -164,7 +164,7 @@ def produce_plots_2d(
     np.save(run_dir / "fraction_of_space_seen.npy", fraction_of_space)
 
     print(f"Total data space: {total_space_size:,} sequences")
-    print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1]*100:.4f}% of space)")
+    print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1] * 100:.4f}% of space)")
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("Generating evaluation data for visualization...")
@@ -367,7 +367,7 @@ def produce_plots_1d(
     np.save(run_dir / "fraction_of_space_seen.npy", fraction_of_space)
 
     print(f"Total data space: {total_space_size:,} sequences")
-    print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1]*100:.4f}% of space)")
+    print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1] * 100:.4f}% of space)")
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("Generating evaluation data for visualization...")
@@ -787,7 +787,7 @@ def produce_plots_D3(
     print(f"Sequence length k: {k}")
     print(f"Total data space: {total_space_size:,} sequences")
     if len(samples_seen) > 0:
-        print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1]*100:.4f}% of space)")
+        print(f"Samples seen: {samples_seen[-1]:,} ({fraction_of_space[-1] * 100:.4f}% of space)")
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("\nGenerating evaluation data for visualization...")
@@ -1308,7 +1308,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
     # Get optional early stopping threshold
     reduction_threshold = config["training"].get("reduction_threshold")
     if reduction_threshold is not None:
-        print(f"Early stopping enabled at {reduction_threshold*100:.1f}% reduction")
+        print(f"Early stopping enabled at {reduction_threshold * 100:.1f}% reduction")
 
     start_time = time.time()
 

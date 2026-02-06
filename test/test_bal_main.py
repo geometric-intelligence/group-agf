@@ -51,11 +51,14 @@ def mock_wandb():
 
     mock_config = MagicMock()
 
-    with patch("wandb.init") as mock_init, patch("wandb.config", mock_config), patch(
-        "wandb.run", mock_run
-    ), patch("wandb.log") as mock_log, patch("wandb.finish") as mock_finish, patch(
-        "wandb.Image"
-    ) as mock_image:
+    with (
+        patch("wandb.init") as mock_init,
+        patch("wandb.config", mock_config),
+        patch("wandb.run", mock_run),
+        patch("wandb.log") as mock_log,
+        patch("wandb.finish") as mock_finish,
+        patch("wandb.Image") as mock_image,
+    ):
         mock_init.return_value = mock_run
         mock_image.return_value = MagicMock()
         yield {
@@ -71,13 +74,12 @@ def mock_wandb():
 @pytest.fixture
 def mock_plots():
     """Mock plot functions to skip visualization."""
-    with patch("group_agf.binary_action_learning.plot.plot_loss_curve") as mock_loss, patch(
-        "group_agf.binary_action_learning.plot.plot_training_power_over_time"
-    ) as mock_power, patch(
-        "group_agf.binary_action_learning.plot.plot_neuron_weights"
-    ) as mock_weights, patch(
-        "group_agf.binary_action_learning.plot.plot_model_outputs"
-    ) as mock_outputs:
+    with (
+        patch("group_agf.binary_action_learning.plot.plot_loss_curve") as mock_loss,
+        patch("group_agf.binary_action_learning.plot.plot_training_power_over_time") as mock_power,
+        patch("group_agf.binary_action_learning.plot.plot_neuron_weights") as mock_weights,
+        patch("group_agf.binary_action_learning.plot.plot_model_outputs") as mock_outputs,
+    ):
         # Return mock figure objects
         mock_fig = MagicMock()
         mock_loss.return_value = mock_fig

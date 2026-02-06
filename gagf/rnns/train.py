@@ -65,7 +65,7 @@ def train(
 
     if reduction_threshold is not None:
         print(f"  Initial loss: {initial_loss:.6f}")
-        print(f"  Early stopping at {reduction_threshold*100:.1f}% reduction")
+        print(f"  Early stopping at {reduction_threshold * 100:.1f}% reduction")
 
     final_epoch = epochs
 
@@ -125,13 +125,13 @@ def train(
                 param_history.append(snap)
                 param_save_epochs.append(epoch)
             print(
-                f"\n[CONVERGED] Epoch {epoch}: {reduction*100:.1f}% reduction >= {reduction_threshold*100:.1f}% threshold"
+                f"\n[CONVERGED] Epoch {epoch}: {reduction * 100:.1f}% reduction >= {reduction_threshold * 100:.1f}% threshold"
             )
             break
 
         if epoch % verbose_interval == 0:
             print(
-                f"[Epoch {epoch:>5}/{epochs}] loss: {avg_loss:.6f} | reduction: {reduction*100:>6.1f}%"
+                f"[Epoch {epoch:>5}/{epochs}] loss: {avg_loss:.6f} | reduction: {reduction * 100:>6.1f}%"
             )
 
     return train_loss_history, val_loss_history, param_history, param_save_epochs, final_epoch
@@ -196,7 +196,7 @@ def train_online(
 
     if reduction_threshold is not None:
         print(f"  Initial loss: {initial_loss:.6f}")
-        print(f"  Early stopping at {reduction_threshold*100:.1f}% reduction")
+        print(f"  Early stopping at {reduction_threshold * 100:.1f}% reduction")
 
     # Training loop
     model.train()
@@ -263,13 +263,13 @@ def train_online(
                 param_history.append(snap)
                 param_save_steps.append(step)
             print(
-                f"\n[CONVERGED] Step {step}: {reduction*100:.1f}% reduction >= {reduction_threshold*100:.1f}% threshold"
+                f"\n[CONVERGED] Step {step}: {reduction * 100:.1f}% reduction >= {reduction_threshold * 100:.1f}% threshold"
             )
             break
 
         if step % verbose_interval == 0:
             print(
-                f"[Step {step:>6}/{num_steps}] loss: {current_loss:.6f} | reduction: {reduction*100:>6.1f}%"
+                f"[Step {step:>6}/{num_steps}] loss: {current_loss:.6f} | reduction: {reduction * 100:>6.1f}%"
             )
 
     return train_loss_history, val_loss_history, param_history, param_save_steps, final_step

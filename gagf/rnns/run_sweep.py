@@ -334,12 +334,12 @@ def run_experiment(
         gpu_id: Optional GPU ID to use (overrides config device)
     """
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"RUNNING EXPERIMENT: {exp_name}")
     print(f"Seeds: {seeds}")
     if gpu_id is not None:
         print(f"GPU: cuda:{gpu_id}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # Create experiment directory
     exp_dir = sweep_dir / exp_name
@@ -348,9 +348,9 @@ def run_experiment(
     # Run each seed sequentially
     run_results = []
     for seed_idx, seed in enumerate(seeds):
-        print(f"\n{'-'*60}")
+        print(f"\n{'-' * 60}")
         print(f"EXPERIMENT {exp_name} - SEED {seed_idx + 1}/{len(seeds)}: seed={seed}")
-        print(f"{'-'*60}")
+        print(f"{'-' * 60}")
 
         result = run_single_seed(exp_name, config, seed, sweep_dir, gpu_id)
         run_results.append(result)
@@ -475,9 +475,9 @@ def generate_sweep_summary(sweep_dir: Path, all_results: dict[str, list[dict[str
     with open(summary_path, "w") as f:
         yaml.dump(sweep_summary, f, default_flow_style=False, indent=2)
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("PARAMETER SWEEP COMPLETE")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"Total experiments: {len(all_results)}")
     print(f"Total runs: {total_runs}")
     print(f"Successful runs: {total_successful}/{total_runs}")
@@ -560,11 +560,11 @@ def run_parameter_sweep(
 
     if use_parallel:
         # Parallel execution: distribute tasks across GPUs
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(
             f"PARALLEL EXECUTION MODE: Distributing {len(experiment_configs) * n_seeds} tasks across {len(gpu_ids)} GPUs"
         )
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Flatten experiments with seeds into individual tasks
         tasks = []
@@ -675,11 +675,11 @@ def run_parameter_sweep(
                 yaml.dump(exp_summary, f, default_flow_style=False, indent=2)
     else:
         # Sequential execution: run experiments one at a time (original behavior)
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(
             f"SEQUENTIAL EXECUTION MODE: Running on GPU {gpu_ids[0] if gpu_ids[0] is not None else 'CPU'}"
         )
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         all_results = {}
         for exp_name, config in experiment_configs:

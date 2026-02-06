@@ -214,7 +214,7 @@ def train(
         if torch.isnan(torch.tensor(avg_loss)):
             if epoch < 0.75 * config["epochs"]:
                 raise RuntimeError(
-                    f"NaN loss encountered at epoch {epoch+1} (avg_loss={avg_loss})."
+                    f"NaN loss encountered at epoch {epoch + 1} (avg_loss={avg_loss})."
                 )
         loss_history.append(avg_loss)
 
@@ -235,7 +235,7 @@ def train(
         # Print verbose information every `verbose_interval` epochs
         if (epoch + 1) % config["verbose_interval"] == 0:
             print(
-                f"Epoch {epoch+1}/{config["epochs"]}, Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%"
+                f"Epoch {epoch + 1}/{config['epochs']}, Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%"
             )
 
         # Save checkpoint if at checkpoint interval or at the end of the training
