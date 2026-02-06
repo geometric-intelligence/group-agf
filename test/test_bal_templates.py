@@ -50,9 +50,9 @@ class TestFixedCnTemplate:
 
         template = fixed_cn_template(group_size, fourier_coef_mags)
 
-        assert template.shape == (
-            group_size,
-        ), f"Expected shape ({group_size},), got {template.shape}"
+        assert template.shape == (group_size,), (
+            f"Expected shape ({group_size},), got {template.shape}"
+        )
 
     def test_mean_centered(self):
         """Test that the template is mean-centered."""
@@ -85,9 +85,9 @@ class TestFixedCnxcnTemplate:
         template = fixed_cnxcn_template(image_length, fourier_coef_mags)
 
         expected_size = image_length * image_length
-        assert template.shape == (
-            expected_size,
-        ), f"Expected shape ({expected_size},), got {template.shape}"
+        assert template.shape == (expected_size,), (
+            f"Expected shape ({expected_size},), got {template.shape}"
+        )
 
     def test_mean_centered(self):
         """Test that the template is mean-centered."""
@@ -126,9 +126,9 @@ class TestFixedGroupTemplate:
 
         template = fixed_group_template(dihedral_group, fourier_coef_diag_values)
 
-        assert template.shape == (
-            group_order,
-        ), f"Expected shape ({group_order},), got {template.shape}"
+        assert template.shape == (group_order,), (
+            f"Expected shape ({group_order},), got {template.shape}"
+        )
 
     def test_mean_centered(self, dihedral_group):
         """Test that the template is mean-centered."""

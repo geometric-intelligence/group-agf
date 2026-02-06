@@ -368,9 +368,9 @@ def build_modular_addition_sequence_dataset_D3(
     D3 = DihedralGroup(N=3)
     group_order = D3.order()  # = 6
 
-    assert template.shape == (
-        group_order,
-    ), f"template must be ({group_order},), got {template.shape}"
+    assert template.shape == (group_order,), (
+        f"template must be ({group_order},), got {template.shape}"
+    )
 
     # Get regular representation and list of elements
     regular_rep = D3.representations["regular"]

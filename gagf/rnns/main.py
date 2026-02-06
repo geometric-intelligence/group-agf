@@ -994,9 +994,9 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             irreps = D3.irreps()
             irrep_dims = [ir.size for ir in irreps]
 
-            assert len(powers) == len(
-                irreps
-            ), f"powers must have {len(irreps)} values (one per irrep), got {len(powers)}"
+            assert len(powers) == len(irreps), (
+                f"powers must have {len(irreps)} values (one per irrep), got {len(powers)}"
+            )
 
             # Convert powers to Fourier coefficient diagonal values
             # (same formula as in binary_action_learning/main.py)

@@ -132,9 +132,9 @@ def fixed_group_template(group, fourier_coef_diag_values):
         The mean centered template.
     """
     spectrum = []
-    assert (
-        len(fourier_coef_diag_values) == len(group.irreps())
-    ), f"Number of Fourier coef. magnitudes on the diagonal {len(fourier_coef_diag_values)} must match number of irreps {len(group.irreps())}"
+    assert len(fourier_coef_diag_values) == len(group.irreps()), (
+        f"Number of Fourier coef. magnitudes on the diagonal {len(fourier_coef_diag_values)} must match number of irreps {len(group.irreps())}"
+    )
     for i, irrep in enumerate(group.irreps()):
         diag_values = np.full(irrep.size, fourier_coef_diag_values[i], dtype=float)
         mat = np.zeros((irrep.size, irrep.size), dtype=float)
