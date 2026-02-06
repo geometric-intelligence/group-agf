@@ -73,7 +73,7 @@ training:
   mode: offline              # 'online' | 'offline'
 
   # Steps/Epochs
-  epochs: 10000                  # Used when mode='offline'
+  epochs: 2 #10000                  # Used when mode='offline'
   num_steps: 100                # Used when mode='online'
 
   # Optimizer

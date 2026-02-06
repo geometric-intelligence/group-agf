@@ -40,7 +40,7 @@ lr = {
 
 mom = [0.9]
 optimizer_name = ["PerNeuronScaledSGD"]
-epochs = [1000]  # , 50000]
+epochs = [2]  # [1000]  # , 50000]
 verbose_interval = 100
 checkpoint_interval = 200000
 batch_size = [128]  #    128, 256]
@@ -64,4 +64,4 @@ dataset_fraction = {
 }
 
 # model_save_dir = "/tmp/nmiolane/"
-model_save_dir = "/tmp/adele/"
+model_save_dir = "/tmp/nmiolane/"
