@@ -6,7 +6,7 @@ data:
   group_name: cnxcn
   p1: 4
   p2: 4
-  k: 5
+  k: 3
   batch_size: 128
   seed: 10
   template_type: fourier

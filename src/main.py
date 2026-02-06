@@ -483,19 +483,21 @@ def plot_model_predictions_over_time_D3(
     checkpoint_indices: list,
     save_path: str = None,
     num_samples: int = 5,
+    group_label: str = "Group",
 ):
     """
-    Plot model predictions vs targets at different training checkpoints for D3.
+    Plot model predictions vs targets at different training checkpoints.
 
     Args:
         model: Trained model
         param_hist: List of parameter snapshots
         X_eval: Input evaluation tensor (N, k, group_order)
         Y_eval: Target evaluation tensor (N, group_order)
-        group_order: Order of D3 group (6)
+        group_order: Order of the group
         checkpoint_indices: Indices into param_hist to visualize
         save_path: Path to save the plot
         num_samples: Number of samples to show
+        group_label: Human-readable label for the group (used in plot title)
     """
     n_checkpoints = len(checkpoint_indices)
 
@@ -541,7 +543,7 @@ def plot_model_predictions_over_time_D3(
             ax.set_xticks(x_axis)
             ax.grid(True, alpha=0.3)
 
-    plt.suptitle("D3 Model Predictions vs Targets Over Training", fontsize=14)
+    plt.suptitle(f"{group_label} Predictions vs Targets Over Training", fontsize=14)
     plt.tight_layout()
 
     if save_path:
@@ -562,9 +564,10 @@ def plot_power_spectrum_over_time_D3(
     save_path: str = None,
     num_samples_for_power: int = 100,
     num_checkpoints_to_sample: int = 50,
+    group_label: str = "Group",
 ):
     """
-    Plot power spectrum of model outputs vs template power spectrum over training for D3.
+    Plot power spectrum of model outputs vs template power spectrum over training.
 
     Args:
         model: Trained model
@@ -572,13 +575,14 @@ def plot_power_spectrum_over_time_D3(
         param_save_indices: List mapping param_hist index to epoch number
         X_eval: Input evaluation tensor
         template: Template array (group_order,)
-        D3: DihedralGroup object from escnn
+        D3: escnn group object (DihedralGroup, Octahedral, Icosahedral, etc.)
         k: Sequence length
         optimizer: Optimizer name (e.g., 'per_neuron', 'adam')
         init_scale: Initialization scale
         save_path: Path to save the plot
         num_samples_for_power: Number of samples to average power over
         num_checkpoints_to_sample: Number of checkpoints to sample for the evolution plot
+        group_label: Human-readable label for the group (used in plot titles)
     """
     from src.group_fourier_transform import compute_group_fourier_coef
 
@@ -712,7 +716,7 @@ def plot_power_spectrum_over_time_D3(
 
     # Overall title
     fig.suptitle(
-        f"D3 Power Evolution Over Training (k={k}, {optimizer}, init={init_scale:.0e})",
+        f"{group_label} Power Evolution Over Training (k={k}, {optimizer}, init={init_scale:.0e})",
         fontsize=14,
         fontweight="bold",
     )
@@ -733,32 +737,49 @@ def produce_plots_D3(
     train_loss_hist,
     template_D3: np.ndarray,
     device: str = "cpu",
+    group=None,
 ):
     """
-    Generate all analysis plots after training (D3 version).
+    Generate all analysis plots after training for any escnn group.
 
     Args:
         run_dir: Directory to save plots
-        config: Configuration dictionary (must have dimension='D3')
+        config: Configuration dictionary
         model: Trained model (QuadraticRNN or SequentialMLP)
         param_hist: List of parameter snapshots
         param_save_indices: Indices where params were saved
         train_loss_hist: Training loss history
-        template_D3: 1D template array of shape (group_order,) where group_order=6 for D3
+        template_D3: 1D template array of shape (group_order,)
         device: Device string ('cpu' or 'cuda')
+        group: escnn group object. If None, defaults to DihedralGroup(N=3) for backward compat.
     """
-    print("\n=== Generating Analysis Plots (D3) ===")
+    group_name = config["data"]["group_name"]
 
-    from escnn.group import DihedralGroup
+    # Build a human-readable label for plot titles
+    if group_name == "dihedral":
+        n = config["data"].get("group_n", 3)
+        group_label = f"D{n} (Dihedral, order {group.order() if group else 2 * n})"
+    elif group_name == "octahedral":
+        group_label = f"Octahedral (order {group.order() if group else 24})"
+    elif group_name == "A5":
+        group_label = f"A5 / Icosahedral (order {group.order() if group else 60})"
+    else:
+        group_label = group_name
 
-    D3 = DihedralGroup(N=3)
-    group_order = D3.order()  # = 6
+    print(f"\n=== Generating Analysis Plots ({group_label}) ===")
+
+    if group is None:
+        from escnn.group import DihedralGroup
+
+        group = DihedralGroup(N=3)
+
+    group_order = group.order()
 
     k = config["data"]["k"]
     batch_size = config["data"]["batch_size"]
     training_mode = config["training"]["mode"]
 
-    # Total data space size for D3 with k compositions
+    # Total data space size with k compositions
     total_space_size = group_order**k
 
     # Calculate x-axis values
@@ -783,7 +804,7 @@ def produce_plots_D3(
     print(f"  ✓ Saved {samples_seen_path}")
     print(f"  ✓ Saved {fraction_path}")
 
-    print(f"\nD3 group order: {group_order}")
+    print(f"\n{group_name} group order: {group_order}")
     print(f"Sequence length k: {k}")
     print(f"Total data space: {total_space_size:,} sequences")
     if len(samples_seen) > 0:
@@ -791,11 +812,12 @@ def produce_plots_D3(
 
     ### ----- GENERATE EVALUATION DATA ----- ###
     print("\nGenerating evaluation data for visualization...")
-    from src.datamodule import build_modular_addition_sequence_dataset_D3
+    from src.datamodule import build_modular_addition_sequence_dataset_generic
 
-    X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_D3(
+    X_eval, Y_eval, _ = build_modular_addition_sequence_dataset_generic(
         template_D3,
         k,
+        group=group,
         mode="sampled",
         num_samples=min(config["data"]["num_samples"], 1000),
         return_all_outputs=config["model"]["return_all_outputs"],
@@ -831,7 +853,7 @@ def produce_plots_D3(
         ax.set_title(title)
         ax.grid(True, alpha=0.3)
 
-    plt.suptitle(f"D3 Group Composition (k={k})", fontsize=14)
+    plt.suptitle(f"{group_label} Composition (k={k})", fontsize=14)
     plt.tight_layout()
     training_loss_path = os.path.join(run_dir, "training_loss.pdf")
     plt.savefig(training_loss_path, bbox_inches="tight", dpi=150)
@@ -848,6 +870,7 @@ def produce_plots_D3(
         group_order=group_order,
         checkpoint_indices=checkpoint_indices,
         save_path=os.path.join(run_dir, "predictions_over_time.pdf"),
+        group_label=group_label,
     )
     print(f"  ✓ Saved {os.path.join(run_dir, 'predictions_over_time.pdf')}")
 
@@ -861,15 +884,16 @@ def produce_plots_D3(
         param_save_indices=param_save_indices,
         X_eval=X_eval_t,
         template=template_D3,
-        D3=D3,
+        D3=group,
         k=k,
         optimizer=optimizer,
         init_scale=init_scale,
         save_path=os.path.join(run_dir, "power_spectrum_analysis.pdf"),
+        group_label=group_label,
     )
     print(f"  ✓ Saved {os.path.join(run_dir, 'power_spectrum_analysis.pdf')}")
 
-    print("\n✓ All D3 plots generated successfully!")
+    print(f"\n✓ All {group_label} plots generated successfully!")
 
 
 def train_single_run(config: dict, run_dir: Path = None) -> dict:
@@ -1605,7 +1629,7 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             device=device,
         )
     elif group_name == "dihedral":
-        # Produce plots for dihedral group (using D3 plotting functions)
+        # Produce plots for dihedral group
         produce_plots_D3(
             run_dir=run_dir,
             config=config,
@@ -1615,10 +1639,9 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             train_loss_hist=train_loss_hist,
             template_D3=template_dihedral,
             device=device,
+            group=dihedral_group,
         )
-    elif group_name in ["octahedral", "A5"]:
-        # Basic plots for octahedral and A5 (similar to dihedral)
-        template_generic = template_octahedral if group_name == "octahedral" else template_A5
+    elif group_name == "octahedral":
         produce_plots_D3(
             run_dir=run_dir,
             config=config,
@@ -1626,8 +1649,21 @@ def train_single_run(config: dict, run_dir: Path = None) -> dict:
             param_hist=param_hist,
             param_save_indices=param_save_indices,
             train_loss_hist=train_loss_hist,
-            template_D3=template_generic,
+            template_D3=template_octahedral,
             device=device,
+            group=octahedral_group,
+        )
+    elif group_name == "A5":
+        produce_plots_D3(
+            run_dir=run_dir,
+            config=config,
+            model=rnn_2d,
+            param_hist=param_hist,
+            param_save_indices=param_save_indices,
+            train_loss_hist=train_loss_hist,
+            template_D3=template_A5,
+            device=device,
+            group=icosahedral_group,
         )
     else:
         raise ValueError(

@@ -6,10 +6,10 @@
 data:
   group_name: dihedral
   group_n: 3
-  k: 5
+  k: 2
   batch_size: 128
   seed: 10
-  template_type: onehot
+  template_type: custom_fourier
   mode: exhaustive
   num_samples: 1000
 

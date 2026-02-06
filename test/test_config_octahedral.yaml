@@ -4,7 +4,7 @@ data:
   k: 2
   batch_size: 2
   seed: 42
-  template_type: onehot
+  template_type: custom_fourier
   mode: sampled
   num_samples: 10
   powers: [0.0, 2000.0, 0.0, 0.0, 0.0]

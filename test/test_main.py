@@ -43,25 +43,47 @@ def temp_run_dir():
 
 
 @pytest.fixture
-def mock_plots():
-    """Mock all plot functions to skip visualization."""
-    # Import the module first so patch can resolve it
+def mock_plots_cn():
+    """Mock plot functions for cn (1D) tests - skip visualization only."""
     import src.main  # noqa: F401
 
     with (
         patch("src.main.produce_plots_1d") as mock_1d,
-        patch("src.main.produce_plots_2d") as mock_2d,
-        patch("src.main.produce_plots_D3") as mock_d3,
         patch("matplotlib.pyplot.savefig") as mock_savefig,
         patch("matplotlib.pyplot.close") as mock_close,
     ):
         yield {
             "produce_plots_1d": mock_1d,
-            "produce_plots_2d": mock_2d,
-            "produce_plots_D3": mock_d3,
             "savefig": mock_savefig,
             "close": mock_close,
         }
+
+
+@pytest.fixture
+def mock_plots_cnxcn():
+    """Mock plot functions for cnxcn (2D) tests - skip visualization only."""
+    import src.main  # noqa: F401
+
+    with (
+        patch("src.main.produce_plots_2d") as mock_2d,
+        patch("matplotlib.pyplot.savefig") as mock_savefig,
+        patch("matplotlib.pyplot.close") as mock_close,
+    ):
+        yield {
+            "produce_plots_2d": mock_2d,
+            "savefig": mock_savefig,
+            "close": mock_close,
+        }
+
+
+@pytest.fixture
+def mock_savefig():
+    """Mock only plt.savefig and plt.close so plotting code runs but files aren't saved."""
+    with (
+        patch("matplotlib.pyplot.savefig") as mock_sf,
+        patch("matplotlib.pyplot.close") as mock_cl,
+    ):
+        yield {"savefig": mock_sf, "close": mock_cl}
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
@@ -82,7 +104,7 @@ def test_load_config():
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
-def test_main_c10(temp_run_dir, mock_plots):
+def test_main_c10(temp_run_dir, mock_plots_cn):
     """Test main() with C_10 cyclic group config."""
     from src.main import load_config, train_single_run
 
@@ -92,11 +114,11 @@ def test_main_c10(temp_run_dir, mock_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_plots["produce_plots_1d"].assert_called_once()
+    mock_plots_cn["produce_plots_1d"].assert_called_once()
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
-def test_main_c4x4(temp_run_dir, mock_plots):
+def test_main_c4x4(temp_run_dir, mock_plots_cnxcn):
     """Test main() with C_4 x C_4 product group config."""
     from src.main import load_config, train_single_run
 
@@ -106,12 +128,16 @@ def test_main_c4x4(temp_run_dir, mock_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_plots["produce_plots_2d"].assert_called_once()
+    mock_plots_cnxcn["produce_plots_2d"].assert_called_once()
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
-def test_main_d3(temp_run_dir, mock_plots):
-    """Test main() with D3 dihedral group config."""
+def test_main_d3(temp_run_dir, mock_savefig):
+    """Test main() with D3 dihedral group config.
+
+    Does NOT mock produce_plots_D3 so the full plotting pipeline
+    (including dataset generation with the correct group) is exercised.
+    """
     from src.main import load_config, train_single_run
 
     config = load_config(str(CONFIG_FILES["d3"]))
@@ -120,12 +146,17 @@ def test_main_d3(temp_run_dir, mock_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_plots["produce_plots_D3"].assert_called_once()
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
-def test_main_octahedral(temp_run_dir, mock_plots):
-    """Test main() with octahedral group config."""
+def test_main_octahedral(temp_run_dir, mock_savefig):
+    """Test main() with octahedral group config.
+
+    Does NOT mock produce_plots_D3 so the full plotting pipeline
+    (including dataset generation with the correct group) is exercised.
+    This ensures the octahedral group (order 24) is passed correctly
+    and not confused with D3 (order 6).
+    """
     from src.main import load_config, train_single_run
 
     config = load_config(str(CONFIG_FILES["octahedral"]))
@@ -134,12 +165,17 @@ def test_main_octahedral(temp_run_dir, mock_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_plots["produce_plots_D3"].assert_called_once()
 
 
 @pytest.mark.skipif(not MAIN_TEST_MODE, reason="Only run with MAIN_TEST_MODE=1")
-def test_main_a5(temp_run_dir, mock_plots):
-    """Test main() with A5 (icosahedral) group config."""
+def test_main_a5(temp_run_dir, mock_savefig):
+    """Test main() with A5 (icosahedral) group config.
+
+    Does NOT mock produce_plots_D3 so the full plotting pipeline
+    (including dataset generation with the correct group) is exercised.
+    This ensures the A5 group (order 60) is passed correctly
+    and not confused with D3 (order 6).
+    """
     from src.main import load_config, train_single_run
 
     config = load_config(str(CONFIG_FILES["a5"]))
@@ -148,7 +184,6 @@ def test_main_a5(temp_run_dir, mock_plots):
     assert "final_train_loss" in results
     assert "final_val_loss" in results
     assert results["final_train_loss"] > 0
-    mock_plots["produce_plots_D3"].assert_called_once()
 
 
 if __name__ == "__main__":
