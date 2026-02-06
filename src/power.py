@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-import src.group_fourier_transform as gft
+import src.fourier as fourier
 
 
 class CyclicPower:
@@ -185,12 +185,13 @@ class GroupPower:
         power_spectrum : np.ndarray, shape=[len(group.irreps())]
             The power spectrum of the template.
         """
+        fourier_coefs = fourier.group_fourier(self.group, self.template)
         irreps = self.group.irreps()
 
         power_spectrum = np.zeros(len(irreps))
         for i, irrep in enumerate(irreps):
-            fourier_coef = gft.compute_group_fourier_coef(self.group, self.template, irrep)
-            power_spectrum[i] = irrep.size * np.trace(fourier_coef.conj().T @ fourier_coef)
+            fc = fourier_coefs[i]
+            power_spectrum[i] = irrep.size * np.trace(fc.conj().T @ fc)
         power_spectrum = power_spectrum / self.group.order()
 
         return np.array(power_spectrum)
@@ -311,3 +312,220 @@ def model_power_over_time(group_name, model, param_history, model_inputs, group=
     powers_over_time[powers_over_time < 1e-20] = 0
 
     return powers_over_time, steps
+
+
+# ---------------------------------------------------------------------------
+# Power spectrum computation functions (moved from utils.py)
+# ---------------------------------------------------------------------------
+
+
+def get_power_1d(points_1d):
+    """Compute 1D power spectrum using rfft (for real-valued inputs).
+
+    Args:
+        points_1d: (p,) array
+
+    Returns:
+        power: (p//2+1,) array of power values
+        freqs: frequency indices
+    """
+    p = len(points_1d)
+
+    ft = np.fft.rfft(points_1d)
+    power = np.abs(ft) ** 2 / p
+
+    power = 2 * power.copy()
+    power[0] = power[0] / 2  # DC component
+    if p % 2 == 0:
+        power[-1] = power[-1] / 2  # Nyquist frequency
+
+    freqs = np.fft.rfftfreq(p, 1.0) * p
+
+    return power, freqs
+
+
+def topk_template_freqs_1d(template_1d: np.ndarray, K: int, min_power: float = 1e-20):
+    """Return top-K frequency indices by power for 1D template.
+
+    Args:
+        template_1d: 1D template array (p,)
+        K: Number of top frequencies to return
+        min_power: Minimum power threshold
+
+    Returns:
+        List of frequency indices (as integers)
+    """
+    power, _ = get_power_1d(template_1d)
+    mask = power > min_power
+    if not np.any(mask):
+        return []
+    valid_power = power[mask]
+    valid_indices = np.flatnonzero(mask)
+    top_idx = valid_indices[np.argsort(valid_power)[::-1]][:K]
+    return top_idx.tolist()
+
+
+def topk_template_freqs(template_2d: np.ndarray, K: int, min_power: float = 1e-20):
+    """Return top-K (kx, ky) rFFT2 bins by power from get_power_2d(template_2d)."""
+    freqs_u, freqs_v, power = get_power_2d(template_2d)
+    shp = power.shape
+    flat = power.ravel()
+    mask = flat > min_power
+    if not np.any(mask):
+        return []
+    top_idx = np.flatnonzero(mask)[np.argsort(flat[mask])[::-1]][:K]
+    kx, ky = np.unravel_index(top_idx, shp)
+    return list(zip(kx.tolist(), ky.tolist()))
+
+
+def get_power_2d(points, no_freq=False):
+    """Compute 2D power spectrum using rfft2 with proper symmetry handling.
+
+    Args:
+        points: (M, N) array, the 2D signal
+        no_freq: if True, only return power (no frequency arrays)
+
+    Returns:
+        freqs_u: frequency bins for rows (if no_freq=False)
+        freqs_v: frequency bins for columns (if no_freq=False)
+        power: 2D power spectrum (M, N//2 + 1)
+    """
+    M, N = points.shape
+
+    ft = np.fft.rfft2(points)
+    power = np.abs(ft) ** 2 / (M * N)
+
+    weight = 2 * np.ones((M, N // 2 + 1))
+    weight[0, 0] = 1
+    weight[(M // 2 + 1) :, 0] = 0
+    if M % 2 == 0:
+        weight[M // 2, 0] = 1
+    if N % 2 == 0:
+        weight[(M // 2 + 1) :, N // 2] = 0
+        weight[0, N // 2] = 1
+    if (M % 2 == 0) and (N % 2 == 0):
+        weight[M // 2, N // 2] = 1
+
+    power = weight * power
+
+    total_power = np.sum(power)
+    norm_squared = np.linalg.norm(points) ** 2
+    if not np.isclose(total_power, norm_squared, rtol=1e-6):
+        print(
+            f"Warning: Total power {total_power:.3f} does not match norm squared {norm_squared:.3f}"
+        )
+
+    if no_freq:
+        return power
+
+    freqs_u = np.fft.fftfreq(M)
+    freqs_v = np.fft.rfftfreq(N)
+
+    return freqs_u, freqs_v, power
+
+
+def _tracked_power_from_fft2(power2d, kx, ky, p1, p2):
+    """Sum power at (kx, ky) and its real-signal mirror (-kx, -ky).
+
+    Args:
+        power2d: 2D power spectrum from fft2 (shape: p1, p2)
+        kx, ky: Frequency indices
+        p1, p2: Dimensions of the signal
+
+    Returns:
+        float: Total power at this frequency (including mirror)
+    """
+    i0, j0 = kx % p1, ky % p2
+    i1, j1 = (-kx) % p1, (-ky) % p2
+    if (i0, j0) == (i1, j1):
+        return float(power2d[i0, j0])
+    return float(power2d[i0, j0] + power2d[i1, j1])
+
+
+def theoretical_loss_levels_2d(template_2d):
+    """Compute theoretical MSE loss levels based on 2D template power spectrum.
+
+    Args:
+        template_2d: 2D template array (p1, p2)
+
+    Returns:
+        dict with 'initial', 'final', and 'levels' keys
+    """
+    p1, p2 = template_2d.shape
+    power = get_power_2d(template_2d, no_freq=True)
+
+    power_flat = power.flatten()
+    power_flat = np.sort(power_flat[power_flat > 1e-20])[::-1]
+
+    coef = 1.0 / (p1 * p2)
+    levels = [coef * np.sum(power_flat[k:]) for k in range(len(power_flat) + 1)]
+
+    return {
+        "initial": levels[0] if levels else 0.0,
+        "final": 0.0,
+        "levels": levels,
+    }
+
+
+def theoretical_loss_levels_1d(template_1d):
+    """Compute theoretical MSE loss levels based on 1D template power spectrum.
+
+    Args:
+        template_1d: 1D template array (p,)
+
+    Returns:
+        dict with 'initial', 'final', and 'levels' keys
+    """
+    p = len(template_1d)
+    power, _ = get_power_1d(template_1d)
+
+    power = np.sort(power[power > 1e-20])[::-1]
+
+    coef = 1.0 / p
+    levels = [coef * np.sum(power[k:]) for k in range(len(power) + 1)]
+
+    return {
+        "initial": levels[0] if levels else 0.0,
+        "final": 0.0,
+        "levels": levels,
+    }
+
+
+# Backward compatibility aliases
+def theoretical_final_loss_2d(template_2d):
+    """Returns expected initial loss (for setting convergence targets)."""
+    return theoretical_loss_levels_2d(template_2d)["initial"]
+
+
+def theoretical_final_loss_1d(template_1d):
+    """Returns expected initial loss (for setting convergence targets)."""
+    return theoretical_loss_levels_1d(template_1d)["initial"]
+
+
+def group_power_spectrum(group, template):
+    """Compute the (group) power spectrum of the template.
+
+    For each irrep rho, the power is given by:
+    ||hat x(rho)||_rho = dim(rho) * Tr(hat x(rho)^dagger * hat x(rho))
+
+    Parameters
+    ----------
+    group : Group (escnn object)
+        The group.
+    template : np.ndarray, shape=[group.order()]
+        The template to compute the power spectrum of.
+
+    Returns
+    -------
+    power_spectrum : np.ndarray, shape=[len(group.irreps())]
+        The power spectrum of the template.
+    """
+    fourier_coefs = fourier.group_fourier(group, template)
+    irreps = group.irreps()
+
+    power_spectrum = np.zeros(len(irreps))
+    for i, irrep in enumerate(irreps):
+        fc = fourier_coefs[i]
+        power_spectrum[i] = irrep.size * np.trace(fc.conj().T @ fc)
+    power_spectrum = power_spectrum / group.order()
+    return np.array(power_spectrum)

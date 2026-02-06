@@ -1,5 +1,5 @@
 # Minimal test configuration for src/main.py
-# Used by test_rnns_main.py for fast testing
+# Used by test_main.py for fast testing
 
 data:
   group_name: cn

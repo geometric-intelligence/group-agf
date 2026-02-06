@@ -270,10 +270,10 @@ def run_single_seed(
 
     try:
         # Import here to avoid circular dependency
-        from src.main import train_single_run
+        import src.main as main
 
         # Run training
-        result = train_single_run(seed_config, run_dir=seed_dir)
+        result = main.train_single_run(seed_config, run_dir=seed_dir)
 
         # Save run summary
         run_summary = {
