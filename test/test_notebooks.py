@@ -22,6 +22,7 @@ Usage:
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -39,19 +40,8 @@ def get_notebooks_dir():
 
 # Notebooks to skip (with reasons)
 SKIP_NOTEBOOKS = {
-    # These notebooks have hardcoded paths to /home/facosta/ which don't exist
-    "seq_mlp_group_size": "Has hardcoded paths to /home/facosta/ filesystem",
-    "rnn_gagf": "Has hardcoded paths to /home/facosta/ filesystem",
-    # These notebooks require pre-trained model files or external data
-    "paper_figures": "Requires pre-trained model .pkl files not included in repo",
-    # These notebooks have import/code issues that need separate debugging
-    "2D": "Missing function: cannot import 'get_power_2d' from src.power",
-    "znz_znz": "Missing function: datasets.choose_template() does not exist",
-    "seq_mlp": "Plotting error: Invalid vmin/vmax values during visualization",
-    # These notebooks have visualization code with hardcoded indices that fail with reduced p
-    "C_n": "IndexError in visualization code when running with reduced parameters",
-    "dihedral": "IndexError in visualization code when running with reduced parameters",
-    "modular_arithmetic": "IndexError in visualization code when running with reduced parameters",
+    # Add notebooks here if they need to be skipped, e.g.:
+    # "notebook_name": "Reason for skipping",
 }
 
 
@@ -89,32 +79,34 @@ def execute_notebook(notebook_path, env):
         tuple: (success: bool, error_message: str or None)
     """
     try:
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "jupyter",
-                "nbconvert",
-                "--to",
-                "notebook",
-                "--execute",
-                "--ExecutePreprocessor.timeout=300",  # 5 minute timeout per notebook
-                "--ExecutePreprocessor.kernel_name=python3",
-                "--output",
-                "/dev/null",
-                str(notebook_path),
-            ],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(get_repo_root()),
-            timeout=360,  # 6 minute overall timeout
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.ipynb")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "jupyter",
+                    "nbconvert",
+                    "--to",
+                    "notebook",
+                    "--execute",
+                    "--ExecutePreprocessor.timeout=300",  # 5 minute timeout per notebook
+                    "--ExecutePreprocessor.kernel_name=python3",
+                    "--output",
+                    output_path,
+                    str(notebook_path),
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=str(get_repo_root()),
+                timeout=360,  # 6 minute overall timeout
+            )
 
-        if result.returncode != 0:
-            error_msg = f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
-            return False, error_msg
-        return True, None
+            if result.returncode != 0:
+                error_msg = f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
+                return False, error_msg
+            return True, None
 
     except subprocess.TimeoutExpired:
         return False, "Notebook execution timed out (>6 minutes)"
