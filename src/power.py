@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-import group_agf.binary_action_learning.group_fourier_transform as gft
+import src.group_fourier_transform as gft
 
 
 class CyclicPower:

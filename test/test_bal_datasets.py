@@ -1,10 +1,10 @@
-"""Tests for group_agf.binary_action_learning.datasets module."""
+"""Tests for src.datasets module."""
 
 import numpy as np
 import pytest
 import torch
 
-from group_agf.binary_action_learning.datasets import (
+from src.datasets import (
     cn_dataset,
     cnxcn_dataset,
     group_dataset,

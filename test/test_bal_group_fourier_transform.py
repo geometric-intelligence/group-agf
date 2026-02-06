@@ -1,11 +1,11 @@
 import numpy as np
 from escnn.group import Octahedral
 
-from group_agf.binary_action_learning.group_fourier_transform import (
+from src.group_fourier_transform import (
     compute_group_fourier_transform,
     compute_group_inverse_fourier_transform,
 )
-from group_agf.binary_action_learning.templates import fixed_group_template
+from src.templates import fixed_group_template
 
 
 def test_fourier_inverse_is_identity():

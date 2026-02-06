@@ -1,8 +1,8 @@
-# Minimal test configuration for gagf/rnns/main.py
+# Minimal test configuration for src/main.py
 # Used by test_rnns_main.py for fast testing
 
 data:
-  dimension: 1
+  group_name: cn
   p: 5
   k: 2
   batch_size: 32

@@ -341,21 +341,23 @@ def build_modular_addition_sequence_dataset_D3(
     mode: str = "sampled",
     num_samples: int = 65536,
     return_all_outputs: bool = False,
+    dihedral_n: int = 3,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Build D3 (dihedral group) composition dataset for sequence length k.
+    Build dihedral group composition dataset for sequence length k.
 
-    Uses the regular representation of D3 to transform the template.
+    Uses the regular representation of D_n to transform the template.
     For a sequence of k group elements (g1, g2, ..., gk), we compute:
     - X[i, t, :] = regular_rep(g_t) @ template  (template transformed by g_t)
     - Y[i, :] = regular_rep(g1 * g2 * ... * gk) @ template  (template transformed by composition)
 
     Args:
-        template: (group_order,) template array, where group_order = 6 for D3
+        template: (group_order,) template array, where group_order = 2*n for D_n
         k: sequence length (number of group elements to compose)
         mode: "sampled" or "exhaustive"
         num_samples: number of samples for "sampled" mode
         return_all_outputs: if True, return intermediate outputs after each composition
+        dihedral_n: the n parameter for the dihedral group D_n (default 3 for D3)
 
     Returns:
         X: (N, k, group_order) input sequences
@@ -364,17 +366,17 @@ def build_modular_addition_sequence_dataset_D3(
     """
     from escnn.group import DihedralGroup
 
-    # Create D3 group (dihedral group of order 6)
-    D3 = DihedralGroup(N=3)
-    group_order = D3.order()  # = 6
+    # Create D_n group (dihedral group of order 2*n)
+    dihedral_group = DihedralGroup(N=dihedral_n)
+    group_order = dihedral_group.order()  # = 2 * dihedral_n
 
     assert template.shape == (group_order,), (
         f"template must be ({group_order},), got {template.shape}"
     )
 
     # Get regular representation and list of elements
-    regular_rep = D3.representations["regular"]
-    elements = list(D3.elements)
+    regular_rep = dihedral_group.representations["regular"]
+    elements = list(dihedral_group.elements)
     n_elements = len(elements)  # = 6
 
     # Pre-compute representation matrices for all elements
@@ -428,6 +430,87 @@ def build_modular_addition_sequence_dataset_D3(
     else:
         # Return all intermediate outputs (skip first since it's just g1, not a composition)
         Y = Y[:, 1:, :]  # (N, k-1, group_order)
+
+    return X, Y, sequence
+
+
+def build_modular_addition_sequence_dataset_generic(
+    template: np.ndarray,
+    k: int,
+    group,
+    mode: str = "sampled",
+    num_samples: int = 65536,
+    return_all_outputs: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build generic group composition dataset for sequence length k.
+
+    Works with any escnn group that has a regular representation.
+    For a sequence of k group elements (g1, g2, ..., gk), we compute:
+    - X[i, t, :] = regular_rep(g_t) @ template  (template transformed by g_t)
+    - Y[i, :] = regular_rep(g1 * g2 * ... * gk) @ template  (template transformed by composition)
+
+    Args:
+        template: (group_order,) template array
+        k: sequence length (number of group elements to compose)
+        group: escnn group object (e.g., Octahedral(), Icosahedral())
+        mode: "sampled" or "exhaustive"
+        num_samples: number of samples for "sampled" mode
+        return_all_outputs: if True, return intermediate outputs after each composition
+
+    Returns:
+        X: (N, k, group_order) input sequences
+        Y: (N, group_order) or (N, k-1, group_order) target outputs
+        sequence: (N, k) integer indices of group elements per token
+    """
+    group_order = group.order()
+
+    assert template.shape == (group_order,), (
+        f"template must be ({group_order},), got {template.shape}"
+    )
+
+    # Get regular representation and list of elements
+    regular_rep = group.representations["regular"]
+    elements = list(group.elements)
+    n_elements = len(elements)
+
+    # Pre-compute representation matrices for all elements
+    rep_matrices = np.array([regular_rep(g) for g in elements])
+
+    if mode == "exhaustive":
+        total = n_elements**k
+        if total > 1_000_000:
+            raise ValueError(f"n_elements^k = {total} is huge; use mode='sampled' instead.")
+        N = total
+
+        # Generate all possible sequences of k element indices
+        sequence = np.zeros((N, k), dtype=np.int64)
+        for idx in range(N):
+            for t in range(k):
+                sequence[idx, t] = (idx // (n_elements**t)) % n_elements
+    else:
+        N = int(num_samples)
+        sequence = np.random.randint(0, n_elements, size=(N, k), dtype=np.int64)
+
+    # Initialize output arrays
+    X = np.zeros((N, k, group_order), dtype=np.float32)
+    Y = np.zeros((N, k, group_order), dtype=np.float32)
+
+    for i in range(N):
+        cumulative_rep = np.eye(group_order)
+
+        for t in range(k):
+            elem_idx = sequence[i, t]
+            g_rep = rep_matrices[elem_idx]
+
+            X[i, t, :] = g_rep @ template
+            cumulative_rep = g_rep @ cumulative_rep
+            Y[i, t, :] = cumulative_rep @ template
+
+    if not return_all_outputs:
+        Y = Y[:, -1, :]
+    else:
+        Y = Y[:, 1:, :]
 
     return X, Y, sequence
 

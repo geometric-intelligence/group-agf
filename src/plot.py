@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-import group_agf.binary_action_learning.power as power
+import src.power as power
 
 FONT_SIZES = {"title": 30, "axes_label": 30, "tick_label": 30, "legend": 15}
 
