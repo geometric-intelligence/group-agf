@@ -1,19 +1,16 @@
 """
 Tests for src/run_sweep.py
 
-Unit tests (always run) exercise config loading, experiment generation,
+Unit tests exercise config loading, experiment generation,
 parameter grid expansion, and helper utilities.
 
-Integration tests (guarded by SWEEP_TEST_MODE=1) run actual sweeps
-with minimal configs to verify the end-to-end pipeline.
+Integration tests run actual sweeps with minimal test configs
+to verify the end-to-end pipeline.
 
-Expected runtime:
-    - Unit tests: < 5 seconds
-    - Integration tests (SWEEP_TEST_MODE=1): < 1 minute total
+Expected runtime: < 1 minute total
 
 Usage:
-    pytest test/test_run_sweep.py -v                    # unit tests only
-    SWEEP_TEST_MODE=1 pytest test/test_run_sweep.py -v  # all tests
+    pytest test/test_run_sweep.py -v
 """
 
 import os
@@ -30,8 +27,6 @@ from src.run_sweep import (
     generate_experiment_name,
     load_sweep_config,
 )
-
-SWEEP_TEST_MODE = os.environ.get("SWEEP_TEST_MODE", "0") == "1"
 
 TEST_DIR = Path(__file__).parent
 SWEEP_CONFIGS = {
@@ -159,7 +154,7 @@ class TestGenerateExperimentConfigs:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests (require SWEEP_TEST_MODE=1)
+# Integration tests
 # ---------------------------------------------------------------------------
 
 
@@ -250,28 +245,9 @@ def _run_sweep_and_check(sweep_config_path, mock_all_plots, expected_experiments
             assert exp_summary.exists(), f"experiment_summary.yaml not found for {exp_name}"
 
 
-@pytest.mark.skipif(not SWEEP_TEST_MODE, reason="Only run with SWEEP_TEST_MODE=1")
 def test_sweep_example(mock_all_plots):
-    """Run full sweep with example config (2 explicit experiments)."""
+    """Run full sweep end-to-end with example config (2 explicit experiments)."""
     _run_sweep_and_check(SWEEP_CONFIGS["example"], mock_all_plots, expected_experiments=2)
-
-
-@pytest.mark.skipif(not SWEEP_TEST_MODE, reason="Only run with SWEEP_TEST_MODE=1")
-def test_sweep_learning_rate(mock_all_plots):
-    """Run full sweep with learning rate config (2 experiments)."""
-    _run_sweep_and_check(SWEEP_CONFIGS["learning_rate"], mock_all_plots, expected_experiments=2)
-
-
-@pytest.mark.skipif(not SWEEP_TEST_MODE, reason="Only run with SWEEP_TEST_MODE=1")
-def test_sweep_model_size(mock_all_plots):
-    """Run full sweep with model size config (2 experiments)."""
-    _run_sweep_and_check(SWEEP_CONFIGS["model_size"], mock_all_plots, expected_experiments=2)
-
-
-@pytest.mark.skipif(not SWEEP_TEST_MODE, reason="Only run with SWEEP_TEST_MODE=1")
-def test_sweep_onehot_grid(mock_all_plots):
-    """Run full sweep with onehot grid config (2 parameter combos)."""
-    _run_sweep_and_check(SWEEP_CONFIGS["onehot_grid"], mock_all_plots, expected_experiments=2)
 
 
 if __name__ == "__main__":

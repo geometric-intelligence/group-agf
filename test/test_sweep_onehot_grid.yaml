@@ -11,11 +11,15 @@ global_overrides:
     epochs: 2
     num_steps: 2
     verbose_interval: 1
+    save_param_interval: null
   data:
+    group_name: cn
+    k: 2
     dimension: 1
     template_type: 'onehot'
     num_samples: 10
     batch_size: 5
+    mode: sampled
 
 parameter_grid:
   data:

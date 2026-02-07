@@ -223,11 +223,11 @@ Plotting functions for training analysis: `plot_train_loss_with_theory`, `plot_p
 ## Testing
 
 ```bash
-# Unit tests
-pytest test/ --ignore=test/test_notebooks.py -v
+# All tests (unit + integration)
+pytest test/ -v
 
-# Integration tests (fast mode)
-MAIN_TEST_MODE=1 pytest test/test_main.py -v
+# Notebook tests only (requires jupyter/nbconvert)
+NOTEBOOK_TEST_MODE=1 pytest test/test_notebooks.py -v
 ```
 
 ## Development
