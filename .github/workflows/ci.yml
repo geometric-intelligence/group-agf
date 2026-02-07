@@ -56,5 +56,3 @@ jobs:
       - name: Run unit tests
         run: |
           pytest test/ -v --ignore=test/test_notebooks.py
-        env:
-          NOTEBOOK_TEST_MODE: "1"
